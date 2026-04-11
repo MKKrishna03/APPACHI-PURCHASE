@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Entry</title>
+  </head>
+  <body>
+    <div id="app">
+      <a href="/profile">Profile Creation</a>
+      &nbsp;|&nbsp;
+      <button onclick="addCompanyBlock()">+ Add Company</button>
+      <div id="company-blocks"></div>
+    </div>
+
+    <script>
+      let companies = [];
+
+      async function loadCompanies() {
+        const res = await fetch("/api/profiles/list");
+        companies = await res.json();
+      }
+
+      function buildCompanyOptions(selectedId) {
+        let opts = `<option value="">-- Select Company --</option>`;
+        companies.forEach((c) => {
+          opts += `<option value="${c.id}" ${c.id == selectedId ? "selected" : ""}>${c.name}</option>`;
+        });
+        return opts;
+      }
+
+      function buildRow(blockId, rowId) {
+        return `
+  <tr id="row-${blockId}-${rowId}">
+    <td>
+      <select id="vtype-${blockId}-${rowId}">
+        <option value="">-- Select --</option>
+        <option>Purchase</option><option>Sale</option>
+        <option>Receipt</option><option>Payment</option><option>Journal</option>
+      </select>
+    </td>
+    <td><input type="date" id="date-${blockId}-${rowId}"/></td>
+    <td><input type="text" placeholder="Bill No" id="billno-${blockId}-${rowId}"/></td>
+    <td>
+      <select id="entry-${blockId}-${rowId}">
+        <option value="">New/Against</option>
+        <option value="new">New</option>
+        <option value="against">Against</option>
+      </select>
+    </td>
+    <td><input type="text" placeholder="Description" id="desc-${blockId}-${rowId}"/></td>
+    <td><input type="number" placeholder="Qty"     id="qty-${blockId}-${rowId}"     oninput="calcRow(${blockId},${rowId})"/></td>
+    <td><input type="number" placeholder="Rate"    id="rate-${blockId}-${rowId}"    oninput="calcRow(${blockId},${rowId})"/></td>
+    <td><input type="number" placeholder="VA"      id="va-${blockId}-${rowId}"      oninput="calcRow(${blockId},${rowId})"/></td>
+    <td><input type="number" placeholder="Taxable" id="taxable-${blockId}-${rowId}" readonly/></td>
+    <td><input type="number" placeholder="Tax%"    id="taxpct-${blockId}-${rowId}"  oninput="calcRow(${blockId},${rowId})"/></td>
+    <td><input type="number" placeholder="IGST"    id="igst-${blockId}-${rowId}"    readonly/></td>
+    <td><input type="number" placeholder="CGST"    id="cgst-${blockId}-${rowId}"    readonly/></td>
+    <td><input type="number" placeholder="SGST"    id="sgst-${blockId}-${rowId}"    readonly/></td>
+    <td><input type="number" placeholder="Tax Amt" id="taxamt-${blockId}-${rowId}"  readonly/></td>
+    <td><input type="number" placeholder="Total"   id="total-${blockId}-${rowId}"   readonly/></td>
+    <td><button onclick="removeRow(${blockId},${rowId})">✕</button></td>
+  </tr>`;
+      }
+
+      function calcRow(blockId, rowId) {
+        const qty =
+          parseFloat(
+            document.getElementById(`qty-${blockId}-${rowId}`).value,
+          ) || 0;
+        const rate =
+          parseFloat(
+            document.getElementById(`rate-${blockId}-${rowId}`).value,
+          ) || 0;
+        const va =
+          parseFloat(document.getElementById(`va-${blockId}-${rowId}`).value) ||
+          0;
+        const taxpct =
+          parseFloat(
+            document.getElementById(`taxpct-${blockId}-${rowId}`).value,
+          ) || 0;
+
+        const taxable = qty * rate + va;
+        const taxamt = (taxable * taxpct) / 100;
+        const total = taxable + taxamt;
+
+        const stateCode =
+          document.getElementById(`block-${blockId}`)?.dataset.stateCode || "";
+        const is33 = stateCode.trim() === "33";
+
+        document.getElementById(`taxable-${blockId}-${rowId}`).value =
+          taxable.toFixed(2);
+        document.getElementById(`igst-${blockId}-${rowId}`).value = is33
+          ? "0.00"
+          : taxamt.toFixed(2);
+        document.getElementById(`cgst-${blockId}-${rowId}`).value = is33
+          ? (taxamt / 2).toFixed(2)
+          : "0.00";
+        document.getElementById(`sgst-${blockId}-${rowId}`).value = is33
+          ? (taxamt / 2).toFixed(2)
+          : "0.00";
+        document.getElementById(`taxamt-${blockId}-${rowId}`).value =
+          taxamt.toFixed(2);
+        document.getElementById(`total-${blockId}-${rowId}`).value =
+          total.toFixed(2);
+      }
+
+      let blockCounter = 0;
+      let rowCounters = {};
+
+      function addRow(blockId) {
+        rowCounters[blockId] = (rowCounters[blockId] || 0) + 1;
+        const rowId = rowCounters[blockId];
+        document
+          .getElementById(`tbody-${blockId}`)
+          .insertAdjacentHTML("beforeend", buildRow(blockId, rowId));
+      }
+
+      function removeRow(blockId, rowId) {
+        document.getElementById(`row-${blockId}-${rowId}`)?.remove();
+      }
+
+      async function addCompanyBlock() {
+        await loadCompanies();
+        blockCounter++;
+        const blockId = blockCounter;
+        rowCounters[blockId] = 0;
+
+        const block = document.createElement("div");
+        block.id = `block-${blockId}`;
+        block.dataset.profileId = "";
+        block.dataset.stateCode = "";
+
+        block.innerHTML = `
+    <hr/>
+    <div>
+      <label>Company:</label>
+      <select id="company-sel-${blockId}" onchange="onCompanyChange(${blockId},this.value)">
+        ${buildCompanyOptions("")}
+      </select>
+    </div>
+    <table border="1" cellpadding="4">
+      <thead>
+        <tr>
+          <th>Voucher Type</th><th>Date</th><th>Bill No</th><th>New/Against</th>
+          <th>Description</th><th>Qty</th><th>Rate</th><th>VA</th>
+          <th>Taxable</th><th>Tax%</th><th>IGST</th><th>CGST</th><th>SGST</th>
+          <th>Tax Amt</th><th>Total</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody-${blockId}"></tbody>
+    </table>
+    <button onclick="addRow(${blockId})">+ Add Row</button>
+    <button onclick="saveBlock(${blockId})">Save Block</button>
+    <button onclick="removeBlock(${blockId})">Remove Block</button>
+    <div id="block-msg-${blockId}"></div>
+  `;
+
+        document.getElementById("company-blocks").appendChild(block);
+        addRow(blockId);
+      }
+
+      function onCompanyChange(blockId, val) {
+        const selected = companies.find((c) => c.id == val);
+        document.getElementById(`block-${blockId}`).dataset.profileId = val;
+        document.getElementById(`block-${blockId}`).dataset.stateCode =
+          selected?.state_code || "";
+      }
+
+      async function saveBlock(blockId) {
+        const msg = document.getElementById(`block-msg-${blockId}`);
+        const profile_id = document.getElementById(`block-${blockId}`).dataset
+          .profileId;
+        if (!profile_id) {
+          msg.textContent = "Select a company first.";
+          return;
+        }
+
+        const rows = document
+          .getElementById(`tbody-${blockId}`)
+          .querySelectorAll("tr");
+        let saved = 0;
+
+        for (const row of rows) {
+          const rowId = row.id.split("-")[2];
+          const payload = {
+            profile_id,
+            voucher_type: document.getElementById(`vtype-${blockId}-${rowId}`)
+              ?.value,
+            date: document.getElementById(`date-${blockId}-${rowId}`)?.value,
+            bill_no: document.getElementById(`billno-${blockId}-${rowId}`)
+              ?.value,
+            entry_type: document.getElementById(`entry-${blockId}-${rowId}`)
+              ?.value,
+            description: document.getElementById(`desc-${blockId}-${rowId}`)
+              ?.value,
+            qty: document.getElementById(`qty-${blockId}-${rowId}`)?.value,
+            rate: document.getElementById(`rate-${blockId}-${rowId}`)?.value,
+            va: document.getElementById(`va-${blockId}-${rowId}`)?.value,
+            taxable_value: document.getElementById(
+              `taxable-${blockId}-${rowId}`,
+            )?.value,
+            tax_percent: document.getElementById(`taxpct-${blockId}-${rowId}`)
+              ?.value,
+            igst: document.getElementById(`igst-${blockId}-${rowId}`)?.value,
+            cgst: document.getElementById(`cgst-${blockId}-${rowId}`)?.value,
+            sgst: document.getElementById(`sgst-${blockId}-${rowId}`)?.value,
+            tax_amount: document.getElementById(`taxamt-${blockId}-${rowId}`)
+              ?.value,
+            total_value: document.getElementById(`total-${blockId}-${rowId}`)
+              ?.value,
+          };
+          const res = await fetch("/api/vouchers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const d = await res.json();
+          if (d.id) saved++;
+        }
+
+        msg.textContent = `Saved ${saved} row(s).`;
+      }
+
+      function removeBlock(blockId) {
+        document.getElementById(`block-${blockId}`)?.remove();
+      }
+
+      loadCompanies();
+    </script>
+  </body>
+</html>
