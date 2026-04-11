@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Profile Creation</title>
+  </head>
+  <body>
+    <div class="layout">
+      <!-- Main Form Card -->
+      <div class="card">
+        <div id="loading" style="display: none">Please wait…</div>
+
+        <div>
+          <h1>PROFILE CREATION</h1>
+          <a href="/">← BACK</a>
+        </div>
+
+        <!-- Edit Banner -->
+        <div id="editBanner" style="display: none">
+          <span>Editing: <span id="editingAlias"></span></span>
+          <button onclick="cancelEdit()">CANCEL</button>
+        </div>
+
+        <div id="formFields"></div>
+      </div>
+
+      <!-- Side Panel -->
+      <div class="side-panel">
+        <h2>COMPANIES</h2>
+        <input
+          type="text"
+          id="companiesSearch"
+          placeholder="Search company..."
+          oninput="filterCompanies()"
+        />
+        <div id="companiesList"></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+      const STATE_CODES = {
+        "Andhra Pradesh": "37",
+        "Arunachal Pradesh": "12",
+        Assam: "18",
+        Bihar: "10",
+        Chhattisgarh: "22",
+        Goa: "30",
+        Gujarat: "24",
+        Haryana: "06",
+        "Himachal Pradesh": "02",
+        Jharkhand: "20",
+        Karnataka: "29",
+        Kerala: "32",
+        "Madhya Pradesh": "23",
+        Maharashtra: "27",
+        Manipur: "14",
+        Meghalaya: "17",
+        Mizoram: "15",
+        Nagaland: "13",
+        Odisha: "21",
+        Punjab: "03",
+        Rajasthan: "08",
+        Sikkim: "11",
+        "Tamil Nadu": "33",
+        Telangana: "36",
+        Tripura: "16",
+        "Uttar Pradesh": "09",
+        Uttarakhand: "05",
+        "West Bengal": "19",
+        "Andaman and Nicobar Islands": "35",
+        Chandigarh: "04",
+        Delhi: "07",
+        "Jammu and Kashmir": "01",
+        Ladakh: "38",
+        Lakshadweep: "31",
+        Puducherry: "34",
+      };
+      const STATES = Object.keys(STATE_CODES);
+
+      const SKIP_FIELDS = ["PAN NUMBER", "SHEET NAME", "LINK"];
+      const MANDATORY_FIELDS = [
+        "COMPANY NAME",
+        "ALIAS",
+        "ADDRESS",
+        "CITY",
+        "PINCODE",
+        "STATE",
+        "STATE CODE",
+        "GST NUMBER",
+      ];
+      const BANK_FIELDS = [
+        "A/C HOLDER'S NAME",
+        "BANK NAME",
+        "ACCOUNT NUMBER",
+        "IFSC CODE",
+        "BRANCH",
+      ];
+      const NUMERIC_FIELDS = [
+        "PINCODE",
+        "STATE CODE",
+        "CONTACT NUMBER 01",
+        "CONTACT NUMBER 02",
+        "ACCOUNT NUMBER",
+      ];
+      const LENGTH_RULES = {
+        PINCODE: 6,
+        "CONTACT NUMBER 01": 10,
+        "CONTACT NUMBER 02": 10,
+      };
+
+      function sanitiseAlias(raw) {
+        if (!raw) return "";
+        return String(raw)
+          .toUpperCase()
+          .trim()
+          .replace(/[:\\/\?\*\[\]']/g, "")
+          .replace(/\s+/g, " ")
+          .substring(0, 50);
+      }
+
+      // ── Build Form ──
+      async function initPage() {
+        const res = await fetch("/api/profile/headers");
+        const headers = await res.json();
+        buildForm(headers);
+        loadCompanies();
+      }
+
+      function buildForm(headers) {
+        const container = document.getElementById("formFields");
+        container.innerHTML = "";
+        let bankSectionStarted = false;
+
+        headers.forEach((header) => {
+          if (!header) return;
+          const key = String(header).trim().toUpperCase();
+          if (SKIP_FIELDS.includes(key)) return;
+
+          if (BANK_FIELDS.includes(key) && !bankSectionStarted) {
+            bankSectionStarted = true;
+            container.appendChild(makeSectionHeading("BANK DETAILS"));
+          }
+
+          const fieldGroup = document.createElement("div");
+          fieldGroup.className = "field-group";
+
+          const label = document.createElement("label");
+          label.textContent = header;
+          if (MANDATORY_FIELDS.includes(key))
+            label.innerHTML += " <span>*</span>";
+          fieldGroup.appendChild(label);
+
+          if (key === "STATE") {
+            const select = document.createElement("select");
+            select.name = header;
+            const def = document.createElement("option");
+            def.value = "";
+            def.textContent = "Select State";
+            select.appendChild(def);
+            STATES.forEach((s) => {
+              const opt = document.createElement("option");
+              opt.value = s;
+              opt.textContent = s;
+              select.appendChild(opt);
+            });
+            select.addEventListener("change", function () {
+              const codeInput = document.querySelector(
+                'input[data-key="STATE CODE"]',
+              );
+              if (codeInput) codeInput.value = STATE_CODES[this.value] || "";
+            });
+            fieldGroup.appendChild(select);
+          } else {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.name = header;
+            input.dataset.key = key;
+            if (key === "STATE CODE") input.readOnly = true;
+
+            if (key === "COMPANY NAME") {
+              input.addEventListener("input", function () {
+                this.value = this.value.replace(/[^a-zA-Z0-9\s.,&()\-]/g, "");
+                const aliasInput = document.querySelector(
+                  'input[data-key="ALIAS"]',
+                );
+                if (aliasInput && !aliasInput.dataset.manuallyEdited) {
+                  aliasInput.value = sanitiseAlias(this.value);
+                  updateAliasPreview(aliasInput.value);
+                }
+              });
+            }
+
+            if (key === "ALIAS") {
+              input.placeholder = "Short unique name";
+              input.addEventListener("input", function () {
+                this.dataset.manuallyEdited = "true";
+                updateAliasPreview(sanitiseAlias(this.value));
+              });
+              input.addEventListener("blur", function () {
+                this.value = sanitiseAlias(this.value);
+                updateAliasPreview(this.value);
+              });
+            }
+
+            if (["GST NUMBER", "IFSC CODE"].includes(key)) {
+              input.addEventListener("input", function () {
+                const pos = this.selectionStart;
+                this.value = this.value.toUpperCase();
+                this.setSelectionRange(pos, pos);
+              });
+            }
+
+            fieldGroup.appendChild(input);
+          }
+
+          container.appendChild(fieldGroup);
+
+          if (key === "ALIAS") {
+            const preview = document.createElement("div");
+            preview.id = "aliasPreview";
+            container.appendChild(preview);
+          }
+        });
+
+        const btn = document.createElement("button");
+        btn.id = "submitBtn";
+        btn.textContent = "SUBMIT PROFILE";
+        btn.onclick = submitForm;
+        container.appendChild(btn);
+      }
+
+      function updateAliasPreview(val) {
+        const el = document.getElementById("aliasPreview");
+        if (el) el.textContent = val ? "→ Sheet name preview: " + val : "";
+      }
+
+      function makeSectionHeading(text) {
+        const h = document.createElement("div");
+        h.textContent = text;
+        return h;
+      }
+
+      function collectData() {
+        const data = {};
+        document.querySelectorAll("input[name], select[name]").forEach((el) => {
+          data[el.name.trim().toUpperCase()] = el.value.trim();
+        });
+        return data;
+      }
+
+      function validateData(data) {
+        const missing = MANDATORY_FIELDS.filter((f) => !data[f]);
+        if (missing.length) return `Please fill: ${missing.join(", ")}`;
+
+        const cleanAlias = sanitiseAlias(data["ALIAS"] || "");
+        if (!cleanAlias) return "Alias cannot be empty.";
+
+        const anyBank = BANK_FIELDS.some((f) => data[f]);
+        if (anyBank) {
+          const missingBank = BANK_FIELDS.filter((f) => !data[f]);
+          if (missingBank.length)
+            return `All bank fields required. Missing: ${missingBank.join(", ")}`;
+        }
+
+        for (const field of NUMERIC_FIELDS) {
+          if (data[field] && !/^\d+$/.test(data[field]))
+            return `${field} must be digits only.`;
+        }
+
+        for (const [field, len] of Object.entries(LENGTH_RULES)) {
+          if (data[field] && data[field].length !== len)
+            return `${field} must be exactly ${len} digits.`;
+        }
+
+        const gstPattern =
+          /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+        if (data["GST NUMBER"] && !gstPattern.test(data["GST NUMBER"])) {
+          return "Invalid GST format. Example: 33AAAAA0000A1Z5";
+        }
+
+        return null;
+      }
+
+      async function submitForm() {
+        const submitBtn = document.getElementById("submitBtn");
+        const isUpdate = submitBtn.dataset.isUpdate === "true";
+        const editingAlias = submitBtn.dataset.editingAlias;
+
+        document.getElementById("loading").style.display = "block";
+        submitBtn.disabled = true;
+
+        let data = collectData();
+
+        if (isUpdate) {
+          data["ALIAS"] = editingAlias;
+        } else {
+          for (const key of Object.keys(data)) {
+            if (key === "E-MAIL ID") data[key] = data[key].toLowerCase();
+            else if (key !== "ADDRESS") data[key] = data[key].toUpperCase();
+          }
+          data["ALIAS"] = sanitiseAlias(
+            data["ALIAS"] || data["COMPANY NAME"] || "",
+          );
+        }
+
+        if (data["GST NUMBER"] && data["GST NUMBER"].length >= 12) {
+          data["PAN NUMBER"] = data["GST NUMBER"].substring(2, 12);
+        }
+
+        const validationError = validateData(data);
+        if (validationError) {
+          document.getElementById("loading").style.display = "none";
+          submitBtn.disabled = false;
+          showToast(validationError, "error");
+          return;
+        }
+
+        try {
+          let res;
+          if (isUpdate) {
+            res = await fetch(
+              `/api/profile/${encodeURIComponent(editingAlias)}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+              },
+            );
+          } else {
+            res = await fetch("/api/profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            });
+          }
+
+          const result = await res.json();
+          document.getElementById("loading").style.display = "none";
+          submitBtn.disabled = false;
+
+          if (result.status === "SUCCESS") {
+            showToast(
+              isUpdate ? "Profile updated! ✅" : "Profile created! 🎉",
+              "success",
+            );
+            if (isUpdate) {
+              cancelEdit();
+            } else {
+              resetForm();
+            }
+            loadCompanies();
+          } else {
+            showToast(result.error || "Something went wrong!", "error");
+          }
+        } catch (err) {
+          document.getElementById("loading").style.display = "none";
+          submitBtn.disabled = false;
+          showToast(err.message || "Request failed", "error");
+        }
+      }
+
+      function resetForm() {
+        document.querySelectorAll("input[name]").forEach((i) => {
+          i.value = "";
+          delete i.dataset.manuallyEdited;
+        });
+        document
+          .querySelectorAll("select[name]")
+          .forEach((s) => (s.selectedIndex = 0));
+        updateAliasPreview("");
+      }
+
+      // ── Companies Sidebar ──
+      let allCompanies = [];
+      let currentEditingAlias = null;
+
+      async function loadCompanies() {
+        const res = await fetch("/api/profile/all");
+        allCompanies = await res.json();
+        renderCompaniesList(allCompanies);
+      }
+
+      function renderCompaniesList(companies) {
+        const container = document.getElementById("companiesList");
+        container.innerHTML = "";
+        if (!companies || companies.length === 0) {
+          container.innerHTML = "<div>No companies yet</div>";
+          return;
+        }
+        companies.forEach((c) => {
+          const row = document.createElement("div");
+          row.className =
+            "company-row" + (currentEditingAlias === c.alias ? " active" : "");
+          row.innerHTML = `
+      <div>
+        <div>${c.company}</div>
+        <div>${c.alias}</div>
+      </div>
+      <button onclick="loadEditForm('${c.alias.replace(/'/g, "&#39;")}')">EDIT</button>
+    `;
+          container.appendChild(row);
+        });
+      }
+
+      function filterCompanies() {
+        const q = document
+          .getElementById("companiesSearch")
+          .value.toLowerCase();
+        const filtered = allCompanies.filter(
+          (c) =>
+            c.company.toLowerCase().includes(q) ||
+            c.alias.toLowerCase().includes(q),
+        );
+        renderCompaniesList(filtered);
+      }
+
+      async function loadEditForm(alias) {
+        document.getElementById("loading").style.display = "block";
+        const res = await fetch(`/api/profile/${encodeURIComponent(alias)}`);
+        const profileData = await res.json();
+        document.getElementById("loading").style.display = "none";
+
+        currentEditingAlias = alias;
+        document.getElementById("editBanner").style.display = "flex";
+        document.getElementById("editingAlias").textContent = alias;
+
+        Object.entries(profileData).forEach(([key, value]) => {
+          const el = document.querySelector(`[data-key="${key}"]`);
+          if (!el) return;
+          if (el.tagName === "SELECT") {
+            el.value = value || "";
+            if (key === "STATE") {
+              const sc = document.querySelector('[data-key="STATE CODE"]');
+              if (sc) sc.value = STATE_CODES[value] || "";
+            }
+          } else {
+            el.value = value || "";
+            if (key === "ALIAS") el.dataset.manuallyEdited = "true";
+          }
+        });
+
+        updateAliasPreview(profileData["ALIAS"] || "");
+
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.textContent = "UPDATE PROFILE";
+        submitBtn.dataset.isUpdate = "true";
+        submitBtn.dataset.editingAlias = alias;
+
+        renderCompaniesList(allCompanies);
+        document.querySelector(".card").scrollIntoView({ behavior: "smooth" });
+      }
+
+      function cancelEdit() {
+        currentEditingAlias = null;
+        document.getElementById("editBanner").style.display = "none";
+        document.getElementById("companiesSearch").value = "";
+        resetForm();
+
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.textContent = "SUBMIT PROFILE";
+        delete submitBtn.dataset.isUpdate;
+        delete submitBtn.dataset.editingAlias;
+
+        renderCompaniesList(allCompanies);
+      }
+
+      function showToast(message, type) {
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.className = "show " + type;
+        setTimeout(() => (toast.className = ""), 3200);
+      }
+
+      window.onload = initPage;
+    </script>
+  </body>
+</html>
