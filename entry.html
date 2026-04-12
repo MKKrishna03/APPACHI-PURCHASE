@@ -32,11 +32,7 @@
         return `
   <tr id="row-${blockId}-${rowId}">
     <td>
-      <select id="vtype-${blockId}-${rowId}">
-        <option value="">-- Select --</option>
-        <option>Purchase</option><option>Sale</option>
-        <option>Receipt</option><option>Payment</option><option>Journal</option>
-      </select>
+      <select id="vtype-${blockId}-${rowId}"></select>
     </td>
     <td><input type="date" id="date-${blockId}-${rowId}"/></td>
     <td><input type="text" placeholder="Bill No" id="billno-${blockId}-${rowId}"/></td>
@@ -110,9 +106,12 @@
       function addRow(blockId) {
         rowCounters[blockId] = (rowCounters[blockId] || 0) + 1;
         const rowId = rowCounters[blockId];
+
         document
           .getElementById(`tbody-${blockId}`)
           .insertAdjacentHTML("beforeend", buildRow(blockId, rowId));
+
+        loadVoucherTypes(`vtype-${blockId}-${rowId}`);
       }
 
       function removeRow(blockId, rowId) {
@@ -223,6 +222,21 @@
 
       function removeBlock(blockId) {
         document.getElementById(`block-${blockId}`)?.remove();
+      }
+      async function loadVoucherTypes(selectId) {
+        const select = document.getElementById(selectId);
+
+        const res = await fetch("/api/voucher-types");
+        const types = await res.json();
+
+        select.innerHTML = `<option value="">-- Select --</option>`;
+
+        types.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = item.name;
+          opt.textContent = item.name;
+          select.appendChild(opt);
+        });
       }
 
       loadCompanies();

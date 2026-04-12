@@ -26,16 +26,12 @@
 
       <!-- Side Panel -->
       <div class="side-panel">
-        <h2>COMPANIES</h2>
-        <input
-          type="text"
-          id="companiesSearch"
-          placeholder="Search company..."
-          oninput="filterCompanies()"
-        />
-        <div id="companiesList"></div>
-      </div>
-    </div>
+  <h2>COMPANIES</h2>
+
+  <select id="companyDropdown" onchange="selectCompanyForEdit()">
+    <option value="">Select Company</option>
+  </select>
+</div>
 
     <div id="toast"></div>
 
@@ -155,6 +151,7 @@
           if (key === "STATE") {
             const select = document.createElement("select");
             select.name = header;
+            select.dataset.key = key;
             const def = document.createElement("option");
             def.value = "";
             def.textContent = "Select State";
@@ -294,8 +291,9 @@
         let data = collectData();
 
         if (isUpdate) {
-          data["ALIAS"] = editingAlias;
-        } else {
+  data["OLD_ALIAS"] = editingAlias;
+  data["ALIAS"] = sanitiseAlias(data["ALIAS"]);
+}else {
           for (const key of Object.keys(data)) {
             if (key === "E-MAIL ID") data[key] = data[key].toLowerCase();
             else if (key !== "ADDRESS") data[key] = data[key].toUpperCase();
@@ -383,38 +381,27 @@
       }
 
       function renderCompaniesList(companies) {
-        const container = document.getElementById("companiesList");
-        container.innerHTML = "";
-        if (!companies || companies.length === 0) {
-          container.innerHTML = "<div>No companies yet</div>";
-          return;
-        }
-        companies.forEach((c) => {
-          const row = document.createElement("div");
-          row.className =
-            "company-row" + (currentEditingAlias === c.alias ? " active" : "");
-          row.innerHTML = `
-      <div>
-        <div>${c.company}</div>
-        <div>${c.alias}</div>
-      </div>
-      <button onclick="loadEditForm('${c.alias.replace(/'/g, "&#39;")}')">EDIT</button>
-    `;
-          container.appendChild(row);
-        });
-      }
+  const dropdown = document.getElementById("companyDropdown");
 
-      function filterCompanies() {
-        const q = document
-          .getElementById("companiesSearch")
-          .value.toLowerCase();
-        const filtered = allCompanies.filter(
-          (c) =>
-            c.company.toLowerCase().includes(q) ||
-            c.alias.toLowerCase().includes(q),
-        );
-        renderCompaniesList(filtered);
-      }
+  dropdown.innerHTML = `<option value="">Select Company</option>`;
+
+  if (!companies || companies.length === 0) {
+    return;
+  }
+
+  companies.forEach((c) => {
+    const option = document.createElement("option");
+    option.value = c.alias;
+    option.textContent = `${c.company} (${c.alias})`;
+
+    if (currentEditingAlias === c.alias) {
+      option.selected = true;
+    }
+
+    dropdown.appendChild(option);
+  });
+}
+      
 
       async function loadEditForm(alias) {
         document.getElementById("loading").style.display = "block";
@@ -455,7 +442,7 @@
       function cancelEdit() {
         currentEditingAlias = null;
         document.getElementById("editBanner").style.display = "none";
-        document.getElementById("companiesSearch").value = "";
+        document.getElementById("companyDropdown").value = "";
         resetForm();
 
         const submitBtn = document.getElementById("submitBtn");
@@ -472,6 +459,13 @@
         toast.className = "show " + type;
         setTimeout(() => (toast.className = ""), 3200);
       }
+      function selectCompanyForEdit() {
+  const alias = document.getElementById("companyDropdown").value;
+
+  if (!alias) return;
+
+  loadEditForm(alias);
+}
 
       window.onload = initPage;
     </script>

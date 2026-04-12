@@ -285,11 +285,10 @@ app.post("/api/vouchers", async (req, res) => {
   }
 });
 
-app.get("/api/vouchers/:profile_id", async (req, res) => {
+app.get("/api/voucher-types", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM vouchers WHERE profile_id=$1 ORDER BY created_at DESC",
-      [req.params.profile_id],
+      "SELECT name FROM voucher_types ORDER BY name",
     );
     res.json(result.rows);
   } catch (err) {
