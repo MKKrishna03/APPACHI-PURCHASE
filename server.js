@@ -392,6 +392,41 @@ app.get("/api/labour", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get("/api/labour/list", async (req, res) => {
+  const { profile_id, voucher_type } = req.query;
+  try {
+    const params = [];
+    let where = "";
+    if (profile_id) {
+      params.push(profile_id);
+      where += `${where ? " AND" : " WHERE"} l.profile_id = $${
+        params.length
+      }`;
+    }
+    if (voucher_type) {
+      params.push(voucher_type);
+      where += `${where ? " AND" : " WHERE"} l.voucher_type = $${
+        params.length
+      }`;
+    }
+    const result = await pool.query(
+      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number,
+              l.voucher_type,
+              COALESCE(SUM(li.amount), 0) AS total_value
+       FROM labour l
+       LEFT JOIN labour_items li ON li.labour_id = l.id
+       ${where}
+       GROUP BY l.id
+       ORDER BY l.created_at DESC`,
+      params,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("LABOUR LIST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ── CLOSE ISSUE VOUCHER ROUTES ──
 
 app.post("/api/close-issue-voucher", async (req, res) => {
@@ -514,6 +549,37 @@ app.post("/api/vouchers", async (req, res) => {
   }
 });
 
+app.get("/api/vouchers/list", async (req, res) => {
+  const { profile_id, voucher_type } = req.query;
+  try {
+    const params = [];
+    let where = "";
+    if (profile_id) {
+      params.push(profile_id);
+      where += `${where ? " AND" : " WHERE"} profile_id = $${
+        params.length
+      }`;
+    }
+    if (voucher_type) {
+      params.push(`%${voucher_type}%`);
+      where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${
+        params.length
+      }`;
+    }
+    const result = await pool.query(
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value
+       FROM vouchers
+       ${where}
+       ORDER BY created_at DESC`,
+      params,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("VOUCHER LIST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── PAGES ──
 app.get("/", (req, res) =>
   res.sendFile(path.join(__dirname, "dashboard.html")),
@@ -523,6 +589,15 @@ app.get("/profile", (req, res) =>
 );
 app.get("/labour", (req, res) =>
   res.sendFile(path.join(__dirname, "labour.html")),
+);
+app.get("/transaction", (req, res) =>
+  res.sendFile(path.join(__dirname, "transaction.html")),
+);
+app.get("/receipt", (req, res) =>
+  res.sendFile(path.join(__dirname, "transaction.html")),
+);
+app.get("/payment", (req, res) =>
+  res.sendFile(path.join(__dirname, "transaction.html")),
 );
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
