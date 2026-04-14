@@ -12,6 +12,7 @@
         font-family: Arial, sans-serif;
         display: flex;
         height: 100vh;
+        background: #f5f5f5;
       }
       .sidebar {
         width: 200px;
@@ -28,7 +29,7 @@
         background: none;
         border: none;
         color: rgb(244, 242, 250);
-        font-size: 20px;
+        font-size: 14px;
         cursor: pointer;
         margin-bottom: 20px;
       }
@@ -43,12 +44,12 @@
         font-weight: bold;
         margin-bottom: 10px;
       }
-      select {
+      .sidebar select {
         width: 100%;
         padding: 8px;
         margin-bottom: 15px;
       }
-      button {
+      .sidebar button {
         display: block;
         width: 100%;
         padding: 10px;
@@ -59,18 +60,156 @@
         cursor: pointer;
         font-size: 14px;
       }
-      button:hover {
+      .sidebar button:hover {
         background: #2980b9;
       }
       .main {
         flex: 1;
+        background: #f5f5f5;
+      }
+      .page {
+        max-width: 1000px;
+        margin: 24px auto;
         background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 18px;
+        color: #2c3e50;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+      }
+      .btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        background: #3498db;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      .btn:hover {
+        background: #2980b9;
+      }
+      .btn-secondary {
+        background: #2ecc71;
+      }
+      .btn-secondary:hover {
+        background: #27ae60;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 999;
+      }
+      .modal-backdrop.show {
+        display: flex;
+      }
+      .modal {
+        width: 100%;
+        max-width: 700px;
+        background: white;
+        border-radius: 8px;
+        padding: 20px 22px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        position: relative;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .modal-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 22px;
+        cursor: pointer;
+        color: #666;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+      }
+      label {
+        font-size: 13px;
+        font-weight: bold;
+        margin-bottom: 6px;
+        color: #2c3e50;
+      }
+      .modal input,
+      .modal select {
+        padding: 9px 10px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        font-size: 14px;
+        width: 100%;
+        margin-bottom: 0;
+      }
+      .modal input:focus,
+      .modal select:focus {
+        outline: none;
+        border-color: #3498db;
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .message {
+        margin-top: 10px;
+        font-size: 13px;
+        padding: 8px 10px;
+        border-radius: 4px;
+        display: none;
+      }
+      .message.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+        display: block;
+      }
+      .message.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        display: block;
+      }
+      @media (max-width: 720px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <div class="sidebar" id="sidebar">
-      <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+      <button class="toggle-btn" onclick="toggleSidebar()">Menu</button>
       <div class="sidebar-content">
         <div class="sidebar-label">Company</div>
         <select id="companySelect" onchange="handleCompanySelect()">
@@ -93,15 +232,135 @@
         </select>
       </div>
     </div>
-    <div class="main"></div>
+
+    <div class="main">
+      <div class="page">
+        <h1>Dashboard</h1>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="receiptBackdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <div class="modal-title">Receipt Voucher</div>
+          <button class="close-btn" onclick="closeModal('receipt')">x</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="receiptCompany">Select Company</label>
+            <select id="receiptCompany"></select>
+          </div>
+          <div class="form-group">
+            <label for="receiptVoucherType">Voucher Type</label>
+            <select id="receiptVoucherType">
+              <option value="">Select Voucher Type</option>
+              <option value="Purchase Receipt Voucher">
+                Purchase Receipt Voucher
+              </option>
+              <option value="Labour Receipt Voucher">
+                Labour Receipt Voucher
+              </option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label for="receiptAgainstBill">Against Bill</label>
+            <select id="receiptAgainstBill"></select>
+          </div>
+          <div class="form-group">
+            <label for="receiptDate">Receipt Date</label>
+            <input type="date" id="receiptDate" />
+          </div>
+          <div class="form-group">
+            <label for="receiptAmount">Amount</label>
+            <input type="number" id="receiptAmount" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label for="receiptMop">MOP</label>
+            <select id="receiptMop">
+              <option value="">Select MOP</option>
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="UPI">UPI</option>
+              <option value="Cheque">Cheque</option>
+              <option value="NEFT/RTGS">NEFT/RTGS</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" onclick="saveReceipt()">Save Receipt</button>
+        </div>
+        <div id="receiptMsg" class="message"></div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="paymentBackdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <div class="modal-title">Payment Voucher</div>
+          <button class="close-btn" onclick="closeModal('payment')">x</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="paymentCompany">Select Company</label>
+            <select id="paymentCompany"></select>
+          </div>
+          <div class="form-group">
+            <label for="paymentVoucherType">Voucher Type</label>
+            <select id="paymentVoucherType">
+              <option value="">Select Voucher Type</option>
+              <option value="Purchase Payment Voucher">
+                Purchase Payment Voucher
+              </option>
+              <option value="Labour Payment Voucher">
+                Labour Payment Voucher
+              </option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label for="paymentAgainstBill">Against Bill</label>
+            <select id="paymentAgainstBill"></select>
+          </div>
+          <div class="form-group">
+            <label for="paymentDate">Payment Date</label>
+            <input type="date" id="paymentDate" />
+          </div>
+          <div class="form-group">
+            <label for="paymentAmount">Amount</label>
+            <input type="number" id="paymentAmount" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label for="paymentMop">MOP</label>
+            <select id="paymentMop">
+              <option value="">Select MOP</option>
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="UPI">UPI</option>
+              <option value="Cheque">Cheque</option>
+              <option value="NEFT/RTGS">NEFT/RTGS</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="savePayment()">
+            Save Payment
+          </button>
+        </div>
+        <div id="paymentMsg" class="message"></div>
+      </div>
+    </div>
+
     <script>
+      const receiptBackdrop = document.getElementById("receiptBackdrop");
+      const paymentBackdrop = document.getElementById("paymentBackdrop");
+
       function toggleSidebar() {
         document.getElementById("sidebar").classList.toggle("collapsed");
       }
 
       function handleCompanySelect() {
         const val = document.getElementById("companySelect").value;
-        console.log("Company selected:", val);
         if (val === "create") {
           window.location.href = "/profile";
         }
@@ -110,15 +369,14 @@
       function handleTransactionSelect() {
         const val = document.getElementById("transactionSelect").value;
         if (val === "receipt") {
-          window.location.href = "/receipt";
+          openModal("receipt");
         } else if (val === "payment") {
-          window.location.href = "/payment";
+          openModal("payment");
         }
         document.getElementById("transactionSelect").value = "";
       }
       function handleLabourSelect() {
         const val = document.getElementById("labourSelect").value;
-        console.log("Labour selected:", val);
         if (val === "create") {
           window.location.href = "/labour";
         } else if (val === "close") {
@@ -133,6 +391,313 @@
           window.location.href = `/profile?edit=${alias}`;
         }
       }
+
+      function openModal(type) {
+        if (type === "receipt") {
+          receiptBackdrop.classList.add("show");
+        } else {
+          paymentBackdrop.classList.add("show");
+        }
+      }
+
+      function closeModal(type) {
+        if (type === "receipt") {
+          receiptBackdrop.classList.remove("show");
+        } else {
+          paymentBackdrop.classList.remove("show");
+        }
+      }
+
+      receiptBackdrop.addEventListener("click", (e) => {
+        if (e.target === receiptBackdrop) closeModal("receipt");
+      });
+      paymentBackdrop.addEventListener("click", (e) => {
+        if (e.target === paymentBackdrop) closeModal("payment");
+      });
+
+      function toggleReceiptEntryType() {
+        const val = document.getElementById("receiptEntryType").value;
+        const fields = document.getElementById("receiptAgainstFields");
+        fields.style.display = val === "against" ? "block" : "none";
+        if (val !== "against") {
+          document.getElementById("receiptVoucherType").value = "";
+          document.getElementById("receiptAgainstBill").innerHTML =
+            "<option value=''>Select Bill</option>";
+        }
+      }
+
+      function togglePaymentEntryType() {
+        const val = document.getElementById("paymentEntryType").value;
+        const fields = document.getElementById("paymentAgainstFields");
+        fields.style.display = val === "against" ? "block" : "none";
+        if (val !== "against") {
+          document.getElementById("paymentVoucherType").value = "";
+          document.getElementById("paymentAgainstBill").innerHTML =
+            "<option value=''>Select Bill</option>";
+        }
+      }
+
+      function onReceiptVoucherTypeChange() {
+        const profileId = document.getElementById("receiptCompany").value;
+        loadBillsForType(receiptCategory(), profileId, "receiptAgainstBill");
+      }
+
+      function onPaymentVoucherTypeChange() {
+        const profileId = document.getElementById("paymentCompany").value;
+        loadBillsForType(paymentCategory(), profileId, "paymentAgainstBill");
+      }
+
+      let companies = [];
+
+      async function loadCompanies() {
+        const res = await fetch("/api/profiles/list");
+        companies = await res.json();
+        const receiptCompany = document.getElementById("receiptCompany");
+        const paymentCompany = document.getElementById("paymentCompany");
+
+        const baseOption = `<option value="">Select Company</option>`;
+        receiptCompany.innerHTML =
+          baseOption +
+          companies
+            .map((c) => `<option value="${c.id}">${c.name}</option>`)
+            .join("");
+        paymentCompany.innerHTML = receiptCompany.innerHTML;
+      }
+
+      function formatDateDDMMYYYY(value) {
+        if (!value) return "";
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+          const parts = value.substring(0, 10).split("-");
+          return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+
+      async function loadBillsForType(
+        voucherCategory,
+        profileId,
+        targetSelectId,
+      ) {
+        const sel = document.getElementById(targetSelectId);
+        if (!profileId || !voucherCategory) {
+          sel.innerHTML = `<option value="">Select Bill</option>`;
+          return;
+        }
+        if (voucherCategory === "labour") {
+          const res = await fetch(
+            `/api/labour/list?profile_id=${profileId}&voucher_type=ISSUE%20VOUCHER`,
+          );
+          const bills = await res.json();
+          const options =
+            `<option value="">Select Bill</option>` +
+            bills
+              .filter((b) => b.issue_number)
+              .map((b) => {
+                const date = formatDateDDMMYYYY(b.date);
+                const total =
+                  b.total_value != null ? Number(b.total_value) : "";
+                return `<option value="${b.issue_number}">${date}-${b.issue_number}-${total}</option>`;
+              })
+              .join("");
+          sel.innerHTML = options;
+          return;
+        }
+
+        const res = await fetch(
+          `/api/vouchers/list?profile_id=${profileId}&voucher_type=Purchase`,
+        );
+        const bills = await res.json();
+        const options =
+          `<option value="">Select Bill</option>` +
+          bills
+            .filter((b) => b.bill_no)
+            .map((b) => {
+              const date = formatDateDDMMYYYY(b.date);
+              const total = b.total_value != null ? Number(b.total_value) : "";
+              return `<option value="${b.bill_no}">${date}-${b.bill_no}-${total}</option>`;
+            })
+            .join("");
+        sel.innerHTML = options;
+      }
+
+      function setMessage(id, text, type) {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        el.className = `message ${type}`;
+      }
+
+      function clearReceiptForm() {
+        document.getElementById("receiptEntryType").value = "";
+        document.getElementById("receiptAgainstFields").style.display = "none";
+        document.getElementById("receiptVoucherType").value = "";
+        document.getElementById("receiptAgainstBill").innerHTML =
+          "<option value=''>Select Bill</option>";
+        document.getElementById("receiptDate").value = "";
+        document.getElementById("receiptAmount").value = "";
+        document.getElementById("receiptMop").value = "";
+        document.getElementById("receiptMsg").className = "message";
+      }
+      function clearPaymentForm() {
+        document.getElementById("paymentEntryType").value = "";
+        document.getElementById("paymentAgainstFields").style.display = "none";
+        document.getElementById("paymentVoucherType").value = "";
+        document.getElementById("paymentAgainstBill").innerHTML =
+          "<option value=''>Select Bill</option>";
+        document.getElementById("paymentDate").value = "";
+        document.getElementById("paymentAmount").value = "";
+        document.getElementById("paymentMop").value = "";
+        document.getElementById("paymentMsg").className = "message";
+      }
+
+      function receiptCategory() {
+        const v = document.getElementById("receiptVoucherType").value;
+        return v.toLowerCase().includes("labour") ? "labour" : "purchase";
+      }
+      function paymentCategory() {
+        const v = document.getElementById("paymentVoucherType").value;
+        return v.toLowerCase().includes("labour") ? "labour" : "purchase";
+      }
+
+      document
+        .getElementById("receiptCompany")
+        .addEventListener("change", (e) => {
+          const cat = receiptCategory();
+          if (cat) loadBillsForType(cat, e.target.value, "receiptAgainstBill");
+          else
+            document.getElementById("receiptAgainstBill").innerHTML =
+              "<option value=''>Select Voucher Type First</option>";
+        });
+      document
+        .getElementById("receiptVoucherType")
+        .addEventListener("change", () => {
+          const profileId = document.getElementById("receiptCompany").value;
+          loadBillsForType(receiptCategory(), profileId, "receiptAgainstBill");
+        });
+
+      document
+        .getElementById("paymentCompany")
+        .addEventListener("change", (e) => {
+          const cat = paymentCategory();
+          if (cat) loadBillsForType(cat, e.target.value, "paymentAgainstBill");
+          else
+            document.getElementById("paymentAgainstBill").innerHTML =
+              "<option value=''>Select Voucher Type First</option>";
+        });
+      document
+        .getElementById("paymentVoucherType")
+        .addEventListener("change", () => {
+          const profileId = document.getElementById("paymentCompany").value;
+          loadBillsForType(paymentCategory(), profileId, "paymentAgainstBill");
+        });
+
+      async function saveReceipt() {
+        const profile_id = document.getElementById("receiptCompany").value;
+        const voucher_type =
+          document.getElementById("receiptVoucherType").value;
+        const bill_no = document.getElementById("receiptAgainstBill").value;
+        const date = document.getElementById("receiptDate").value;
+        const amount = document.getElementById("receiptAmount").value;
+        const mop = document.getElementById("receiptMop").value;
+
+        if (!profile_id || !date || !amount || !mop) {
+          setMessage("receiptMsg", "Please fill all receipt fields.", "error");
+          return;
+        }
+        if (!voucher_type || !bill_no) {
+          setMessage(
+            "receiptMsg",
+            "Please select voucher type and bill.",
+            "error",
+          );
+          return;
+        }
+
+        const payload = {
+          profile_id,
+          voucher_type,
+          date,
+          bill_no,
+          entry_type: "against",
+          description: `Receipt via ${mop}`,
+          total_value: amount,
+        };
+
+        const res = await fetch("/api/vouchers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.id) {
+          alert("Receipt Saved!");
+          closeModal("receipt");
+          clearReceiptForm();
+        } else {
+          setMessage(
+            "receiptMsg",
+            data.error || "Failed to save receipt.",
+            "error",
+          );
+        }
+      }
+
+      async function savePayment() {
+        const profile_id = document.getElementById("paymentCompany").value;
+        const voucher_type =
+          document.getElementById("paymentVoucherType").value;
+        const bill_no = document.getElementById("paymentAgainstBill").value;
+        const date = document.getElementById("paymentDate").value;
+        const amount = document.getElementById("paymentAmount").value;
+        const mop = document.getElementById("paymentMop").value;
+
+        if (!profile_id || !date || !amount || !mop) {
+          setMessage("paymentMsg", "Please fill all payment fields.", "error");
+          return;
+        }
+        if (!voucher_type || !bill_no) {
+          setMessage(
+            "paymentMsg",
+            "Please select voucher type and bill.",
+            "error",
+          );
+          return;
+        }
+
+        const payload = {
+          profile_id,
+          voucher_type: voucher_type || "Payment Voucher",
+          date,
+          bill_no: bill_no || null,
+          entry_type: "against",
+          description: `Payment via ${mop}`,
+          total_value: amount,
+        };
+
+        const res = await fetch("/api/vouchers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.id) {
+          alert("Payment Saved!");
+          closeModal("payment");
+          clearPaymentForm();
+        } else {
+          setMessage(
+            "paymentMsg",
+            data.error || "Failed to save payment.",
+            "error",
+          );
+        }
+      }
+
+      loadCompanies();
     </script>
   </body>
 </html>
