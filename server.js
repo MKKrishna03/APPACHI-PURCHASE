@@ -32,7 +32,7 @@ async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
-      alias TEXT UNIQUE NOT NULL,
+alias TEXT UNIQUE NOT NULL,
       company_name TEXT,
       address TEXT,
       city TEXT,
@@ -51,6 +51,34 @@ async function initDB() {
       branch TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS voucher_types (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS labour (
+      id SERIAL PRIMARY KEY,
+      profile_id INTEGER REFERENCES profiles(id),
+      company_name TEXT,
+      date DATE,
+      issue_number TEXT,
+      labour_item_type TEXT,
+      voucher_type TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS labour_items (
+      id SERIAL PRIMARY KEY,
+      labour_id INTEGER REFERENCES labour(id),
+      sl_no INTEGER,
+      description TEXT,
+      quantity NUMERIC,
+      rate NUMERIC,
+      amount NUMERIC,
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS vouchers (
@@ -106,7 +134,7 @@ app.get("/api/profile/headers", (req, res) => {
 app.get("/api/profile/all", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT alias, company_name AS company FROM profiles ORDER BY company_name",
+      "SELECT id, alias, company_name AS company, state_code FROM profiles ORDER BY company_name",
     );
     res.json(result.rows);
   } catch (err) {
@@ -197,12 +225,13 @@ app.put("/api/profile/:alias", async (req, res) => {
   try {
     await pool.query(
       `UPDATE profiles SET
-        company_name=$1, address=$2, city=$3, pincode=$4, state=$5,
-        state_code=$6, gst_number=$7, pan_number=$8, contact1=$9,
-        contact2=$10, email=$11, ac_holder=$12, bank_name=$13,
-        account_number=$14, ifsc_code=$15, branch=$16, updated_at=NOW()
-      WHERE alias=$17`,
+        alias=$1, company_name=$2, address=$3, city=$4, pincode=$5, state=$6,
+        state_code=$7, gst_number=$8, pan_number=$9, contact1=$10,
+        contact2=$11, email=$12, ac_holder=$13, bank_name=$14,
+        account_number=$15, ifsc_code=$16, branch=$17, updated_at=NOW()
+      WHERE alias=$18`,
       [
+        d["ALIAS"],
         d["COMPANY NAME"],
         d["ADDRESS"],
         d["CITY"],
@@ -231,6 +260,206 @@ app.put("/api/profile/:alias", async (req, res) => {
 function num(v) {
   return v === "" || v == null ? null : v;
 }
+
+// ── VOUCHER TYPE ROUTES ──
+
+app.get("/api/voucher-types", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT name FROM voucher_types ORDER BY name",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/labour-item-types", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT name FROM labour_item_types ORDER BY name",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/voucher-type", async (req, res) => {
+  const { name } = req.body;
+  try {
+    await pool.query(
+      "INSERT INTO voucher_types (name) VALUES ($1) ON CONFLICT DO NOTHING",
+      [name],
+    );
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/seed-voucher-types", async (req, res) => {
+  try {
+    await pool.query(
+      "INSERT INTO voucher_types (name) VALUES ('Create Issue Voucher'), ('Close Issue Voucher') ON CONFLICT DO NOTHING",
+    );
+    res.json({ status: "SUCCESS", message: "Voucher types seeded" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── LABOUR ROUTES ──
+
+app.post("/api/labour", async (req, res) => {
+  const {
+    profile_id,
+    company_name,
+    date,
+    issue_number,
+    labour_item_type,
+    items,
+  } = req.body;
+
+  try {
+    const labourResult = await pool.query(
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        profile_id,
+        company_name,
+        date,
+        issue_number,
+        labour_item_type,
+        "ISSUE VOUCHER",
+      ],
+    );
+    const labour_id = labourResult.rows[0].id;
+
+    for (const item of items) {
+      await pool.query(
+        `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          labour_id,
+          item.sl_no,
+          item.description,
+          item.quantity,
+          item.rate,
+          item.amount,
+        ],
+      );
+    }
+
+    res.json({ status: "SUCCESS", labour_id });
+  } catch (err) {
+    console.error("LABOUR POST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/labour/:id", async (req, res) => {
+  try {
+    const labourResult = await pool.query(
+      "SELECT * FROM labour WHERE id = $1",
+      [req.params.id],
+    );
+    if (!labourResult.rows[0]) {
+      return res.status(404).json({ error: "Labour not found" });
+    }
+
+    const itemsResult = await pool.query(
+      "SELECT * FROM labour_items WHERE labour_id = $1 ORDER BY sl_no",
+      [req.params.id],
+    );
+
+    res.json({
+      labour: labourResult.rows[0],
+      items: itemsResult.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/labour", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM labour ORDER BY created_at DESC`,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ── CLOSE ISSUE VOUCHER ROUTES ──
+
+app.post("/api/close-issue-voucher", async (req, res) => {
+  const { labour_id, closing_date, closing_type, partial_qty, items } =
+    req.body;
+
+  try {
+    const labourResult = await pool.query(
+      "SELECT * FROM labour WHERE id = $1",
+      [labour_id],
+    );
+
+    if (!labourResult.rows[0]) {
+      return res.status(404).json({ error: "Labour bill not found" });
+    }
+
+    const labour = labourResult.rows[0];
+
+    // Ensure Receipt Voucher type exists
+    await pool.query(
+      "INSERT INTO voucher_types (name) VALUES ($1) ON CONFLICT DO NOTHING",
+      ["Receipt Voucher"],
+    );
+
+    const result = await pool.query(
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [
+        labour.profile_id,
+        labour.company_name,
+        closing_date,
+        labour.issue_number,
+        "Receipt Voucher",
+      ],
+    );
+
+    const close_labour_id = result.rows[0].id;
+
+    // Insert items if provided
+    if (items && items.length > 0) {
+      for (const item of items) {
+        await pool.query(
+          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            close_labour_id,
+            item.sl_no,
+            item.description,
+            partial_qty && closing_type === "partial"
+              ? partial_qty
+              : item.quantity,
+            item.rate,
+            item.amount,
+          ],
+        );
+      }
+    }
+
+    res.json({ status: "SUCCESS", id: close_labour_id });
+  } catch (err) {
+    console.error("CLOSE ISSUE VOUCHER ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/labclose", (req, res) =>
+  res.sendFile(path.join(__dirname, "labclose.html")),
+);
 
 // ── VOUCHER ROUTES ──
 
@@ -285,21 +514,15 @@ app.post("/api/vouchers", async (req, res) => {
   }
 });
 
-app.get("/api/voucher-types", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT name FROM voucher_types ORDER BY name",
-    );
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── PAGES ──
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "entry.html")));
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "dashboard.html")),
+);
 app.get("/profile", (req, res) =>
   res.sendFile(path.join(__dirname, "profile.html")),
+);
+app.get("/labour", (req, res) =>
+  res.sendFile(path.join(__dirname, "labour.html")),
 );
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
