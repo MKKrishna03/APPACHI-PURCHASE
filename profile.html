@@ -291,9 +291,13 @@
         let data = collectData();
 
         if (isUpdate) {
-  data["OLD_ALIAS"] = editingAlias;
-  data["ALIAS"] = sanitiseAlias(data["ALIAS"]);
-}else {
+          data["ALIAS"] = sanitiseAlias(data["ALIAS"] || data["COMPANY NAME"] || "");
+          for (const key of Object.keys(data)) {
+            if (key === "E-MAIL ID") data[key] = data[key].toLowerCase();
+            else if (key !== "ADDRESS") data[key] = data[key].toUpperCase();
+          }
+          data["ALIAS"] = sanitiseAlias(data["ALIAS"]);
+        }else {
           for (const key of Object.keys(data)) {
             if (key === "E-MAIL ID") data[key] = data[key].toLowerCase();
             else if (key !== "ADDRESS") data[key] = data[key].toUpperCase();

@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        height: 100vh;
+      }
+      .sidebar {
+        width: 200px;
+        background: #0c4b9c;
+        color: rgb(195, 191, 216);
+        padding: 20px;
+        transition: width 0.3s;
+        overflow: hidden;
+      }
+      .sidebar.collapsed {
+        width: 60px;
+      }
+      .toggle-btn {
+        background: none;
+        border: none;
+        color: rgb(244, 242, 250);
+        font-size: 20px;
+        cursor: pointer;
+        margin-bottom: 20px;
+      }
+      .sidebar-content {
+        display: block;
+      }
+      .sidebar.collapsed .sidebar-content {
+        display: none;
+      }
+      .sidebar-label {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      select {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 15px;
+      }
+      button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: #3498db;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      button:hover {
+        background: #2980b9;
+      }
+      .main {
+        flex: 1;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sidebar" id="sidebar">
+      <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+      <div class="sidebar-content">
+        <div class="sidebar-label">Company</div>
+        <select id="companySelect" onchange="handleCompanySelect()">
+          <option value="">Select Company</option>
+          <option value="create">Create Profile</option>
+        </select>
+
+        <div class="sidebar-label" style="margin-top: 20px">Labour</div>
+        <select id="labourSelect" onchange="handleLabourSelect()">
+          <option value="">Select Labour</option>
+          <option value="create">Create Issue Voucher</option>
+          <option value="close">Close Issue Voucher</option>
+        </select>
+
+        <div class="sidebar-label" style="margin-top: 20px">Transactions</div>
+        <select id="transactionSelect" onchange="handleTransactionSelect()">
+          <option value="">Select Transaction</option>
+          <option value="receipt">Receipt</option>
+          <option value="payment">Payment</option>
+        </select>
+      </div>
+    </div>
+    <div class="main"></div>
+    <script>
+      function toggleSidebar() {
+        document.getElementById("sidebar").classList.toggle("collapsed");
+      }
+
+      function handleCompanySelect() {
+        const val = document.getElementById("companySelect").value;
+        console.log("Company selected:", val);
+        if (val === "create") {
+          window.location.href = "/profile";
+        }
+        document.getElementById("companySelect").value = "";
+      }
+      function handleTransactionSelect() {
+        const val = document.getElementById("transactionSelect").value;
+        if (val === "receipt") {
+          window.location.href = "/receipt";
+        } else if (val === "payment") {
+          window.location.href = "/payment";
+        }
+        document.getElementById("transactionSelect").value = "";
+      }
+      function handleLabourSelect() {
+        const val = document.getElementById("labourSelect").value;
+        console.log("Labour selected:", val);
+        if (val === "create") {
+          window.location.href = "/labour";
+        } else if (val === "close") {
+          window.location.href = "/labclose";
+        }
+        document.getElementById("labourSelect").value = "";
+      }
+
+      function editCompany() {
+        const alias = document.getElementById("companySelect").value;
+        if (alias) {
+          window.location.href = `/profile?edit=${alias}`;
+        }
+      }
+    </script>
+  </body>
+</html>
