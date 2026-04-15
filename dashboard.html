@@ -74,8 +74,12 @@
         background: rgba(0, 0, 0, 0.06);
         transform: scale(1.05);
       }
-      .sidebar.collapsed .toggle-btn span {
+      .sidebar.collapsed .toggle-btn span:not(:first-child) {
         display: none;
+      }
+
+      .sidebar.collapsed .toggle-btn span:first-child {
+        display: inline;
       }
       .sidebar-content {
         display: block;
