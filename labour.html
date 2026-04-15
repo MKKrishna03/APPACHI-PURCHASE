@@ -412,7 +412,7 @@
           companies.forEach((c) => {
             const opt = document.createElement("option");
             opt.value = c.alias;
-            opt.textContent = `${c.company} (${c.alias})`;
+            opt.textContent = c.alias;
             select.appendChild(opt);
           });
         } catch (err) {
