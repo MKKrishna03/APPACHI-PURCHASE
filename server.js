@@ -590,5 +590,14 @@ app.post("/api/labour", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.get("/api/descriptions", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT name FROM descriptions ORDER BY name",
+    );
+    res.json(result.rows.map((r) => r.name));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
