@@ -148,7 +148,7 @@ app.get("/api/profile/all", async (req, res) => {
 app.get("/api/profiles/list", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, company_name AS name, state_code FROM profiles ORDER BY company_name",
+      "SELECT id, alias, company_name AS name, state_code FROM profiles ORDER BY company_name",
     );
     res.json(result.rows);
   } catch (err) {

@@ -780,7 +780,9 @@
               baseOption +
               companies
                 .map(function (c) {
-                  return "<option value='" + c.id + "'>" + c.name + "</option>";
+                  return (
+                    "<option value='" + c.id + "'>" + c.alias + "</option>"
+                  );
                 })
                 .join("");
             document.getElementById("receiptCompany").innerHTML = opts;

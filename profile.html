@@ -944,7 +944,7 @@
         companies.forEach((c) => {
           const option = document.createElement("option");
           option.value = c.alias;
-          option.textContent = `${c.company} (${c.alias})`;
+          option.textContent = c.alias;
           if (currentEditingAlias === c.alias) option.selected = true;
           dropdown.appendChild(option);
         });
