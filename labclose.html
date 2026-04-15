@@ -38,6 +38,17 @@
         box-sizing: border-box;
       }
 
+      /* Hide number input spinners */
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+
       body {
         font-family: "DM Sans", system-ui, sans-serif;
         background: var(--surface);
@@ -514,9 +525,22 @@
         padding: 5px 7px;
         font-size: 12px;
         border-radius: 6px;
+        width: calc(100% + 12px);
+        margin-left: -6px;
+        margin-right: -6px;
+        padding-left: 7px;
+        padding-right: 7px;
       }
       tbody td input[readonly] {
         background: var(--surface-2);
+      }
+      tbody td input[type="number"],
+      tbody td input[type="text"] {
+        width: calc(100% + 12px) !important;
+        margin-left: -6px !important;
+        margin-right: -6px !important;
+        padding-left: 7px !important;
+        padding-right: 7px !important;
       }
 
       .btn-row-del {
@@ -759,6 +783,7 @@
               <tbody id="itemsTable"></tbody>
             </table>
           </div>
+          <datalist id="descriptionList"></datalist>
 
           <div class="action-bar">
             <button class="btn-add-row" onclick="addNewRow()">
@@ -787,6 +812,25 @@
         const arrow = document.getElementById(`arrow_${name}`);
         body.classList.toggle("show");
         arrow.classList.toggle("open");
+      }
+
+      async function loadDescriptions() {
+        try {
+          const res = await fetch("/api/descriptions");
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const data = await res.json();
+          const list = document.getElementById("descriptionList");
+          if (Array.isArray(data)) {
+            list.innerHTML = data
+              .map(
+                (d) =>
+                  `<option value="${typeof d === "object" ? d.description || d.name || "" : d}">`,
+              )
+              .join("");
+          }
+        } catch (err) {
+          console.error("Failed to load descriptions:", err);
+        }
       }
 
       async function loadCompanies() {
@@ -1039,7 +1083,7 @@
             ).toFixed(2);
             return `<tr id="row_${index}">
         <td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td>
-        <td><input type="text" class="description" value="${item.description}" style="min-width:120px;"></td>
+        <td><input type="text" class="description" value="${item.description}" style="min-width:120px;" list="descriptionList"></td>
         <td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td>
         <td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td>
         <td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td>
@@ -1081,7 +1125,7 @@
         row.id = `row_${rowCount}`;
         row.innerHTML = `
       <td><input type="number" value="${rowCount}" readonly style="width:44px;"></td>
-      <td><input type="text" class="description" placeholder="Description" style="min-width:120px;"></td>
+      <td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList"></td>
       <td><input type="number" class="quantity" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td>
       <td><input type="number" class="rate" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td>
       <td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly style="width:80px;"></td>
@@ -1196,6 +1240,7 @@
 
       window.onload = async () => {
         await loadCompanies();
+        loadDescriptions();
         loadRecentReceipts();
       };
     </script>

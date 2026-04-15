@@ -30,7 +30,11 @@
         min-height: 100vh;
         font-family: Georgia, "Times New Roman", serif;
         background:
-          radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 30%),
+          radial-gradient(
+            circle at top left,
+            rgba(15, 118, 110, 0.14),
+            transparent 30%
+          ),
           linear-gradient(135deg, #f6f1e7 0%, #efe6d7 50%, #f7f4ee 100%);
         color: var(--ink);
       }
@@ -56,7 +60,11 @@
 
       .modal {
         width: min(760px, 100%);
-        background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(247, 243, 234, 0.98));
+        background: linear-gradient(
+          180deg,
+          rgba(255, 253, 248, 0.98),
+          rgba(247, 243, 234, 0.98)
+        );
         border: 1px solid rgba(255, 255, 255, 0.8);
         border-radius: 28px;
         box-shadow: var(--shadow);
@@ -144,7 +152,10 @@
         color: var(--ink);
         font-size: 15px;
         font-family: Arial, sans-serif;
-        transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          transform 0.18s ease;
       }
 
       select:focus,
@@ -262,16 +273,24 @@
     <div class="page"></div>
 
     <div class="modal-overlay" id="transactionOverlay">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
         <div class="modal-header">
           <div>
             <p class="eyebrow">Transaction Entry</p>
             <h1 id="modalTitle">Receipt or Payment</h1>
             <p class="subtext">
-              Select the transaction flow first, then the rest of the form will open below.
+              Select the transaction flow first, then the rest of the form will
+              open below.
             </p>
           </div>
-          <button class="close-link" type="button" onclick="goBack()">Close</button>
+          <button class="close-link" type="button" onclick="goBack()">
+            Close
+          </button>
         </div>
 
         <div class="form-grid">
@@ -287,7 +306,7 @@
           <div class="form-group">
             <label for="companySelect">Company</label>
             <select id="companySelect">
-              <option value="">Select Alias</option>
+              <option value="">Select Company</option>
             </select>
           </div>
 
@@ -368,7 +387,12 @@
           <button class="btn btn-secondary" type="button" onclick="resetForm()">
             Reset
           </button>
-          <button class="btn btn-primary" type="button" id="saveButton" onclick="saveTransaction()">
+          <button
+            class="btn btn-primary"
+            type="button"
+            id="saveButton"
+            onclick="saveTransaction()"
+          >
             Save Transaction
           </button>
         </div>
@@ -449,7 +473,10 @@
       function updateSections() {
         clearMessage();
         newSection.classList.toggle("hidden", entryType.value !== "new");
-        againstSection.classList.toggle("hidden", entryType.value !== "against");
+        againstSection.classList.toggle(
+          "hidden",
+          entryType.value !== "against",
+        );
       }
 
       async function loadCompanies() {
@@ -457,7 +484,7 @@
         const data = await res.json();
         companies = data;
 
-        companySelect.innerHTML = '<option value="">Select Alias</option>';
+        companySelect.innerHTML = '<option value="">Select Company</option>';
         companies.forEach((company) => {
           const option = document.createElement("option");
           option.value = company.id;
@@ -477,11 +504,13 @@
         const data = await res.json();
         companyVouchers = Array.isArray(data) ? data : [];
 
-        const voucherTypes = [...new Set(
-          companyVouchers
-            .map((voucher) => voucher.voucher_type)
-            .filter(Boolean),
-        )];
+        const voucherTypes = [
+          ...new Set(
+            companyVouchers
+              .map((voucher) => voucher.voucher_type)
+              .filter(Boolean),
+          ),
+        ];
 
         if (!voucherTypes.length) {
           againstHint.textContent =
@@ -539,7 +568,11 @@
       async function saveTransaction() {
         clearMessage();
 
-        if (!transactionKind.value || !companySelect.value || !entryType.value) {
+        if (
+          !transactionKind.value ||
+          !companySelect.value ||
+          !entryType.value
+        ) {
           setMessage(
             "Please select Receipt/Payment, Company, and New/Against first.",
             "error",
@@ -555,7 +588,10 @@
           const mop = document.getElementById("newMop").value;
 
           if (!date || !amount || !mop) {
-            setMessage("Please fill Date, Amount, and MOP for the new entry.", "error");
+            setMessage(
+              "Please fill Date, Amount, and MOP for the new entry.",
+              "error",
+            );
             return;
           }
 
@@ -566,7 +602,9 @@
             bill_no: null,
             entry_type: "new",
             description:
-              (transactionKind.value === "Receipt Voucher" ? "Receipt" : "Payment") +
+              (transactionKind.value === "Receipt Voucher"
+                ? "Receipt"
+                : "Payment") +
               " via " +
               mop,
             total_value: amount,
@@ -593,7 +631,9 @@
             bill_no: billNo,
             entry_type: "against",
             description:
-              (transactionKind.value === "Receipt Voucher" ? "Receipt" : "Payment") +
+              (transactionKind.value === "Receipt Voucher"
+                ? "Receipt"
+                : "Payment") +
               " against " +
               voucherType +
               " via " +
