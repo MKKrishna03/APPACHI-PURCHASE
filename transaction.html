@@ -540,7 +540,12 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="receiptCompany">Select Company</label>
-            <select id="receiptCompany"></select>
+            <!-- Replace these two lines in modal HTML -->
+
+            <select
+              id="receiptCompany"
+              onchange="onReceiptVoucherTypeChange()"
+            ></select>
           </div>
           <div class="form-group">
             <label for="receiptEntryType">Entry Type</label>
@@ -566,7 +571,7 @@
                     Purchase Receipt Voucher
                   </option>
                   <option value="Labour Receipt Voucher">
-                    Labour Receipt Voucher
+                    Labour Receipt Voucher (Closing)
                   </option>
                 </select>
               </div>
@@ -616,7 +621,10 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="paymentCompany">Select Company</label>
-            <select id="paymentCompany"></select>
+            <select
+              id="paymentCompany"
+              onchange="onPaymentVoucherTypeChange()"
+            ></select>
           </div>
           <div class="form-group">
             <label for="paymentEntryType">Entry Type</label>
@@ -713,11 +721,17 @@
 
       function onReceiptVoucherTypeChange() {
         var profileId = document.getElementById("receiptCompany").value;
+        var voucherType = document.getElementById("receiptVoucherType").value;
+        console.log("receipt:", profileId, voucherType);
+        if (!profileId || !voucherType) return;
         loadBillsForType(receiptCategory(), profileId, "receiptAgainstBill");
       }
 
       function onPaymentVoucherTypeChange() {
         var profileId = document.getElementById("paymentCompany").value;
+        var voucherType = document.getElementById("paymentVoucherType").value;
+        console.log("payment:", profileId, voucherType);
+        if (!profileId || !voucherType) return;
         loadBillsForType(paymentCategory(), profileId, "paymentAgainstBill");
       }
 
@@ -778,6 +792,7 @@
       }
 
       function loadBillsForType(voucherCategory, profileId, targetSelectId) {
+        console.log("loadBillsForType:", voucherCategory, profileId);
         var sel = document.getElementById(targetSelectId);
         if (!profileId || !voucherCategory) {
           sel.innerHTML = "<option value=''>Select Bill</option>";
@@ -788,7 +803,8 @@
           voucherCategory === "labour"
             ? "/api/labour/list?profile_id=" +
               profileId +
-              "&voucher_type=ISSUE%20VOUCHER"
+              "&voucher_type=" +
+              "Receipt%20Voucher"
             : "/api/vouchers/list?profile_id=" +
               profileId +
               "&voucher_type=Purchase";
@@ -798,19 +814,24 @@
             return res.json();
           })
           .then(function (bills) {
+            if (!Array.isArray(bills)) {
+              sel.innerHTML = "<option value=''>No Bills Found</option>";
+              return;
+            }
+            console.log("Bills loaded:", bills); // add this line
             if (voucherCategory === "labour") {
               sel.innerHTML =
                 "<option value=''>Select Bill</option>" +
                 bills
                   .filter(function (b) {
-                    return b.issue_number;
+                    return b.bill_no;
                   })
                   .map(function (b) {
                     var date = b.date || "";
                     var total = b.total_value != null ? b.total_value : "";
                     return (
                       "<option value='" +
-                      b.issue_number +
+                      b.bill_no +
                       "'>" +
                       date +
                       "-" +
@@ -859,6 +880,7 @@
 
       function receiptCategory() {
         var v = document.getElementById("receiptVoucherType").value;
+        console.log("receiptCategory value:", v);
         return v.toLowerCase().indexOf("labour") !== -1 ? "labour" : "purchase";
       }
 

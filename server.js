@@ -105,7 +105,10 @@ alias TEXT UNIQUE NOT NULL,
   console.log("DB ready");
 }
 
-initDB().catch(console.error);
+initDB().catch((err) => {
+  console.error("INITDB FAILED:", err.message);
+  process.exit(1);
+});
 
 // ── PROFILE ROUTES ──
 
@@ -133,6 +136,7 @@ app.get("/api/profile/headers", (req, res) => {
 
 app.get("/api/profile/all", async (req, res) => {
   try {
+    console.log("QUERY PARAMS:", params, where);
     const result = await pool.query(
       "SELECT id, alias, company_name AS company, state_code FROM profiles ORDER BY company_name",
     );
@@ -311,72 +315,55 @@ app.post("/api/seed-voucher-types", async (req, res) => {
 
 // ── LABOUR ROUTES ──
 
-app.post("/api/labour", async (req, res) => {
-  const {
-    profile_id,
-    company_name,
-    date,
-    issue_number,
-    labour_item_type,
-    items,
-  } = req.body;
-
+app.get("/api/labour/list", async (req, res) => {
+  console.log("HIT LABOUR LIST", req.query);
+  const { profile_id, voucher_type } = req.query;
   try {
-    const labourResult = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [
-        profile_id,
-        company_name,
-        date,
-        issue_number,
-        labour_item_type,
-        "ISSUE VOUCHER",
-      ],
-    );
-    const labour_id = labourResult.rows[0].id;
-
-    for (const item of items) {
-      await pool.query(
-        `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          labour_id,
-          item.sl_no,
-          item.description,
-          item.quantity,
-          item.rate,
-          item.amount,
-        ],
-      );
+    const params = [];
+    let where = "";
+    if (profile_id) {
+      params.push(profile_id);
+      where += `${where ? " AND" : " WHERE"} l.profile_id = $${params.length}`;
     }
-
-    res.json({ status: "SUCCESS", labour_id });
+    if (voucher_type) {
+      params.push(voucher_type);
+      where += `${where ? " AND" : " WHERE"} l.voucher_type = $${params.length}`;
+    }
+    const result = await pool.query(
+      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.bill_no,
+              l.voucher_type,
+              COALESCE(SUM(li.amount::numeric), 0) AS total_value
+       FROM labour l
+       LEFT JOIN labour_items li ON li.labour_id = l.id
+       ${where}
+       GROUP BY l.id
+       ORDER BY l.created_at DESC`,
+      params,
+    );
+    console.log("LABOUR LIST RESULT:", result.rows);
+    res.json(result.rows);
   } catch (err) {
-    console.error("LABOUR POST ERROR:", err.message);
+    console.error("LABOUR LIST ERROR FULL:", err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.get("/api/labour/:id", async (req, res) => {
+  if (req.params.id === "list")
+    return res.status(404).json({ error: "Not found" });
+  if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
     const labourResult = await pool.query(
       "SELECT * FROM labour WHERE id = $1",
       [req.params.id],
     );
-    if (!labourResult.rows[0]) {
+    if (!labourResult.rows[0])
       return res.status(404).json({ error: "Labour not found" });
-    }
-
     const itemsResult = await pool.query(
       "SELECT * FROM labour_items WHERE labour_id = $1 ORDER BY sl_no",
       [req.params.id],
     );
-
-    res.json({
-      labour: labourResult.rows[0],
-      items: itemsResult.rows,
-    });
+    res.json({ labour: labourResult.rows[0], items: itemsResult.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -389,41 +376,6 @@ app.get("/api/labour", async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/labour/list", async (req, res) => {
-  const { profile_id, voucher_type } = req.query;
-  try {
-    const params = [];
-    let where = "";
-    if (profile_id) {
-      params.push(profile_id);
-      where += `${where ? " AND" : " WHERE"} l.profile_id = $${
-        params.length
-      }`;
-    }
-    if (voucher_type) {
-      params.push(voucher_type);
-      where += `${where ? " AND" : " WHERE"} l.voucher_type = $${
-        params.length
-      }`;
-    }
-    const result = await pool.query(
-      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number,
-              l.voucher_type,
-              COALESCE(SUM(li.amount), 0) AS total_value
-       FROM labour l
-       LEFT JOIN labour_items li ON li.labour_id = l.id
-       ${where}
-       GROUP BY l.id
-       ORDER BY l.created_at DESC`,
-      params,
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error("LABOUR LIST ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -452,14 +404,15 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     );
 
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, bill_no)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
         labour.profile_id,
         labour.company_name,
         closing_date,
         labour.issue_number,
         "Receipt Voucher",
+        req.body.bill_no || null,
       ],
     );
 
@@ -556,9 +509,7 @@ app.get("/api/vouchers/list", async (req, res) => {
     let where = "";
     if (profile_id) {
       params.push(profile_id);
-      where += `${where ? " AND" : " WHERE"} profile_id = $${
-        params.length
-      }`;
+      where += `${where ? " AND" : " WHERE"} profile_id = $${params.length}`;
     }
     if (voucher_type) {
       params.push(`%${voucher_type}%`);
@@ -601,3 +552,6 @@ app.get("/payment", (req, res) =>
 );
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
+process.on("uncaughtException", (err) =>
+  console.error("UNCAUGHT:", err.message, err.stack),
+);
