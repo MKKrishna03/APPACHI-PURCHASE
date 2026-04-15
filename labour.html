@@ -62,6 +62,74 @@
         letter-spacing: -0.5px;
       }
 
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+
+      .header-copy h1 {
+        margin-bottom: 8px;
+      }
+
+      .header-subtitle {
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .link-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        transition:
+          transform 0.12s,
+          box-shadow 0.15s,
+          background 0.15s,
+          border-color 0.15s;
+      }
+
+      .link-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .link-btn-back {
+        color: var(--ink-2);
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      .link-btn-back:hover {
+        background: var(--surface-2);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .link-btn-close {
+        color: #fff;
+        background: linear-gradient(135deg, var(--blue), #155a84);
+        box-shadow: 0 6px 16px rgba(29, 111, 164, 0.22);
+      }
+
+      .link-btn-close:hover {
+        background: linear-gradient(135deg, #155a84, #11476b);
+      }
+
       .form-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -334,13 +402,38 @@
         padding: 20px;
         font-size: 13px;
       }
+
+      @media (max-width: 720px) {
+        .page-header {
+          flex-direction: column;
+        }
+
+        .header-actions {
+          width: 100%;
+          justify-content: stretch;
+        }
+
+        .link-btn {
+          width: 100%;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="main-content">
       <div class="container">
-        <h1>Labour Voucher</h1>
-        <a href="/">← Back</a>
+        <div class="page-header">
+          <div class="header-copy">
+            <h1>Labour Voucher</h1>
+            <div class="header-subtitle">
+              Create issue vouchers and continue to receipt closing when the work is ready.
+            </div>
+          </div>
+          <div class="header-actions">
+            <a href="/" class="link-btn link-btn-back">Back to Dashboard</a>
+            <a href="/labclose" class="link-btn link-btn-close">Close Issue Voucher</a>
+          </div>
+        </div>
 
         <div class="form-row" style="margin-top: 20px">
           <div class="form-group">
@@ -628,3 +721,4 @@
     </script>
   </body>
 </html>
+
