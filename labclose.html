@@ -3,497 +3,776 @@
   <head>
     <meta charset="UTF-8" />
     <title>Close Issue Voucher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
+      :root {
+        --ink: #1a1a2e;
+        --ink-2: #444466;
+        --ink-3: #8888aa;
+        --surface: #f7f6f2;
+        --surface-2: #eeecea;
+        --surface-3: #e4e2dd;
+        --accent: #2d6a4f;
+        --accent-2: #52b788;
+        --accent-light: #d8f3dc;
+        --blue: #1d6fa4;
+        --blue-light: #dbeeff;
+        --danger: #b5301e;
+        --danger-light: #fce8e6;
+        --amber: #b5620a;
+        --amber-light: #fef0d6;
+        --border: rgba(0, 0, 0, 0.1);
+        --border-strong: rgba(0, 0, 0, 0.2);
+        --radius: 10px;
+        --radius-lg: 16px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 4px 16px rgba(0, 0, 0, 0.05);
+      }
+
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
+
       body {
-        font-family: Arial, sans-serif;
-        background: #f5f5f5;
+        font-family: "DM Sans", system-ui, sans-serif;
+        background: var(--surface);
+        color: var(--ink);
         display: flex;
         min-height: 100vh;
-      }
-      .main-content {
-        flex: 1;
-        padding: 30px;
-        overflow-y: auto;
-      }
-      .container {
-        background: white;
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        max-width: 900px;
-      }
-      h1 {
-        color: #2c3e50;
-        margin-bottom: 30px;
-        font-size: 28px;
-      }
-      .back-link {
-        display: inline-block;
-        margin-bottom: 20px;
-        color: #3498db;
-        text-decoration: none;
-        font-weight: bold;
         font-size: 14px;
       }
-      .back-link:hover {
-        text-decoration: underline;
-      }
-      .form-group {
+
+      /* ─── SIDEBAR ─── */
+      .sidebar {
+        width: 300px;
+        flex-shrink: 0;
+        background: #fff;
+        border-right: 1px solid var(--border);
         display: flex;
         flex-direction: column;
-        margin-bottom: 20px;
-      }
-      label {
-        font-weight: bold;
-        margin-bottom: 8px;
-        color: #2c3e50;
-        font-size: 14px;
-      }
-      select {
-        padding: 10px;
-        border: 1px solid #bdc3c7;
-        border-radius: 4px;
-        font-size: 14px;
-      }
-      select:focus {
-        outline: none;
-        border-color: #3498db;
-      }
-      .message {
-        padding: 12px;
-        border-radius: 4px;
-        margin-bottom: 15px;
-        display: none;
-        font-size: 13px;
-      }
-      .message.success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-        display: block;
-      }
-      .message.error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-        display: block;
-      }
-
-      /* Sidebar */
-      .sidebar {
-        width: 320px;
-        background: white;
-        border-left: 1px solid #ddd;
-        overflow-y: auto;
-        padding: 20px;
-        flex-shrink: 0;
-      }
-
-      /* Section headers (stackable toggles) */
-      .sidebar-section {
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
+        height: 100vh;
+        position: sticky;
+        top: 0;
         overflow: hidden;
       }
-      .sidebar-section-header {
-        background: #34495e;
-        color: white;
-        padding: 12px 15px;
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        user-select: none;
-        font-size: 14px;
-        font-weight: bold;
+
+      .sidebar-header {
+        padding: 20px 20px 16px;
+        border-bottom: 1px solid var(--border);
       }
-      .sidebar-section-header:hover {
-        background: #2c3e50;
-      }
-      .sidebar-section-header .arrow {
+
+      .sidebar-logo {
         font-size: 11px;
-        transition: transform 0.2s;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin-bottom: 6px;
       }
-      .sidebar-section-header .arrow.open {
+
+      .sidebar-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .sidebar-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+      }
+
+      .sidebar-body::-webkit-scrollbar {
+        width: 4px;
+      }
+      .sidebar-body::-webkit-scrollbar-thumb {
+        background: var(--surface-3);
+        border-radius: 2px;
+      }
+
+      .section-toggle {
+        width: 100%;
+        background: none;
+        border: none;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        border-radius: var(--radius);
+        color: var(--ink-2);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-family: inherit;
+        transition: background 0.15s;
+        margin-bottom: 4px;
+      }
+      .section-toggle:hover {
+        background: var(--surface);
+      }
+
+      .section-icon {
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s;
+        font-size: 10px;
+        color: var(--ink-3);
+      }
+      .section-icon.open {
         transform: rotate(180deg);
       }
-      .sidebar-section-body {
-        display: none;
-        max-height: 60vh;
-        overflow-y: auto;
-        padding: 10px;
-        background: #fafafa;
+
+      .section-body {
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.3s ease;
       }
-      .sidebar-section-body.show {
-        display: block;
+      .section-body.show {
+        max-height: 600px;
       }
 
-      /* Pending bill cards */
-      .labour-card {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 8px;
+      /* Pending bill card */
+      .bill-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
         padding: 12px;
-        margin-bottom: 10px;
-        border-left: 4px solid #3498db;
-      }
-      .labour-card-info {
-        font-size: 12px;
-        margin-bottom: 10px;
-      }
-      .labour-card-info p {
-        margin: 5px 0;
-        color: #555;
-      }
-      .labour-card-info strong {
-        color: #2c3e50;
-        min-width: 70px;
-        display: inline-block;
-      }
-      .radio-group {
-        display: flex;
-        gap: 12px;
         margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.15s;
+        border-left: 3px solid transparent;
       }
-      .radio-group label {
+      .bill-card:hover {
+        border-color: var(--border-strong);
+        border-left-color: var(--accent-2);
+      }
+      .bill-card.selected {
+        border-left-color: var(--accent);
+        background: var(--accent-light);
+      }
+
+      .bill-card-id {
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--blue);
+        margin-bottom: 6px;
+      }
+      .bill-card-row {
         display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--ink-2);
+        margin-bottom: 3px;
+      }
+      .bill-card-row span:last-child {
+        font-weight: 500;
+        color: var(--ink);
+      }
+
+      .tag {
+        display: inline-flex;
         align-items: center;
         gap: 4px;
-        margin-bottom: 0;
-        font-weight: normal;
-        cursor: pointer;
-        font-size: 12px;
-      }
-      .radio-group input[type="radio"] {
-        cursor: pointer;
-      }
-      .partial-input {
-        display: none;
-        margin-top: 8px;
-        margin-bottom: 8px;
-      }
-      .partial-input.show {
-        display: block;
-      }
-      .partial-input input {
-        width: 100%;
-        padding: 5px;
-        border: 1px solid #bdc3c7;
-        border-radius: 4px;
-        font-size: 12px;
-      }
-      .partial-input label {
-        margin-bottom: 3px;
+        padding: 2px 8px;
+        border-radius: 99px;
         font-size: 11px;
+        font-weight: 500;
+      }
+      .tag-pending {
+        background: var(--amber-light);
+        color: var(--amber);
+      }
+      .tag-done {
+        background: var(--accent-light);
+        color: var(--accent);
       }
 
-      /* Recent entry cards */
-      .recent-card {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        border-left: 4px solid #27ae60;
+      .radio-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+        margin-bottom: 0;
+      }
+      .radio-label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--ink-2);
+        cursor: pointer;
+      }
+      .radio-label input {
+        cursor: pointer;
+        accent-color: var(--accent);
+      }
+
+      .partial-qty {
+        display: none;
+        margin-top: 8px;
+      }
+      .partial-qty.show {
+        display: block;
+      }
+      .partial-qty input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        font-size: 12px;
+        font-family: "DM Mono", monospace;
+        background: #fff;
+        color: var(--ink);
+      }
+
+      .btn-select {
+        width: 100%;
+        margin-top: 10px;
+        padding: 7px;
+        background: var(--ink);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.03em;
+        transition:
+          background 0.15s,
+          transform 0.1s;
+      }
+      .btn-select:hover {
+        background: var(--ink-2);
+      }
+      .btn-select:active {
+        transform: scale(0.98);
+      }
+
+      /* Recent receipts */
+      .receipt-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin-bottom: 6px;
         overflow: hidden;
       }
-      .recent-card-header {
+      .receipt-card-head {
         padding: 10px 12px;
         cursor: pointer;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        user-select: none;
+        transition: background 0.12s;
       }
-      .recent-card-header:hover {
-        background: #ecf0f1;
+      .receipt-card-head:hover {
+        background: var(--surface-2);
       }
-      .recent-card-title {
-        font-size: 12px;
-        font-weight: bold;
-        color: #2c3e50;
-      }
-      .recent-card-sub {
+      .receipt-title {
+        font-family: "DM Mono", monospace;
         font-size: 11px;
-        color: #888;
+        font-weight: 500;
+        color: var(--blue);
+      }
+      .receipt-sub {
+        font-size: 11px;
+        color: var(--ink-3);
         margin-top: 2px;
       }
-      .recent-card-arrow {
-        font-size: 10px;
-        color: #888;
-        transition: transform 0.2s;
-      }
-      .recent-card-arrow.open {
-        transform: rotate(180deg);
-      }
-      .recent-card-body {
+      .receipt-body {
         display: none;
-        padding: 0 12px 10px;
-        font-size: 12px;
-        color: #555;
-        border-top: 1px solid #eee;
+        padding: 8px 12px 12px;
+        border-top: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--ink-2);
       }
-      .recent-card-body.show {
+      .receipt-body.show {
         display: block;
       }
-      .recent-card-body p {
-        margin: 5px 0;
+      .receipt-body p {
+        margin-bottom: 4px;
       }
-      .recent-items-table {
+      .receipt-mini-table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 6px;
-        font-size: 11px;
       }
-      .recent-items-table th {
-        background: #34495e;
-        color: white;
-        padding: 4px;
+      .receipt-mini-table th {
+        background: var(--surface-3);
+        padding: 3px 5px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--ink-2);
         text-align: left;
       }
-      .recent-items-table td {
-        padding: 3px 4px;
-        border-bottom: 1px solid #eee;
+      .receipt-mini-table td {
+        padding: 3px 5px;
+        border-bottom: 1px solid var(--border);
+        font-size: 10px;
+        font-family: "DM Mono", monospace;
       }
 
-      .btn {
-        padding: 8px 15px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
+      /* ─── MAIN ─── */
+      .main {
+        flex: 1;
+        padding: 32px;
+        max-width: 900px;
+        overflow-y: auto;
+      }
+
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
-        width: 100%;
+        color: var(--ink-3);
+        margin-bottom: 24px;
       }
-      .btn:hover {
-        background: #2980b9;
+      .breadcrumb a {
+        color: var(--blue);
+        text-decoration: none;
+        font-weight: 500;
       }
-      .btn:disabled {
-        background: #bdc3c7;
-        cursor: not-allowed;
+      .breadcrumb a:hover {
+        text-decoration: underline;
       }
-      .btn-large {
-        padding: 10px 20px;
-        font-size: 14px;
-        margin-top: 15px;
+      .breadcrumb-sep {
+        color: var(--ink-3);
       }
-      .btn-danger {
-        background: #e74c3c;
-        padding: 5px 10px;
-        font-size: 11px;
-        width: auto;
+
+      .page-title {
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.5px;
+        margin-bottom: 4px;
       }
-      .btn-danger:hover {
-        background: #c0392b;
+      .page-sub {
+        font-size: 13px;
+        color: var(--ink-3);
+        margin-bottom: 28px;
       }
-      .btn-add {
-        background: #27ae60;
-        margin-top: 10px;
-      }
-      .btn-add:hover {
-        background: #229954;
-      }
-      .bill-details {
+
+      .message {
         display: none;
-        margin-top: 30px;
+        padding: 11px 16px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
       }
-      .bill-details.show {
+      .message.success {
         display: block;
+        background: var(--accent-light);
+        color: var(--accent);
+        border-color: var(--accent-2);
       }
-      .bill-details h2 {
-        color: #2c3e50;
-        font-size: 20px;
+      .message.error {
+        display: block;
+        background: var(--danger-light);
+        color: var(--danger);
+        border-color: #f09898;
+      }
+
+      /* Card */
+      .card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 24px;
         margin-bottom: 20px;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 10px;
+        box-shadow: var(--shadow);
       }
-      .bill-details h3 {
-        color: #2c3e50;
-        font-size: 16px;
-        margin-top: 25px;
-        margin-bottom: 15px;
+      .card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink-3);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 16px;
       }
-      .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-bottom: 20px;
+
+      .form-group {
+        margin-bottom: 16px;
       }
+      label.field-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink-3);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+
       input[type="text"],
       input[type="date"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--ink);
+        font-size: 13px;
+        font-family: inherit;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+        -webkit-appearance: none;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+        background: #fff;
+      }
+      input:disabled,
+      select:disabled {
+        background: var(--surface-2);
+        color: var(--ink-2);
+        cursor: not-allowed;
+      }
       input[type="number"] {
-        padding: 10px;
-        border: 1px solid #bdc3c7;
-        border-radius: 4px;
+        font-family: "DM Mono", monospace;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      /* Select override */
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        padding-right: 28px;
+      }
+
+      /* Empty state */
+      .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--ink-3);
+      }
+      .empty-icon {
+        font-size: 40px;
+        margin-bottom: 12px;
+        opacity: 0.4;
+      }
+      .empty-text {
         font-size: 14px;
       }
-      input:disabled {
-        background-color: #ecf0f1;
-        cursor: not-allowed;
+
+      /* Table */
+      .table-wrap {
+        overflow-x: auto;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
       }
       table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 15px;
       }
-      th {
-        background: #34495e;
-        color: white;
-        padding: 10px;
+      thead th {
+        background: var(--surface-2);
+        padding: 9px 10px;
         text-align: left;
-        font-weight: bold;
-        font-size: 13px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        white-space: nowrap;
+        border-bottom: 1px solid var(--border);
       }
-      td {
-        padding: 10px;
-        border-bottom: 1px solid #bdc3c7;
-        font-size: 13px;
+      tbody tr:not(:last-child) td {
+        border-bottom: 1px solid var(--border);
       }
-      td input {
-        width: 100%;
-        padding: 5px;
-        border: 1px solid #bdc3c7;
-        border-radius: 3px;
+      tbody tr:hover {
+        background: var(--surface);
+      }
+      tbody td {
+        padding: 6px 6px;
+      }
+      tbody td input {
+        padding: 5px 7px;
         font-size: 12px;
+        border-radius: 6px;
       }
-      tr:hover {
-        background: #ecf0f1;
+      tbody td input[readonly] {
+        background: var(--surface-2);
       }
-      .empty-state {
-        text-align: center;
-        color: #999;
-        padding: 30px 20px;
+
+      .btn-row-del {
+        padding: 4px 8px;
+        background: var(--danger-light);
+        color: var(--danger);
+        border: 1px solid #f09898;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.12s;
+        white-space: nowrap;
+      }
+      .btn-row-del:hover {
+        background: #fcd4d0;
+      }
+
+      .action-bar {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        align-items: center;
+      }
+
+      .btn-add-row {
+        padding: 9px 18px;
+        background: none;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ink-2);
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-add-row:hover {
+        background: var(--surface);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .btn-submit {
+        flex: 1;
+        padding: 11px 24px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: inherit;
         font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        transition:
+          background 0.15s,
+          transform 0.1s,
+          box-shadow 0.15s;
+        box-shadow: 0 2px 8px rgba(45, 106, 79, 0.25);
       }
-      .table-container {
-        overflow-x: auto;
+      .btn-submit:hover {
+        background: #245c43;
+        box-shadow: 0 4px 16px rgba(45, 106, 79, 0.35);
       }
+      .btn-submit:active {
+        transform: scale(0.99);
+      }
+
+      .bill-details {
+        display: none;
+      }
+      .bill-details.show {
+        display: block;
+      }
+
+      .section-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink-2);
+        margin: 0 0 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .info-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        background: var(--blue-light);
+        color: var(--blue);
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+
       .no-data {
         text-align: center;
-        color: #999;
-        padding: 15px;
+        color: var(--ink-3);
+        padding: 20px 12px;
         font-size: 12px;
       }
     </style>
   </head>
   <body>
-    <div class="main-content">
-      <div class="container">
-        <a href="/" class="back-link">← BACK</a>
-        <h1>Close Issue Voucher</h1>
-        <div id="message" class="message"></div>
-
-        <div class="form-group">
-          <label>Company *</label>
-          <select id="companySelect" onchange="loadCompanyLabourBills()">
-            <option value="">Select Company</option>
-          </select>
+    <!-- ─── SIDEBAR ─── -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">Labour Management</div>
+        <div class="sidebar-title">Issue Vouchers</div>
+      </div>
+      <div class="sidebar-body">
+        <!-- Pending Bills -->
+        <button class="section-toggle" onclick="toggleSection('pending')">
+          <span>Pending Bills</span>
+          <span class="section-icon open" id="arrow_pending">▾</span>
+        </button>
+        <div class="section-body show" id="body_pending">
+          <div id="labourBillsList">
+            <div class="no-data">Select a company first</div>
+          </div>
         </div>
 
-        <div class="bill-details" id="billDetails">
-          <h2>Bill Details</h2>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Issue Number *</label>
+        <!-- Recent Receipts -->
+        <button
+          class="section-toggle"
+          onclick="toggleSection('recent')"
+          style="margin-top: 8px"
+        >
+          <span>Recent Receipts</span>
+          <span class="section-icon" id="arrow_recent">▾</span>
+        </button>
+        <div class="section-body" id="body_recent">
+          <div id="recentReceiptsList">
+            <div class="no-data">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── MAIN ─── -->
+    <div class="main">
+      <div class="breadcrumb">
+        <a href="/">Dashboard</a>
+        <span class="breadcrumb-sep">/</span>
+        <span>Close Issue Voucher</span>
+      </div>
+
+      <div class="page-title">Close Issue Voucher</div>
+      <div class="page-sub">
+        Select a pending bill and create a receipt entry
+      </div>
+
+      <div id="message" class="message"></div>
+
+      <!-- Company select -->
+      <div class="card">
+        <div class="card-title">Company</div>
+        <div class="form-group" style="margin-bottom: 0">
+          <label class="field-label">Select Company *</label>
+          <select id="companySelect" onchange="loadCompanyLabourBills()">
+            <option value="">— Choose a company —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="emptyState">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div class="empty-text">Select a company to view pending bills</div>
+        </div>
+      </div>
+
+      <!-- Bill details -->
+      <div class="bill-details" id="billDetails">
+        <!-- Header info -->
+        <div class="card">
+          <div class="card-title">Bill Details</div>
+          <div class="form-grid" style="margin-bottom: 16px">
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">Issue Number</label>
               <input type="text" id="issueNumber" disabled />
             </div>
-            <div class="form-group">
-              <label>Receipt Bill Number *</label>
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">Receipt Bill Number *</label>
               <input
                 type="text"
                 id="receiptBillNo"
-                placeholder="Enter bill number"
+                placeholder="Enter receipt bill no."
               />
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Company Name *</label>
+          <div class="form-grid" style="margin-bottom: 16px">
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">Company Name</label>
               <input type="text" id="companyName" disabled />
             </div>
-            <div class="form-group">
-              <label>GST Type (Auto-detected)</label>
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">GST Type</label>
               <input type="text" id="gstType" disabled />
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Bill Date *</label>
+          <div class="form-grid">
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">Bill Date</label>
               <input type="date" id="billDate" disabled />
             </div>
-            <div class="form-group">
-              <label>Closing Date *</label>
+            <div class="form-group" style="margin-bottom: 0">
+              <label class="field-label">Closing Date *</label>
               <input type="date" id="closingDate" required />
             </div>
           </div>
+        </div>
 
-          <h3>Line Items</h3>
-          <div class="table-container">
+        <!-- Line Items -->
+        <div class="card">
+          <div class="card-title">Line Items</div>
+          <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Sl.No</th>
+                  <th>Sl</th>
                   <th>Description</th>
-                  <th>Qty/G</th>
-                  <th>Rate/G</th>
+                  <th>Qty / g</th>
+                  <th>Rate / g</th>
                   <th>Taxable</th>
                   <th>CGST 2.5%</th>
                   <th>SGST 2.5%</th>
                   <th>IGST 5%</th>
                   <th>Total</th>
-                  <th>Action</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="itemsTable"></tbody>
             </table>
           </div>
-          <button class="btn btn-add" onclick="addNewRow()">+ ADD ROW</button>
-          <button class="btn btn-large" onclick="submitCloseVoucher()">
-            SUBMIT CLOSE VOUCHER
-          </button>
-        </div>
 
-        <div class="empty-state" id="emptyState">
-          Select a company to view labour bills
-        </div>
-      </div>
-    </div>
-
-    <!-- SIDEBAR with two stackable sections -->
-    <div class="sidebar">
-      <!-- Section 1: Pending Bills -->
-      <div class="sidebar-section">
-        <div class="sidebar-section-header" onclick="toggleSection('pending')">
-          <span>Pending Bills</span>
-          <span class="arrow open" id="arrow_pending">▼</span>
-        </div>
-        <div class="sidebar-section-body show" id="body_pending">
-          <div id="labourBillsList">
-            <div class="no-data">Select a company first</div>
+          <div class="action-bar">
+            <button class="btn-add-row" onclick="addNewRow()">
+              <span>＋</span> Add Row
+            </button>
+            <button class="btn-submit" onclick="submitCloseVoucher()">
+              Submit Close Voucher →
+            </button>
           </div>
         </div>
       </div>
-
-      <!-- Section 2: Recent Receipts -->
-      <div class="sidebar-section">
-        <div class="sidebar-section-header" onclick="toggleSection('recent')">
-          <span>Recent Receipts (Last 5)</span>
-          <span class="arrow" id="arrow_recent">▼</span>
-        </div>
-        <div class="sidebar-section-body" id="body_recent">
-          <div id="recentReceiptsList">
-            <div class="no-data">Loading...</div>
-          </div>
-        </div>
-      </div>
+      <!-- /bill-details -->
     </div>
+    <!-- /main -->
 
     <script>
       let companies = [];
@@ -515,7 +794,7 @@
           const res = await fetch("/api/profile/all");
           companies = await res.json();
           const select = document.getElementById("companySelect");
-          select.innerHTML = '<option value="">Select Company</option>';
+          select.innerHTML = '<option value="">— Choose a company —</option>';
           companies.forEach((c) => {
             const opt = document.createElement("option");
             opt.value = c.id;
@@ -535,7 +814,7 @@
             .filter((b) => b.voucher_type === "Receipt Voucher")
             .slice(0, 5);
           const list = document.getElementById("recentReceiptsList");
-          if (receipts.length === 0) {
+          if (!receipts.length) {
             list.innerHTML = '<div class="no-data">No receipts yet</div>';
             return;
           }
@@ -547,36 +826,32 @@
                 (s, it) => s + (parseFloat(it.quantity) || 0),
                 0,
               );
-              const itemRows = d.items
+              const rows = d.items
                 .map(
-                  (it) => `
-              <tr><td>${it.sl_no}</td><td>${it.description || "-"}</td><td>${parseFloat(it.quantity).toFixed(2)}</td><td>${parseFloat(it.rate).toFixed(2)}</td><td>${parseFloat(it.amount).toFixed(2)}</td></tr>
-            `,
+                  (it) =>
+                    `<tr><td>${it.sl_no}</td><td>${it.description || "-"}</td><td>${parseFloat(it.quantity).toFixed(2)}</td><td>${parseFloat(it.rate).toFixed(2)}</td><td>${parseFloat(it.amount).toFixed(2)}</td></tr>`,
                 )
                 .join("");
-              return `
-              <div class="recent-card">
-                <div class="recent-card-header" onclick="toggleRecent(${i})">
-                  <div>
-                    <div class="recent-card-title">${bill.issue_number}</div>
-                    <div class="recent-card-sub">${bill.company_name || ""} · ${new Date(bill.date).toLocaleDateString()}</div>
-                  </div>
-                  <span class="recent-card-arrow" id="rarrow_${i}">▼</span>
-                </div>
-                <div class="recent-card-body" id="rbody_${i}">
-                  <p><strong>Company:</strong> ${bill.company_name || "-"}</p>
-                  <p><strong>Date:</strong> ${new Date(bill.date).toLocaleDateString()}</p>
-                  <p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p>
-                  <table class="recent-items-table">
-                    <thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead>
-                    <tbody>${itemRows}</tbody>
-                  </table>
-                </div>
-              </div>`;
+              return `<div class="receipt-card">
+          <div class="receipt-card-head" onclick="toggleRecent(${i})">
+            <div>
+              <div class="receipt-title">${bill.issue_number}</div>
+              <div class="receipt-sub">${bill.company_name || ""} · ${new Date(bill.date).toLocaleDateString()}</div>
+            </div>
+            <span class="section-icon" id="rarrow_${i}">▾</span>
+          </div>
+          <div class="receipt-body" id="rbody_${i}">
+            <p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p>
+            <table class="receipt-mini-table">
+              <thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
             }),
           );
           list.innerHTML = rendered.join("");
-        } catch (err) {
+        } catch {
           document.getElementById("recentReceiptsList").innerHTML =
             '<div class="no-data">Error loading</div>';
         }
@@ -592,14 +867,14 @@
         if (!companyId) return;
         document.getElementById("emptyState").style.display = "none";
         document.getElementById("labourBillsList").innerHTML =
-          '<div class="no-data">Loading...</div>';
-        // Auto-open pending section
+          '<div class="no-data">Loading…</div>';
         const body = document.getElementById("body_pending");
         const arrow = document.getElementById("arrow_pending");
         if (!body.classList.contains("show")) {
           body.classList.add("show");
           arrow.classList.add("open");
         }
+
         try {
           const res = await fetch("/api/labour");
           const allBills = await res.json();
@@ -625,9 +900,9 @@
             receivedQty[b.issue_number] =
               (receivedQty[b.issue_number] || 0) + (qtyMap[b.id] || 0);
           });
-          const pendingBills = issueBills.filter((b) => {
-            return (qtyMap[b.id] || 0) > (receivedQty[b.issue_number] || 0);
-          });
+          const pendingBills = issueBills.filter(
+            (b) => (qtyMap[b.id] || 0) > (receivedQty[b.issue_number] || 0),
+          );
           displayLabourBillCards(pendingBills, qtyMap, receivedQty);
         } catch (err) {
           showMessage("Error: " + err.message, "error");
@@ -635,36 +910,33 @@
       }
 
       function displayLabourBillCards(bills, qtyMap, receivedQty) {
-        const billsList = document.getElementById("labourBillsList");
-        if (bills.length === 0) {
-          billsList.innerHTML = '<div class="no-data">No pending bills</div>';
+        const list = document.getElementById("labourBillsList");
+        if (!bills.length) {
+          list.innerHTML = '<div class="no-data">No pending bills</div>';
           return;
         }
-        billsList.innerHTML = bills
+        list.innerHTML = bills
           .map((bill) => {
             const issued = (qtyMap[bill.id] || 0).toFixed(2);
             const received = (receivedQty[bill.issue_number] || 0).toFixed(2);
             const pending = (
               (qtyMap[bill.id] || 0) - (receivedQty[bill.issue_number] || 0)
             ).toFixed(2);
-            return `
-            <div class="labour-card" id="card_${bill.id}">
-              <div class="labour-card-info">
-                <p><strong>Bill #:</strong> ${bill.issue_number}</p>
-                <p><strong>Date:</strong> ${new Date(bill.date).toLocaleDateString()}</p>
-                <p><strong>Issued:</strong> ${issued} | <strong>Rcvd:</strong> ${received}</p>
-                <p data-pending="${pending}"><strong>Pending:</strong> ${pending}</p>
-              </div>
-              <div class="radio-group">
-                <label><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
-                <label><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
-              </div>
-              <div class="partial-input" id="partial_${bill.id}">
-                <label>Qty to Close:</label>
-                <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Max: ${pending}"/>
-              </div>
-              <button class="btn" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select</button>
-            </div>`;
+            return `<div class="bill-card" id="card_${bill.id}">
+        <div class="bill-card-id">${bill.issue_number}</div>
+        <div class="bill-card-row"><span>Date</span><span>${new Date(bill.date).toLocaleDateString()}</span></div>
+        <div class="bill-card-row"><span>Issued</span><span>${issued} g</span></div>
+        <div class="bill-card-row"><span>Received</span><span>${received} g</span></div>
+        <div class="bill-card-row"><span>Pending</span><span class="tag tag-pending">${pending} g</span></div>
+        <div class="radio-row">
+          <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
+          <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
+        </div>
+        <div class="partial-qty" id="partial_${bill.id}">
+          <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Qty to close (max ${pending})">
+        </div>
+        <button class="btn-select" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select this bill →</button>
+      </div>`;
           })
           .join("");
       }
@@ -675,11 +947,11 @@
         if (type === "partial") {
           partialDiv.classList.add("show");
           const input = partialDiv.querySelector("input");
-          const pendingQty = parseFloat(input.dataset.pending) || 0;
+          const max = parseFloat(input.dataset.pending) || 0;
           input.oninput = function () {
-            if (parseFloat(this.value) > pendingQty) {
-              this.value = pendingQty;
-              showMessage(`Max allowed: ${pendingQty}`, "error");
+            if (parseFloat(this.value) > max) {
+              this.value = max;
+              showMessage(`Max allowed: ${max}`, "error");
             }
           };
         } else {
@@ -689,16 +961,13 @@
 
       function selectLabourBill(labourId, issueNumber, companyName, billDate) {
         selectedLabourId = labourId;
-        document.querySelectorAll(".labour-card").forEach((card) => {
-          card.style.borderLeftWidth = "4px";
-          card.style.borderLeftColor = "#3498db";
-        });
-        document.getElementById(`card_${labourId}`).style.borderLeftWidth =
-          "6px";
-        document.getElementById(`card_${labourId}`).style.borderLeftColor =
-          "#27ae60";
+        document
+          .querySelectorAll(".bill-card")
+          .forEach((c) => c.classList.remove("selected"));
+        document.getElementById(`card_${labourId}`).classList.add("selected");
 
         document.getElementById("billDetails").classList.add("show");
+        document.getElementById("emptyState").style.display = "none";
         document.getElementById("issueNumber").value = issueNumber;
         document.getElementById("companyName").value = companyName || "";
         document.getElementById("billDate").value = billDate;
@@ -743,6 +1012,7 @@
           closingType === "partial" && partialInput
             ? parseFloat(partialInput.value) || null
             : null;
+
         tbody.innerHTML = items
           .map((item, index) => {
             const qty =
@@ -767,19 +1037,18 @@
               parseFloat(sgst) +
               parseFloat(igst)
             ).toFixed(2);
-            return `
-            <tr id="row_${index}">
-              <td><input type="number" value="${item.sl_no}" readonly></td>
-              <td><input type="text" class="description" value="${item.description}"></td>
-              <td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})"></td>
-              <td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})"></td>
-              <td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly></td>
-              <td><input type="number" class="cgst" step="0.01" value="${cgst}" readonly></td>
-              <td><input type="number" class="sgst" step="0.01" value="${sgst}" readonly></td>
-              <td><input type="number" class="igst" step="0.01" value="${igst}" readonly></td>
-              <td><input type="number" class="total" step="0.01" value="${total}" readonly></td>
-              <td><button class="btn btn-danger" onclick="deleteRow(${index})">DEL</button></td>
-            </tr>`;
+            return `<tr id="row_${index}">
+        <td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td>
+        <td><input type="text" class="description" value="${item.description}" style="min-width:120px;"></td>
+        <td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td>
+        <td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td>
+        <td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td>
+        <td><input type="number" class="cgst" step="0.01" value="${cgst}" readonly style="width:72px;"></td>
+        <td><input type="number" class="sgst" step="0.01" value="${sgst}" readonly style="width:72px;"></td>
+        <td><input type="number" class="igst" step="0.01" value="${igst}" readonly style="width:72px;"></td>
+        <td><input type="number" class="total" step="0.01" value="${total}" readonly style="width:80px;"></td>
+        <td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td>
+      </tr>`;
           })
           .join("");
       }
@@ -811,16 +1080,16 @@
         const row = document.createElement("tr");
         row.id = `row_${rowCount}`;
         row.innerHTML = `
-          <td><input type="number" value="${rowCount}" readonly></td>
-          <td><input type="text" class="description" placeholder="Description"></td>
-          <td><input type="number" class="quantity" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})"></td>
-          <td><input type="number" class="rate" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})"></td>
-          <td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly></td>
-          <td><input type="number" class="cgst" step="0.01" placeholder="0.00" readonly></td>
-          <td><input type="number" class="sgst" step="0.01" placeholder="0.00" readonly></td>
-          <td><input type="number" class="igst" step="0.01" placeholder="0.00" readonly></td>
-          <td><input type="number" class="total" step="0.01" placeholder="0.00" readonly></td>
-          <td><button class="btn btn-danger" onclick="deleteRow(${rowCount})">DEL</button></td>`;
+      <td><input type="number" value="${rowCount}" readonly style="width:44px;"></td>
+      <td><input type="text" class="description" placeholder="Description" style="min-width:120px;"></td>
+      <td><input type="number" class="quantity" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td>
+      <td><input type="number" class="rate" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td>
+      <td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly style="width:80px;"></td>
+      <td><input type="number" class="cgst" step="0.01" placeholder="0.00" readonly style="width:72px;"></td>
+      <td><input type="number" class="sgst" step="0.01" placeholder="0.00" readonly style="width:72px;"></td>
+      <td><input type="number" class="igst" step="0.01" placeholder="0.00" readonly style="width:72px;"></td>
+      <td><input type="number" class="total" step="0.01" placeholder="0.00" readonly style="width:80px;"></td>
+      <td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
         tbody.appendChild(row);
       }
 
@@ -922,6 +1191,7 @@
         const el = document.getElementById("message");
         el.textContent = msg;
         el.className = "message " + type;
+        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
 
       window.onload = async () => {
