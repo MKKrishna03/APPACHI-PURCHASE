@@ -67,6 +67,7 @@ alias TEXT UNIQUE NOT NULL,
       issue_number TEXT,
       labour_item_type TEXT,
       voucher_type TEXT,
+      receipt_bill_no TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -326,11 +327,11 @@ app.get("/api/labour/list", async (req, res) => {
     }
     if (voucher_type) {
       params.push(voucher_type);
-      where += `${where ? " AND" : " WHERE"} l.voucher_type = $${params.length}`;
+      where += `${where ? " AND" : " WHERE"} l.voucher_type ILIKE $${params.length}`;
     }
     const result = await pool.query(
-      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.bill_no,
-              l.voucher_type,
+      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.receipt_bill_no,
+              l.voucher_type, l.receipt_bill_no,
               COALESCE(SUM(li.amount::numeric), 0) AS total_value
        FROM labour l
        LEFT JOIN labour_items li ON li.labour_id = l.id
@@ -403,7 +404,7 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     );
 
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, bill_no)
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
         labour.profile_id,
@@ -541,16 +542,53 @@ app.get("/labour", (req, res) =>
   res.sendFile(path.join(__dirname, "labour.html")),
 );
 app.get("/transaction", (req, res) =>
-  res.sendFile(path.join(__dirname, "transaction.html")),
+  res.sendFile(path.join(__dirname, "newtrns.html")),
+);
+app.get("/newtrns", (req, res) =>
+  res.sendFile(path.join(__dirname, "newtrns.html")),
 );
 app.get("/receipt", (req, res) =>
-  res.sendFile(path.join(__dirname, "transaction.html")),
+  res.sendFile(path.join(__dirname, "newtrns.html")),
 );
 app.get("/payment", (req, res) =>
-  res.sendFile(path.join(__dirname, "transaction.html")),
+  res.sendFile(path.join(__dirname, "newtrns.html")),
 );
+app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
+app.post("/api/labour", async (req, res) => {
+  const {
+    profile_id,
+    company_name,
+    date,
+    issue_number,
+    labour_item_type,
+    items,
+  } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type)
+       VALUES ($1, $2, $3, $4, $5, 'ISSUE VOUCHER') RETURNING *`,
+      [profile_id, company_name, date, issue_number, labour_item_type],
+    );
+    const labourId = result.rows[0].id;
+    for (const item of items) {
+      await pool.query(
+        `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          labourId,
+          item.sl_no,
+          item.description,
+          item.quantity,
+          item.rate,
+          item.amount,
+        ],
+      );
+    }
+    res.json({ status: "SUCCESS", id: labourId });
+  } catch (err) {
+    console.error("LABOUR POST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
-process.on("uncaughtException", (err) =>
-  console.error("UNCAUGHT:", err.message, err.stack),
-);

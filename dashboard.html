@@ -516,18 +516,11 @@
         <div class="sidebar-section" id="transactionSection">
           <div
             class="sidebar-section-header"
-            onclick="toggleSection('transactionSection')"
+            onclick="window.location.href='/transaction'"
           >
             <span
               ><span class="sidebar-section-icon">▶</span>💰 Transactions</span
             >
-          </div>
-          <div class="sidebar-section-content">
-            <select id="transactionSelect" onchange="handleTransactionSelect()">
-              <option value="">Select Transaction</option>
-              <option value="receipt">📥 Receipt</option>
-              <option value="payment">📤 Payment</option>
-            </select>
           </div>
         </div>
       </div>
@@ -680,15 +673,7 @@
         }
         document.getElementById("companySelect").value = "";
       }
-      function handleTransactionSelect() {
-        const val = document.getElementById("transactionSelect").value;
-        if (val === "receipt") {
-          openModal("receipt");
-        } else if (val === "payment") {
-          openModal("payment");
-        }
-        document.getElementById("transactionSelect").value = "";
-      }
+
       function handleLabourSelect() {
         const val = document.getElementById("labourSelect").value;
         if (val === "create") {
@@ -1015,3 +1000,4 @@
     </script>
   </body>
 </html>
+
