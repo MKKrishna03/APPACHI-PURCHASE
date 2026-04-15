@@ -136,7 +136,6 @@ app.get("/api/profile/headers", (req, res) => {
 
 app.get("/api/profile/all", async (req, res) => {
   try {
-    console.log("QUERY PARAMS:", params, where);
     const result = await pool.query(
       "SELECT id, alias, company_name AS company, state_code FROM profiles ORDER BY company_name",
     );
