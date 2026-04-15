@@ -181,6 +181,146 @@
         background: rgba(25, 118, 210, 0.05);
         box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
       }
+      .company-list-wrap {
+        margin: 12px 4px 4px;
+        padding: 14px;
+        border-radius: 14px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.92),
+          rgba(242, 247, 255, 0.9)
+        );
+        border: 1px solid rgba(25, 118, 210, 0.14);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.8),
+          0 10px 24px rgba(25, 118, 210, 0.08);
+      }
+      .company-action {
+        margin: 8px 4px 0;
+        background: linear-gradient(
+          135deg,
+          rgba(25, 118, 210, 0.12),
+          rgba(25, 118, 210, 0.04)
+        );
+        border-color: rgba(25, 118, 210, 0.24);
+        font-weight: 600;
+      }
+      .company-subsection {
+        margin: 12px 4px 4px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(25, 118, 210, 0.14);
+        background: rgba(255, 255, 255, 0.56);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.76),
+          0 8px 20px rgba(25, 118, 210, 0.06);
+      }
+      .company-subsection-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        cursor: pointer;
+        color: #355c94;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        background: linear-gradient(
+          180deg,
+          rgba(245, 249, 255, 0.96),
+          rgba(236, 243, 253, 0.92)
+        );
+      }
+      .company-subsection-header:hover {
+        background: linear-gradient(
+          180deg,
+          rgba(239, 246, 255, 0.98),
+          rgba(228, 238, 252, 0.94)
+        );
+      }
+      .company-subsection-icon {
+        display: inline-block;
+        transition: transform 0.25s ease;
+      }
+      .company-subsection.collapsed .company-subsection-icon {
+        transform: rotate(-90deg);
+      }
+      .company-subsection-body {
+        max-height: 340px;
+        overflow: hidden;
+        transition:
+          max-height 0.3s ease,
+          opacity 0.25s ease;
+      }
+      .company-subsection.collapsed .company-subsection-body {
+        max-height: 0;
+        opacity: 0;
+      }
+      .company-list-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #4f6fa8;
+      }
+      .company-count {
+        min-width: 28px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(25, 118, 210, 0.12);
+        color: #1976d2;
+        font-size: 11px;
+        text-align: center;
+      }
+      .company-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 280px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .company-list::-webkit-scrollbar {
+        width: 5px;
+      }
+      .company-list::-webkit-scrollbar-thumb {
+        background: rgba(25, 118, 210, 0.22);
+        border-radius: 999px;
+      }
+      .company-card {
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(25, 118, 210, 0.1);
+        color: #23406d;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.4;
+        box-shadow: 0 6px 16px rgba(25, 118, 210, 0.08);
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease,
+          border-color 0.2s ease;
+      }
+      .company-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(25, 118, 210, 0.22);
+        box-shadow: 0 10px 22px rgba(25, 118, 210, 0.12);
+      }
+      .company-empty {
+        padding: 14px 12px;
+        border-radius: 12px;
+        background: rgba(25, 118, 210, 0.06);
+        color: #6b7b93;
+        font-size: 12px;
+        text-align: center;
+        border: 1px dashed rgba(25, 118, 210, 0.16);
+      }
       .main {
         flex: 1;
         padding: 24px;
@@ -488,10 +628,34 @@
             <span><span class="sidebar-section-icon">▶</span>🏢 Company</span>
           </div>
           <div class="sidebar-section-content">
-            <select id="companySelect" onchange="handleCompanySelect()">
-              <option value="">Select Company</option>
-              <option value="create">+ Create Profile</option>
-            </select>
+            <div
+              class="sidebar-option company-action"
+              onclick="window.location.href = '/profile'"
+            >
+              Create Profile
+            </div>
+            <div class="company-subsection collapsed" id="companyListSection">
+              <div
+                class="company-subsection-header"
+                onclick="toggleCompanyList(event)"
+              >
+                <span> List of Companies</span>
+                <span class="company-subsection-icon">▼</span>
+              </div>
+              <div class="company-subsection-body">
+                <div class="company-list-wrap">
+                  <div class="company-list-title">
+                    <span>List of Company</span>
+                    <span class="company-count" id="companyCount">0</span>
+                  </div>
+                  <div class="company-list" id="companyList">
+                    <div class="company-empty">
+                      No company profiles created yet.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -516,7 +680,7 @@
         <div class="sidebar-section" id="transactionSection">
           <div
             class="sidebar-section-header"
-            onclick="window.location.href='/transaction'"
+            onclick="window.location.href = '/transaction'"
           >
             <span
               ><span class="sidebar-section-icon">▶</span>💰 Transactions</span
@@ -540,7 +704,7 @@
         </div>
         <div class="form-grid">
           <div class="form-group">
-            <label for="receiptCompany">Select Company</label>
+            <label for="receiptCompany">Company</label>
             <select id="receiptCompany"></select>
           </div>
           <div class="form-group">
@@ -595,7 +759,7 @@
         </div>
         <div class="form-grid">
           <div class="form-group">
-            <label for="paymentCompany">Select Company</label>
+            <label for="paymentCompany">Company</label>
             <select id="paymentCompany"></select>
           </div>
           <div class="form-group">
@@ -666,14 +830,6 @@
         section.classList.toggle("collapsed");
       }
 
-      function handleCompanySelect() {
-        const val = document.getElementById("companySelect").value;
-        if (val === "create") {
-          window.location.href = "/profile";
-        }
-        document.getElementById("companySelect").value = "";
-      }
-
       function handleLabourSelect() {
         const val = document.getElementById("labourSelect").value;
         if (val === "create") {
@@ -684,11 +840,11 @@
         document.getElementById("labourSelect").value = "";
       }
 
-      function editCompany() {
-        const alias = document.getElementById("companySelect").value;
-        if (alias) {
-          window.location.href = `/profile?edit=${alias}`;
-        }
+      function toggleCompanyList(event) {
+        event.stopPropagation();
+        document
+          .getElementById("companyListSection")
+          .classList.toggle("collapsed");
       }
 
       function openModal(type) {
@@ -751,16 +907,32 @@
       async function loadCompanies() {
         const res = await fetch("/api/profiles/list");
         companies = await res.json();
+        const companyList = document.getElementById("companyList");
+        const companyCount = document.getElementById("companyCount");
         const receiptCompany = document.getElementById("receiptCompany");
         const paymentCompany = document.getElementById("paymentCompany");
 
-        const baseOption = `<option value="">Select Company</option>`;
+        const baseOption = `<option value="">Company</option>`;
         receiptCompany.innerHTML =
           baseOption +
           companies
             .map((c) => `<option value="${c.id}">${c.name}</option>`)
             .join("");
         paymentCompany.innerHTML = receiptCompany.innerHTML;
+
+        companyCount.textContent = companies.length;
+        if (!companies.length) {
+          companyList.innerHTML =
+            '<div class="company-empty">No company profiles created yet.</div>';
+          return;
+        }
+
+        companyList.innerHTML = companies
+          .map(
+            (c) =>
+              `<div class="company-card">${String(c.name || "").trim()}</div>`,
+          )
+          .join("");
       }
 
       function formatDateDDMMYYYY(value) {
@@ -1000,4 +1172,3 @@
     </script>
   </body>
 </html>
-
