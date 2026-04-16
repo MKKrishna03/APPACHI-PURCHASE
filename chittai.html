@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chittai</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 999;
+        backdrop-filter: blur(5px);
+      }
+
+      .modal {
+        width: 100%;
+        max-width: 580px;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+        animation: slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        overflow: hidden;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(32px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .modal-header {
+        background: linear-gradient(135deg, #1976d2, #1565c0);
+        padding: 22px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .modal-header-left {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .modal-title {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.3px;
+      }
+      .chittai-no-badge {
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.75);
+        letter-spacing: 0.5px;
+      }
+      .close-btn {
+        background: rgba(255, 255, 255, 0.15);
+        border: none;
+        color: #fff;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+      .close-btn:hover {
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      .modal-body {
+        padding: 26px 28px;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 16px;
+      }
+
+      .form-row {
+        display: grid;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .form-row-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .form-row-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      label {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        color: #8898aa;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+
+      input,
+      select {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 10px 13px;
+        border: 1.5px solid #e0e6ed;
+        border-radius: 9px;
+        font-size: 14px;
+        color: #202124;
+        background: #fff;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+        width: 100%;
+      }
+      input:hover,
+      select:hover {
+        border-color: #b0c4de;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #1976d2;
+        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+      }
+      input[readonly] {
+        background: #f0f5ff;
+        color: #1565c0;
+        font-weight: 700;
+        border-color: #ccdaf5;
+        cursor: default;
+      }
+      input[readonly]:focus {
+        box-shadow: none;
+        border-color: #ccdaf5;
+      }
+
+      .section-label {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        color: #1976d2;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        padding: 12px 0 10px;
+        border-top: 1px solid #eef2f7;
+        margin-bottom: 0;
+      }
+
+      .modal-footer {
+        padding: 16px 28px 22px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        border-top: 1px solid #f0f2f5;
+      }
+      .btn {
+        font-family: inherit;
+        padding: 10px 22px;
+        border: none;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.3px;
+        transition: all 0.2s;
+      }
+      .btn-ghost {
+        background: #f4f6f8;
+        color: #6b7280;
+        border: 1px solid #e5e7eb;
+      }
+      .btn-ghost:hover {
+        background: #e9ecef;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #1976d2, #1565c0);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.28);
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #1565c0, #0d47a1);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(25, 118, 210, 0.36);
+      }
+
+      .message {
+        margin: 0 28px 14px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-family: inherit;
+        display: none;
+        border-left: 4px solid transparent;
+      }
+      .message.success {
+        display: block;
+        background: rgba(76, 175, 80, 0.1);
+        color: #2e7d32;
+        border-left-color: #43a047;
+      }
+      .message.error {
+        display: block;
+        background: rgba(244, 67, 54, 0.1);
+        color: #c62828;
+        border-left-color: #f44336;
+      }
+
+      @media (max-width: 520px) {
+        .form-row-2,
+        .form-row-3 {
+          grid-template-columns: 1fr;
+        }
+        .modal-body {
+          padding: 18px;
+        }
+        .modal-footer {
+          padding: 12px 18px 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-backdrop" id="chittaiBackdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <div class="modal-title">Chittai Entry</div>
+            <div class="chittai-no-badge" id="chittaiNoBadge">Generating…</div>
+          </div>
+          <button class="close-btn" onclick="closeChittai()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-row form-row-2">
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Company *</label>
+              <select id="chittaiCompany">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Chittai Date *</label>
+              <input
+                type="date"
+                id="chittaiDate"
+                onchange="refreshChittaiNo()"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Chittai No (Auto)</label>
+            <input type="text" id="chittaiNo" readonly placeholder="Loading…" />
+          </div>
+
+          <div class="section-label">Calculation</div>
+
+          <div class="form-row form-row-3">
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Weight (g) *</label>
+              <input
+                type="number"
+                id="chittaiWeight"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                oninput="calcChittai()"
+              />
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Rate *</label>
+              <input
+                type="number"
+                id="chittaiRate"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                oninput="calcChittai()"
+              />
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Value (Wt × Rate)</label>
+              <input
+                type="number"
+                id="chittaiValue"
+                readonly
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div class="form-row form-row-2">
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Others</label>
+              <input
+                type="number"
+                id="chittaiOthers"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                oninput="calcChittai()"
+              />
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+              <label>Total (Value + Others)</label>
+              <input
+                type="number"
+                id="chittaiTotal"
+                readonly
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div class="form-row form-row-2" style="margin-bottom: 0">
+            <div class="form-group" style="margin-bottom: 0">
+              <label>TDS</label>
+              <input
+                type="number"
+                id="chittaiTds"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                oninput="calcChittai()"
+              />
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+              <label>RTGS Amount (Total − TDS)</label>
+              <input
+                type="number"
+                id="chittaiRtgs"
+                readonly
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div id="chittaiMsg" class="message"></div>
+
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="resetChittai()">Reset</button>
+          <button class="btn btn-primary" onclick="saveChittai()">
+            Save Chittai
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function calcChittai() {
+        const weight =
+          parseFloat(document.getElementById("chittaiWeight").value) || 0;
+        const rate =
+          parseFloat(document.getElementById("chittaiRate").value) || 0;
+        const others =
+          parseFloat(document.getElementById("chittaiOthers").value) || 0;
+        const tds =
+          parseFloat(document.getElementById("chittaiTds").value) || 0;
+        const value = weight * rate;
+        const total = value + others;
+        const rtgs = total - tds;
+        document.getElementById("chittaiValue").value = value.toFixed(2);
+        document.getElementById("chittaiTotal").value = total.toFixed(2);
+        document.getElementById("chittaiRtgs").value = rtgs.toFixed(2);
+      }
+
+      async function generateChittaiNo(dateVal) {
+        const d = dateVal ? new Date(dateVal) : new Date();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = String(d.getFullYear()).slice(-2);
+        const prefix = `${mm}-${yy}-`;
+        try {
+          const res = await fetch(
+            `/api/chittai/next-no?prefix=${encodeURIComponent(prefix)}`,
+          );
+          const data = await res.json();
+          return data.chittai_no;
+        } catch (e) {
+          return `${prefix}001`;
+        }
+      }
+
+      async function refreshChittaiNo() {
+        const dateVal = document.getElementById("chittaiDate").value;
+        const no = await generateChittaiNo(dateVal);
+        document.getElementById("chittaiNo").value = no;
+        document.getElementById("chittaiNoBadge").textContent = no;
+      }
+
+      function resetChittai() {
+        ["chittaiWeight", "chittaiRate", "chittaiOthers", "chittaiTds"].forEach(
+          (id) => (document.getElementById(id).value = ""),
+        );
+        ["chittaiValue", "chittaiTotal", "chittaiRtgs"].forEach(
+          (id) => (document.getElementById(id).value = ""),
+        );
+        document.getElementById("chittaiCompany").value = "";
+        document.getElementById("chittaiMsg").className = "message";
+        document.getElementById("chittaiDate").valueAsDate = new Date();
+        refreshChittaiNo();
+      }
+
+      function closeChittai() {
+        document.getElementById("chittaiBackdrop").classList.remove("show");
+        try {
+          window.parent.closeChittaiModal();
+        } catch (e) {}
+      }
+
+      async function loadCompanies() {
+        try {
+          const res = await fetch("/api/profiles/list");
+          const companies = await res.json();
+          const sel = document.getElementById("chittaiCompany");
+          sel.innerHTML =
+            '<option value="">— Select Company —</option>' +
+            companies
+              .map((c) => `<option value="${c.id}">${c.name}</option>`)
+              .join("");
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function saveChittai() {
+        const profile_id = document.getElementById("chittaiCompany").value;
+        const date = document.getElementById("chittaiDate").value;
+        const chittai_no = document.getElementById("chittaiNo").value;
+        const weight = document.getElementById("chittaiWeight").value;
+        const rate = document.getElementById("chittaiRate").value;
+        const value = document.getElementById("chittaiValue").value;
+        const others = document.getElementById("chittaiOthers").value;
+        const total = document.getElementById("chittaiTotal").value;
+        const tds = document.getElementById("chittaiTds").value;
+        const rtgs = document.getElementById("chittaiRtgs").value;
+        const msg = document.getElementById("chittaiMsg");
+
+        if (!profile_id || !date || !weight || !rate) {
+          msg.textContent = "Please fill Company, Date, Weight and Rate.";
+          msg.className = "message error";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/chittai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              profile_id,
+              chittai_no,
+              date,
+              weight,
+              rate,
+              value,
+              others,
+              total,
+              tds,
+              rtgs_amount: rtgs,
+            }),
+          });
+          const data = await res.json();
+          if (data.id) {
+            msg.textContent = `Chittai ${chittai_no} saved!`;
+            msg.className = "message success";
+            setTimeout(resetChittai, 1800);
+          } else {
+            msg.textContent = data.error || "Failed to save.";
+            msg.className = "message error";
+          }
+        } catch (e) {
+          msg.textContent = "Network error: " + e.message;
+          msg.className = "message error";
+        }
+      }
+
+      document
+        .getElementById("chittaiBackdrop")
+        .addEventListener("click", function (e) {
+          if (e.target === this) closeChittai();
+        });
+
+      document.getElementById("chittaiDate").valueAsDate = new Date();
+      loadCompanies();
+      refreshChittaiNo();
+    </script>
+  </body>
+</html>

@@ -479,8 +479,8 @@ app.get("/api/labour/unlinked-receipts", async (req, res) => {
   }
 });
 
-app.get("/labclose", (req, res) =>
-  res.sendFile(path.join(__dirname, "labclose.html")),
+app.get("/chittai", (req, res) =>
+  res.sendFile(path.join(__dirname, "chittai.html")),
 );
 
 // ── VOUCHER ROUTES ──
@@ -622,6 +622,57 @@ app.post("/api/labour", async (req, res) => {
     res.json({ status: "SUCCESS", id: labourId });
   } catch (err) {
     console.error("LABOUR POST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/api/chittai/next-no", async (req, res) => {
+  const { prefix } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT chittai_no FROM chittai WHERE chittai_no LIKE $1 ORDER BY chittai_no DESC LIMIT 1`,
+      [`${prefix}%`],
+    );
+    if (!result.rows.length) return res.json({ chittai_no: `${prefix}001` });
+    const last = result.rows[0].chittai_no;
+    const num = parseInt(last.split("-")[2]) + 1;
+    res.json({ chittai_no: `${prefix}${String(num).padStart(3, "0")}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/chittai", async (req, res) => {
+  const {
+    profile_id,
+    chittai_no,
+    date,
+    weight,
+    rate,
+    value,
+    others,
+    total,
+    tds,
+    rtgs_amount,
+  } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [
+        profile_id,
+        chittai_no,
+        date,
+        weight,
+        rate,
+        value,
+        others || 0,
+        total,
+        tds || 0,
+        rtgs_amount,
+      ],
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
