@@ -32,6 +32,9 @@ async function initDB() {
   await pool.query(
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_labour_id INTEGER REFERENCES labour(id)`,
   );
+  await pool.query(
+    `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_chittai_id INTEGER REFERENCES chittai(id)`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -550,7 +553,7 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${params.length}`;
     }
     if (unlinked_only === "true") {
-      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL`;
+      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL`;
     }
     const result = await pool.query(
       `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id
