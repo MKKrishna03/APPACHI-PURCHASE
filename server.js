@@ -29,6 +29,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 
 async function initDB() {
+  await pool.query(
+    `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_labour_id INTEGER REFERENCES labour(id)`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -382,8 +385,14 @@ app.get("/api/labour", async (req, res) => {
 // ── CLOSE ISSUE VOUCHER ROUTES ──
 
 app.post("/api/close-issue-voucher", async (req, res) => {
-  const { labour_id, closing_date, closing_type, partial_qty, items } =
-    req.body;
+  const {
+    labour_id,
+    closing_date,
+    closing_type,
+    partial_qty,
+    items,
+    payment_voucher_id,
+  } = req.body;
 
   try {
     const labourResult = await pool.query(
@@ -438,9 +447,34 @@ app.post("/api/close-issue-voucher", async (req, res) => {
       }
     }
 
+    if (payment_voucher_id) {
+      await pool.query(
+        `UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`,
+        [close_labour_id, payment_voucher_id],
+      );
+    }
+
     res.json({ status: "SUCCESS", id: close_labour_id });
   } catch (err) {
     console.error("CLOSE ISSUE VOUCHER ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/labour/unlinked-receipts", async (req, res) => {
+  const { profile_id } = req.query;
+  if (!profile_id)
+    return res.status(400).json({ error: "profile_id required" });
+  try {
+    const linkedIds = await pool.query(
+      `SELECT linked_labour_id FROM vouchers WHERE linked_labour_id IS NOT NULL`,
+    );
+    const linkedSet = linkedIds.rows.map((r) => r.linked_labour_id);
+    let query = `SELECT id, issue_number, receipt_bill_no, date FROM labour WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1`;
+    const result = await pool.query(query, [profile_id]);
+    const unlinked = result.rows.filter((r) => !linkedSet.includes(r.id));
+    res.json(unlinked);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -503,7 +537,7 @@ app.post("/api/vouchers", async (req, res) => {
 });
 
 app.get("/api/vouchers/list", async (req, res) => {
-  const { profile_id, voucher_type } = req.query;
+  const { profile_id, voucher_type, unlinked_only } = req.query;
   try {
     const params = [];
     let where = "";
@@ -513,12 +547,13 @@ app.get("/api/vouchers/list", async (req, res) => {
     }
     if (voucher_type) {
       params.push(`%${voucher_type}%`);
-      where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${
-        params.length
-      }`;
+      where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${params.length}`;
+    }
+    if (unlinked_only === "true") {
+      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id
        FROM vouchers
        ${where}
        ORDER BY created_at DESC`,
@@ -600,4 +635,3 @@ app.get("/api/descriptions", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

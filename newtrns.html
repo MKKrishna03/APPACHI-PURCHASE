@@ -493,24 +493,45 @@
         });
       }
 
+      let labourReceiptVouchers = [];
+
       async function loadCompanyVouchers() {
         resetVoucherSelectors();
+        labourReceiptVouchers = [];
 
         if (!companySelect.value) return;
 
-        const res = await fetch(
-          `/api/vouchers/list?profile_id=${encodeURIComponent(companySelect.value)}`,
-        );
-        const data = await res.json();
-        companyVouchers = Array.isArray(data) ? data : [];
+        const [vouchersRes, labourRes] = await Promise.all([
+          fetch(
+            `/api/vouchers/list?profile_id=${encodeURIComponent(companySelect.value)}&unlinked_only=true`,
+          ),
+          fetch(
+            `/api/labour/list?profile_id=${encodeURIComponent(companySelect.value)}&voucher_type=Receipt Voucher`,
+          ),
+        ]);
+        const vouchersData = await vouchersRes.json();
+        const labourData = await labourRes.json();
+
+        companyVouchers = Array.isArray(vouchersData) ? vouchersData : [];
+        labourReceiptVouchers = Array.isArray(labourData)
+          ? labourData.filter((l) => l.voucher_type === "Receipt Voucher")
+          : [];
 
         const voucherTypes = [
           ...new Set(
-            companyVouchers
-              .map((voucher) => voucher.voucher_type)
-              .filter(Boolean),
+            companyVouchers.map((v) => v.voucher_type).filter(Boolean),
           ),
         ];
+
+        if (labourReceiptVouchers.length) {
+          [
+            ...new Set(
+              labourReceiptVouchers.map((l) => l.voucher_type).filter(Boolean),
+            ),
+          ].forEach((t) => {
+            if (!voucherTypes.includes(t)) voucherTypes.push(t);
+          });
+        }
 
         if (!voucherTypes.length) {
           againstHint.textContent =
@@ -533,6 +554,23 @@
         againstHint.classList.remove("show");
 
         if (!againstVoucherType.value) return;
+
+        if (againstVoucherType.value === "Receipt Voucher") {
+          if (!labourReceiptVouchers.length) {
+            againstHint.textContent =
+              "No unlinked Receipt Vouchers found for this company.";
+            againstHint.classList.add("show");
+            return;
+          }
+          labourReceiptVouchers.forEach((lv) => {
+            const option = document.createElement("option");
+            option.value = lv.receipt_bill_no || `ID-${lv.id}`;
+            option.textContent = lv.receipt_bill_no || `ID-${lv.id}`;
+            option.dataset.amount = "";
+            againstBillNo.appendChild(option);
+          });
+          return;
+        }
 
         const filtered = companyVouchers.filter(
           (voucher) => voucher.voucher_type === againstVoucherType.value,

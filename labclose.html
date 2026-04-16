@@ -278,6 +278,11 @@
         margin-bottom: 6px;
         overflow: hidden;
       }
+      .receipt-card.selected {
+        border-color: var(--accent);
+        background: var(--accent-light);
+        border-left: 3px solid var(--accent);
+      }
       .receipt-card-head {
         padding: 10px 12px;
         cursor: pointer;
@@ -683,6 +688,21 @@
             <div class="no-data">Loading…</div>
           </div>
         </div>
+
+        <!-- Recent Payments -->
+        <button
+          class="section-toggle"
+          onclick="toggleSection('payments')"
+          style="margin-top: 8px"
+        >
+          <span>Recent Payments</span>
+          <span class="section-icon" id="arrow_payments">▾</span>
+        </button>
+        <div class="section-body" id="body_payments">
+          <div id="recentPaymentsList">
+            <div class="no-data">Loading…</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -806,6 +826,7 @@
       let selectedClosingType = {};
       let rowCount = 0;
       let selectedGstType = "CGST_SGST";
+      let selectedPaymentVoucherId = null;
 
       function toggleSection(name) {
         const body = document.getElementById(`body_${name}`);
@@ -847,6 +868,57 @@
           });
         } catch (err) {
           showMessage("Error loading companies: " + err.message, "error");
+        }
+      }
+
+      async function loadRecentPayments() {
+        const companyId = document.getElementById("companySelect").value;
+        const list = document.getElementById("recentPaymentsList");
+        if (!companyId) {
+          list.innerHTML = '<div class="no-data">Select a company first</div>';
+          return;
+        }
+        try {
+          const res = await fetch(
+            `/api/vouchers/list?voucher_type=Payment Voucher&profile_id=${companyId}`,
+          );
+          const data = await res.json();
+          const payments = data
+            .filter((v) => v.entry_type === "new")
+            .slice(0, 5);
+          if (!payments.length) {
+            list.innerHTML = '<div class="no-data">No payments yet</div>';
+            return;
+          }
+          list.innerHTML = payments
+            .map(
+              (p) => `
+            <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
+              <div class="receipt-card-head">
+                <div>
+                  <div class="receipt-title">${p.bill_no || "—"}</div>
+                  <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
+                </div>
+              </div>
+            </div>`,
+            )
+            .join("");
+        } catch {
+          list.innerHTML = '<div class="no-data">Error loading</div>';
+        }
+      }
+
+      function selectPayment(id) {
+        const card = document.getElementById(`pay_${id}`);
+        if (selectedPaymentVoucherId === id) {
+          card.classList.remove("selected");
+          selectedPaymentVoucherId = null;
+        } else {
+          document
+            .querySelectorAll(".receipt-card")
+            .forEach((c) => c.classList.remove("selected"));
+          card.classList.add("selected");
+          selectedPaymentVoucherId = id;
         }
       }
 
@@ -909,6 +981,7 @@
       async function loadCompanyLabourBills() {
         const companyId = document.getElementById("companySelect").value;
         if (!companyId) return;
+        loadRecentPayments();
         document.getElementById("emptyState").style.display = "none";
         document.getElementById("labourBillsList").innerHTML =
           '<div class="no-data">Loading…</div>';
@@ -1214,6 +1287,7 @@
               partial_qty: partialQty,
               bill_no: receiptBillNo,
               items,
+              payment_voucher_id: selectedPaymentVoucherId,
             }),
           });
           const result = await res.json();
@@ -1242,6 +1316,7 @@
         await loadCompanies();
         loadDescriptions();
         loadRecentReceipts();
+        loadRecentPayments();
       };
     </script>
   </body>
