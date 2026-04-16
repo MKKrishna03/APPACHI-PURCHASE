@@ -26,7 +26,7 @@
       }
       .sidebar {
         width: 280px;
-        background: rgba(255, 255, 255, 0.85);
+        background: #ffffff;
         backdrop-filter: blur(30px) saturate(180%);
         color: #202124;
         border-right: 1px solid rgba(255, 255, 255, 0.7);
@@ -634,27 +634,8 @@
             >
               Create Profile
             </div>
-            <div class="company-subsection collapsed" id="companyListSection">
-              <div
-                class="company-subsection-header"
-                onclick="toggleCompanyList(event)"
-              >
-                <span> List of Companies</span>
-                <span class="company-subsection-icon">▼</span>
-              </div>
-              <div class="company-subsection-body">
-                <div class="company-list-wrap">
-                  <div class="company-list-title">
-                    <span>List of Company</span>
-                    <span class="company-count" id="companyCount">0</span>
-                  </div>
-                  <div class="company-list" id="companyList">
-                    <div class="company-empty">
-                      No company profiles created yet.
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div class="sidebar-option" onclick="openCompanyListModal()">
+              List of Companies
             </div>
           </div>
         </div>
@@ -845,13 +826,6 @@
           window.location.href = "/labclose";
         }
         document.getElementById("labourSelect").value = "";
-      }
-
-      function toggleCompanyList(event) {
-        event.stopPropagation();
-        document
-          .getElementById("companyListSection")
-          .classList.toggle("collapsed");
       }
 
       function openModal(type) {
@@ -1179,6 +1153,45 @@
     </script>
 
     <iframe id="chittaiFrame" src="/chittai" style="display: none"></iframe>
+
+    <div class="modal-backdrop" id="companyListBackdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <div class="modal-title">
+            List of Companies &nbsp;<span
+              class="company-count"
+              id="companyCount"
+              >0</span
+            >
+          </div>
+          <button class="close-btn" onclick="closeCompanyListModal()">x</button>
+        </div>
+        <input
+          type="text"
+          id="companySearch"
+          placeholder="Search companies..."
+          style="
+            width: 100%;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            border: 1.5px solid rgba(25, 118, 210, 0.3);
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            display: block;
+            box-sizing: border-box;
+          "
+          oninput="filterCompanyList(this.value)"
+        />
+        <div
+          class="company-list"
+          id="companyList"
+          style="max-height: 400px; overflow-y: auto"
+        >
+          <div class="company-empty">No company profiles created yet.</div>
+        </div>
+      </div>
+    </div>
     <div class="modal-backdrop" id="chittaiBackdrop">
       <div
         class="modal"
@@ -1210,6 +1223,34 @@
         .getElementById("chittaiBackdrop")
         .addEventListener("click", function (e) {
           if (e.target === this) closeChittaiModal();
+        });
+      function openCompanyListModal() {
+        document.getElementById("companyListBackdrop").classList.add("show");
+      }
+      /*************  ✨ Windsurf Command ⭐  *************/
+      /**
+ * Close the company list modal and clear the search query.
+
+/*******  0731cb41-0d51-4f39-b89b-cb591fa2eec7  *******/
+      function closeCompanyListModal() {
+        document.getElementById("companyListBackdrop").classList.remove("show");
+        document.getElementById("companySearch").value = "";
+        filterCompanyList("");
+      }
+      function filterCompanyList(query) {
+        const q = query.toLowerCase();
+        document
+          .querySelectorAll("#companyList .company-card")
+          .forEach((card) => {
+            card.style.display = card.textContent.toLowerCase().includes(q)
+              ? ""
+              : "none";
+          });
+      }
+      document
+        .getElementById("companyListBackdrop")
+        .addEventListener("click", function (e) {
+          if (e.target === this) closeCompanyListModal();
         });
     </script>
   </body>
