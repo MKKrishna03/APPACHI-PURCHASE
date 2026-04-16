@@ -686,3 +686,6 @@ app.get("/api/descriptions", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/labclose", (req, res) =>
+  res.sendFile(path.join(__dirname, "labclose.html")),
+);
