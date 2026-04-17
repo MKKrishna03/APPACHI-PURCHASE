@@ -682,6 +682,55 @@
       <div class="page">
         <h1>Dashboard</h1>
       </div>
+
+      <div
+        style="
+          display: grid;
+          grid-template-columns: 340px;
+          gap: 20px;
+          margin-top: 20px;
+        "
+      >
+        <!-- Left: Pending Vouchers -->
+        <div
+          class="page"
+          style="
+            padding: 20px;
+            height: fit-content;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+          "
+        >
+          <h2
+            style="
+              font-size: 15px;
+              font-weight: 700;
+              margin-bottom: 12px;
+              color: #202124;
+            "
+          >
+            Pending Issue Vouchers
+          </h2>
+          <input
+            type="text"
+            id="pendingSearch"
+            placeholder="Search..."
+            oninput="filterPending(this.value)"
+            style="
+              width: 100%;
+              padding: 8px 12px;
+              margin-bottom: 12px;
+              border: 1.5px solid rgba(25, 118, 210, 0.25);
+              border-radius: 8px;
+              font-size: 13px;
+              outline: none;
+              box-sizing: border-box;
+            "
+          />
+          <div id="pendingVoucherList" style="flex: 1; overflow-y: auto"></div>
+        </div>
+      </div>
     </div>
 
     <div class="modal-backdrop" id="receiptBackdrop">
@@ -1150,6 +1199,58 @@
       }
 
       loadCompanies();
+      loadPendingVouchers();
+
+      async function loadPendingVouchers() {
+        try {
+          const res = await fetch("/api/labour");
+          const bills = await res.json();
+          const issues = bills.filter(
+            (b) => b.voucher_type === "ISSUE VOUCHER",
+          );
+          const receipts = bills.filter(
+            (b) => b.voucher_type === "Receipt Voucher",
+          );
+          const closedSet = new Set(receipts.map((r) => r.issue_number));
+          const pending = issues.filter((b) => !closedSet.has(b.issue_number));
+          window._pendingVouchers = pending;
+          renderPending(pending);
+        } catch (e) {
+          document.getElementById("pendingVoucherList").innerHTML =
+            '<p style="color:red;">Error</p>';
+        }
+      }
+
+      function renderPending(list) {
+        const el = document.getElementById("pendingVoucherList");
+        if (!list.length) {
+          el.innerHTML =
+            '<p style="text-align:center;color:#999;font-size:12px;">No pending vouchers</p>';
+          return;
+        }
+        el.innerHTML = list
+          .map(
+            (b) => `
+          <div style="padding:10px 12px;margin-bottom:6px;border-radius:10px;background:rgba(25,118,210,0.04);border:1px solid rgba(25,118,210,0.12);cursor:pointer;" onmouseover="this.style.borderColor='rgba(25,118,210,0.4)'" onmouseout="this.style.borderColor='rgba(25,118,210,0.12)'">
+            <div style="font-weight:600;color:#1976d2;font-size:13px;">${b.issue_number || "-"}</div>
+            <div style="font-size:11px;color:#666;margin-top:2px;">${b.company_name || "-"} · ${b.date ? new Date(b.date).toLocaleDateString() : "-"}</div>
+          </div>
+        `,
+          )
+          .join("");
+      }
+
+      function filterPending(q) {
+        const all = window._pendingVouchers || [];
+        const f = q.toLowerCase();
+        renderPending(
+          all.filter(
+            (b) =>
+              (b.issue_number || "").toLowerCase().includes(f) ||
+              (b.company_name || "").toLowerCase().includes(f),
+          ),
+        );
+      }
     </script>
 
     <iframe id="chittaiFrame" src="/chittai" style="display: none"></iframe>
