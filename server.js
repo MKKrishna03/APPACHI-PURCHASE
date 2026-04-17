@@ -35,6 +35,9 @@ async function initDB() {
   await pool.query(
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_chittai_id INTEGER REFERENCES chittai(id)`,
   );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -553,7 +556,7 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${params.length}`;
     }
     if (unlinked_only === "true") {
-      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL`;
+      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
       `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id
@@ -628,6 +631,33 @@ app.post("/api/labour", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/api/chittai/list", async (req, res) => {
+  const { profile_id, is_paid } = req.query;
+  if (!profile_id) return res.json([]);
+  try {
+    const result = await pool.query(
+      `SELECT * FROM chittai WHERE profile_id = $1 AND (is_paid = $2 OR is_paid IS NULL) ORDER BY date DESC`,
+      [profile_id, is_paid === "false" ? false : true],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/chittai/:id", async (req, res) => {
+  const { is_paid } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE chittai SET is_paid = $1 WHERE id = $2 RETURNING *`,
+      [is_paid, req.params.id],
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/chittai/next-no", async (req, res) => {
   const { prefix } = req.query;
   try {
