@@ -436,8 +436,7 @@
             onclick="togglePayment()"
           >
             + Add Payment
-          </button>
-          <button class="btn btn-primary" onclick="saveChittai()">
+          <button class="btn btn-primary" id="saveChittaiBtn" onclick="saveChittai()">
             Save Chittai
           </button>
         </div>
@@ -577,6 +576,7 @@
               total,
               tds,
               rtgs_amount: rtgs,
+              is_paid: false,
             }),
           });
           const data = await res.json();
@@ -603,8 +603,13 @@
                   linked_chittai_id: data.id,
                 }),
               });
+              await fetch(`/api/chittai/${data.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_paid: true }),
+              });
             }
-            msg.textContent = `Chittai ${chittai_no} saved!`;
+            msg.textContent = payVisible && payDate && payAmount && payMop ? `Chittai ${chittai_no} and Payment saved!` : `Chittai ${chittai_no} saved!`;
             msg.className = "message success";
             setTimeout(resetChittai, 1800);
           } else {
@@ -625,11 +630,13 @@
         if (isHidden) {
           sec.style.display = "block";
           btn.textContent = "− Remove Payment";
+          document.getElementById("saveChittaiBtn").textContent = "Save Chittai & Payment";
           const rtgs = document.getElementById("chittaiRtgs").value;
           if (rtgs) document.getElementById("payAmount").value = rtgs;
         } else {
           sec.style.display = "none";
           btn.textContent = "+ Add Payment";
+          document.getElementById("saveChittaiBtn").textContent = "Save Chittai";
         }
       }
 

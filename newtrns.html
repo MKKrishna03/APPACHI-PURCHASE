@@ -472,21 +472,27 @@
       }
 
       let labourReceiptVouchers = [];
+      let openChittais = [];
 
       async function loadCompanyVouchers() {
         resetVoucherSelectors();
         labourReceiptVouchers = [];
         if (!companySelect.value) return;
-        const [vouchersRes, labourRes] = await Promise.all([
+        const [vouchersRes, chittaiRes, labourRes] = await Promise.all([
           fetch(
             `/api/vouchers/list?profile_id=${encodeURIComponent(companySelect.value)}&unlinked_only=true`,
+          ),
+          fetch(
+            `/api/chittai/list?profile_id=${encodeURIComponent(companySelect.value)}&is_paid=false`,
           ),
           fetch(
             `/api/labour/list?profile_id=${encodeURIComponent(companySelect.value)}&voucher_type=Receipt Voucher`,
           ),
         ]);
         const vouchersData = await vouchersRes.json();
+        const chittaiData = await chittaiRes.json();
         const labourData = await labourRes.json();
+        openChittais = Array.isArray(chittaiData) ? chittaiData : [];
         companyVouchers = Array.isArray(vouchersData) ? vouchersData : [];
         labourReceiptVouchers = Array.isArray(labourData)
           ? labourData.filter((l) => l.voucher_type === "Receipt Voucher")
@@ -495,7 +501,10 @@
           ...new Set(
             companyVouchers.map((v) => v.voucher_type).filter(Boolean),
           ),
-        ];
+        ].filter((t) => t !== "Chittai Payment");
+        if (openChittais.length) {
+          if (!voucherTypes.includes("Chittai")) voucherTypes.push("Chittai");
+        }
         if (labourReceiptVouchers.length) {
           [
             ...new Set(
@@ -524,6 +533,22 @@
         againstHint.textContent = "";
         againstHint.classList.remove("show");
         if (!againstVoucherType.value) return;
+        if (againstVoucherType.value === "Chittai") {
+          if (!openChittais.length) {
+            againstHint.textContent =
+              "No unpaid Chittais found for this company.";
+            againstHint.classList.add("show");
+            return;
+          }
+          openChittais.forEach((c) => {
+            const o = document.createElement("option");
+            o.value = c.chittai_no;
+            o.textContent = c.chittai_no;
+            o.dataset.amount = c.rtgs_amount || "";
+            againstBillNo.appendChild(o);
+          });
+          return;
+        }
         if (againstVoucherType.value === "Receipt Voucher") {
           if (!labourReceiptVouchers.length) {
             againstHint.textContent = "No unlinked Receipt Vouchers found.";
