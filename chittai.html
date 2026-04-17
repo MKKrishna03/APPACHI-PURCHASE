@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <title>Chittai</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap"
+      rel="stylesheet"
+    />
     <style>
+      :root {
+        --bg: #f5f5f0;
+        --surface: #ffffff;
+        --surface-2: #f9f9f6;
+        --ink: #1a1a2e;
+        --ink-2: #444466;
+        --ink-3: #8888aa;
+        --accent: #2d6a4f;
+        --accent-2: #245c43;
+        --accent-light: #d8f3dc;
+        --danger: #b5301e;
+        --danger-light: #fce8e6;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-strong: rgba(0, 0, 0, 0.14);
+        --radius: 10px;
+        --radius-lg: 16px;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -13,7 +36,7 @@
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.45);
+        background: rgba(26, 26, 46, 0.3);
         display: flex;
         align-items: flex-start;
         justify-content: center;
@@ -25,19 +48,21 @@
       .modal {
         width: 100%;
         max-width: 700px;
-        background: #fff;
-        border-radius: 18px;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
         margin: auto;
         align-self: center;
+        border: 1px solid var(--border);
       }
 
       .modal-header {
-        background: linear-gradient(135deg, #1976d2, #1565c0);
+        background: var(--accent);
         padding: 22px 28px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
       }
       .modal-header-left {
         display: flex;
@@ -45,14 +70,14 @@
         gap: 4px;
       }
       .modal-title {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "DM Sans", system-ui, sans-serif;
         font-size: 18px;
         font-weight: 700;
         color: #fff;
         letter-spacing: -0.3px;
       }
       .chittai-no-badge {
-        font-family: "Courier New", monospace;
+        font-family: monospace;
         font-size: 12px;
         font-weight: 700;
         color: rgba(255, 255, 255, 0.75);
@@ -86,7 +111,6 @@
         gap: 6px;
         margin-bottom: 16px;
       }
-
       .form-row {
         display: grid;
         gap: 16px;
@@ -100,59 +124,60 @@
       }
 
       label {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "DM Sans", system-ui, sans-serif;
         font-size: 10px;
         font-weight: 700;
-        color: #8898aa;
+        color: var(--ink-3);
         text-transform: uppercase;
-        letter-spacing: 0.6px;
+        letter-spacing: 0.06em;
       }
 
       input,
       select {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "DM Sans", system-ui, sans-serif;
         padding: 10px 13px;
-        border: 1.5px solid #e0e6ed;
-        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
         font-size: 14px;
-        color: #202124;
-        background: #fff;
+        color: var(--ink);
+        background: var(--surface-2);
         transition:
-          border-color 0.2s,
-          box-shadow 0.2s;
+          border-color 0.15s,
+          box-shadow 0.15s;
         width: 100%;
       }
       input:hover,
       select:hover {
-        border-color: #b0c4de;
+        border-color: rgba(45, 106, 79, 0.3);
       }
       input:focus,
       select:focus {
         outline: none;
-        border-color: #1976d2;
-        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.08);
+        background: var(--surface);
       }
       input[readonly] {
-        background: #f0f5ff;
-        color: #1565c0;
+        background: var(--accent-light);
+        color: var(--accent);
         font-weight: 700;
-        border-color: #ccdaf5;
+        border-color: rgba(45, 106, 79, 0.2);
         cursor: default;
       }
       input[readonly]:focus {
         box-shadow: none;
-        border-color: #ccdaf5;
+        border-color: rgba(45, 106, 79, 0.2);
       }
 
       .section-label {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "DM Sans", system-ui, sans-serif;
         font-size: 10px;
         font-weight: 700;
-        color: #1976d2;
+        color: var(--accent);
         text-transform: uppercase;
-        letter-spacing: 0.7px;
+        letter-spacing: 0.07em;
         padding: 12px 0 10px;
-        border-top: 1px solid #eef2f7;
+        border-top: 1px solid var(--border);
         margin-bottom: 0;
       }
 
@@ -161,7 +186,7 @@
         display: flex;
         justify-content: flex-end;
         gap: 10px;
-        border-top: 1px solid #f0f2f5;
+        border-top: 1px solid var(--border);
         position: relative;
         z-index: 1;
       }
@@ -169,30 +194,29 @@
         font-family: inherit;
         padding: 10px 22px;
         border: none;
-        border-radius: 9px;
+        border-radius: var(--radius);
         font-size: 13px;
         font-weight: 700;
         cursor: pointer;
-        letter-spacing: 0.3px;
-        transition: all 0.2s;
+        letter-spacing: 0.03em;
+        transition: all 0.15s;
       }
       .btn-ghost {
-        background: #f4f6f8;
-        color: #6b7280;
-        border: 1px solid #e5e7eb;
+        background: var(--surface-2);
+        color: var(--ink-3);
+        border: 1px solid var(--border-strong);
       }
       .btn-ghost:hover {
-        background: #e9ecef;
+        background: var(--surface);
+        color: var(--ink-2);
       }
       .btn-primary {
-        background: linear-gradient(135deg, #1976d2, #1565c0);
+        background: var(--accent);
         color: #fff;
-        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.28);
+        box-shadow: 0 4px 12px rgba(45, 106, 79, 0.2);
       }
       .btn-primary:hover {
-        background: linear-gradient(135deg, #1565c0, #0d47a1);
-        transform: translateY(-1px);
-        box-shadow: 0 6px 18px rgba(25, 118, 210, 0.36);
+        background: var(--accent-2);
       }
 
       .message {
@@ -202,19 +226,19 @@
         font-size: 13px;
         font-family: inherit;
         display: none;
-        border-left: 4px solid transparent;
+        border-left: 3px solid transparent;
       }
       .message.success {
         display: block;
-        background: rgba(76, 175, 80, 0.1);
-        color: #2e7d32;
-        border-left-color: #43a047;
+        background: var(--accent-light);
+        color: var(--accent);
+        border-left-color: var(--accent);
       }
       .message.error {
         display: block;
-        background: rgba(244, 67, 54, 0.1);
-        color: #c62828;
-        border-left-color: #f44336;
+        background: var(--danger-light);
+        color: var(--danger);
+        border-left-color: var(--danger);
       }
 
       @media (max-width: 520px) {
@@ -260,14 +284,14 @@
         <div class="modal-body">
           <div class="form-row form-row-3">
             <div class="form-group" style="margin-bottom: 0">
-              <label>Company *</label>
-              <select id="chittaiCompany">
+              <label>Company *</label
+              ><select id="chittaiCompany">
                 <option value="">— Select —</option>
               </select>
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Chittai Date *</label>
-              <input
+              <label>Chittai Date *</label
+              ><input
                 type="date"
                 id="chittaiDate"
                 onchange="debouncedRefresh()"
@@ -275,15 +299,12 @@
             </div>
             <div></div>
           </div>
-
           <input type="hidden" id="chittaiNo" />
-
           <div class="section-label">Calculation</div>
-
           <div class="form-row form-row-3">
             <div class="form-group" style="margin-bottom: 0">
-              <label>Weight (g) *</label>
-              <input
+              <label>Weight (g) *</label
+              ><input
                 type="number"
                 id="chittaiWeight"
                 min="0"
@@ -293,8 +314,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Rate *</label>
-              <input
+              <label>Rate *</label
+              ><input
                 type="number"
                 id="chittaiRate"
                 min="0"
@@ -304,8 +325,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Value (Wt × Rate)</label>
-              <input
+              <label>Value (Wt × Rate)</label
+              ><input
                 type="number"
                 id="chittaiValue"
                 readonly
@@ -313,11 +334,10 @@
               />
             </div>
           </div>
-
           <div class="form-row form-row-3">
             <div class="form-group" style="margin-bottom: 0">
-              <label>Rnd</label>
-              <input
+              <label>Rnd</label
+              ><input
                 type="number"
                 id="chittaiRnd"
                 min="0"
@@ -327,8 +347,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Others</label>
-              <input
+              <label>Others</label
+              ><input
                 type="number"
                 id="chittaiOthers"
                 min="0"
@@ -338,8 +358,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Total (Value + Others)</label>
-              <input
+              <label>Total (Value + Others)</label
+              ><input
                 type="number"
                 id="chittaiTotal"
                 readonly
@@ -347,11 +367,10 @@
               />
             </div>
           </div>
-
           <div class="form-row form-row-2" style="margin-bottom: 0">
             <div class="form-group" style="margin-bottom: 0">
-              <label>TDS</label>
-              <input
+              <label>TDS</label
+              ><input
                 type="number"
                 id="chittaiTds"
                 min="0"
@@ -361,8 +380,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>RTGS Amount (Total − TDS)</label>
-              <input
+              <label>RTGS Amount (Total − TDS)</label
+              ><input
                 type="number"
                 id="chittaiRtgs"
                 readonly
@@ -380,18 +399,17 @@
         >
           <div
             class="section-label"
-            style="border-top: 1px solid #eef2f7; padding-top: 12px"
+            style="border-top: 1px solid var(--border); padding-top: 12px"
           >
             Payment
           </div>
           <div class="form-row form-row-3" style="margin-top: 10px">
             <div class="form-group" style="margin-bottom: 0">
-              <label>Payment Date</label>
-              <input type="date" id="payDate" />
+              <label>Payment Date</label><input type="date" id="payDate" />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>Amount</label>
-              <input
+              <label>Amount</label
+              ><input
                 type="number"
                 id="payAmount"
                 min="0"
@@ -400,8 +418,8 @@
               />
             </div>
             <div class="form-group" style="margin-bottom: 0">
-              <label>MOP</label>
-              <select id="payMop">
+              <label>MOP</label
+              ><select id="payMop">
                 <option value="">— Select —</option>
                 <option value="Cash">Cash</option>
                 <option value="NEFT/RTGS">NEFT/RTGS</option>
@@ -409,6 +427,7 @@
             </div>
           </div>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="resetChittai()">Reset</button>
           <button
@@ -426,7 +445,6 @@
     </div>
 
     <script>
-      // ── Utility: debounce ──────────────────────────────────────────────────
       function debounce(fn, ms) {
         let t;
         return (...a) => {
@@ -434,15 +452,10 @@
           t = setTimeout(() => fn(...a), ms);
         };
       }
-
-      // ── Cache for companies list ───────────────────────────────────────────
       let companyCache = null;
-
-      // ── Debounced versions of heavy handlers ──────────────────────────────
       const debouncedCalc = debounce(calcChittai, 300);
       const debouncedRefresh = debounce(refreshChittaiNo, 400);
 
-      // ── Calculation (uses requestAnimationFrame to batch DOM writes) ───────
       function calcChittai() {
         const weight =
           parseFloat(document.getElementById("chittaiWeight").value) || 0;
@@ -454,11 +467,9 @@
           parseFloat(document.getElementById("chittaiRnd").value) || 0;
         const tds =
           parseFloat(document.getElementById("chittaiTds").value) || 0;
-
         const value = weight * rate;
         const total = value + others + rnd;
         const rtgs = total - tds;
-
         requestAnimationFrame(() => {
           document.getElementById("chittaiValue").value = value.toFixed(2);
           document.getElementById("chittaiTotal").value = total.toFixed(2);
@@ -466,7 +477,6 @@
         });
       }
 
-      // ── Chittai number generation ──────────────────────────────────────────
       async function generateChittaiNo(dateVal) {
         const d = dateVal ? new Date(dateVal) : new Date();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -482,7 +492,6 @@
           return `${prefix}001`;
         }
       }
-
       async function refreshChittaiNo() {
         const dateVal = document.getElementById("chittaiDate").value;
         const no = await generateChittaiNo(dateVal);
@@ -490,7 +499,6 @@
         document.getElementById("chittaiNoBadge").textContent = no;
       }
 
-      // ── Reset ──────────────────────────────────────────────────────────────
       function resetChittai() {
         [
           "chittaiWeight",
@@ -513,7 +521,6 @@
         refreshChittaiNo();
       }
 
-      // ── Close ──────────────────────────────────────────────────────────────
       function closeChittai() {
         document.getElementById("chittaiBackdrop").classList.remove("show");
         try {
@@ -521,18 +528,16 @@
         } catch (e) {}
       }
 
-      // ── Load companies with cache ──────────────────────────────────────────
       async function loadCompanies() {
         try {
           if (!companyCache) {
             const res = await fetch("/api/profiles/list");
             companyCache = await res.json();
           }
-          const companies = companyCache;
           const sel = document.getElementById("chittaiCompany");
           sel.innerHTML =
             '<option value="">— Select Company —</option>' +
-            companies
+            companyCache
               .map((c) => `<option value="${c.id}">${c.alias}</option>`)
               .join("");
         } catch (e) {
@@ -540,26 +545,23 @@
         }
       }
 
-      // ── Save ───────────────────────────────────────────────────────────────
       async function saveChittai() {
-        const profile_id = document.getElementById("chittaiCompany").value;
-        const date = document.getElementById("chittaiDate").value;
-        const chittai_no = document.getElementById("chittaiNo").value;
-        const weight = document.getElementById("chittaiWeight").value;
-        const rate = document.getElementById("chittaiRate").value;
-        const value = document.getElementById("chittaiValue").value;
-        const others = document.getElementById("chittaiOthers").value;
-        const total = document.getElementById("chittaiTotal").value;
-        const tds = document.getElementById("chittaiTds").value;
-        const rtgs = document.getElementById("chittaiRtgs").value;
-        const msg = document.getElementById("chittaiMsg");
-
+        const profile_id = document.getElementById("chittaiCompany").value,
+          date = document.getElementById("chittaiDate").value,
+          chittai_no = document.getElementById("chittaiNo").value,
+          weight = document.getElementById("chittaiWeight").value,
+          rate = document.getElementById("chittaiRate").value,
+          value = document.getElementById("chittaiValue").value,
+          others = document.getElementById("chittaiOthers").value,
+          total = document.getElementById("chittaiTotal").value,
+          tds = document.getElementById("chittaiTds").value,
+          rtgs = document.getElementById("chittaiRtgs").value,
+          msg = document.getElementById("chittaiMsg");
         if (!profile_id || !date || !weight || !rate) {
           msg.textContent = "Please fill Company, Date, Weight and Rate.";
           msg.className = "message error";
           return;
         }
-
         try {
           const res = await fetch("/api/chittai", {
             method: "POST",
@@ -579,13 +581,12 @@
           });
           const data = await res.json();
           if (data.id) {
-            const payDate = document.getElementById("payDate").value;
-            const payAmount = document.getElementById("payAmount").value;
-            const payMop = document.getElementById("payMop").value;
-            const payVisible =
-              document.getElementById("paymentSection").style.display !==
-              "none";
-
+            const payDate = document.getElementById("payDate").value,
+              payAmount = document.getElementById("payAmount").value,
+              payMop = document.getElementById("payMop").value,
+              payVisible =
+                document.getElementById("paymentSection").style.display !==
+                "none";
             if (payVisible && payDate && payAmount && payMop) {
               await fetch("/api/vouchers", {
                 method: "POST",
@@ -603,7 +604,6 @@
                 }),
               });
             }
-
             msg.textContent = `Chittai ${chittai_no} saved!`;
             msg.className = "message success";
             setTimeout(resetChittai, 1800);
@@ -617,10 +617,9 @@
         }
       }
 
-      // ── Toggle payment section (lazy) ──────────────────────────────────────
       function togglePayment() {
-        const sec = document.getElementById("paymentSection");
-        const btn = document.getElementById("addPayBtn");
+        const sec = document.getElementById("paymentSection"),
+          btn = document.getElementById("addPayBtn");
         const isHidden =
           sec.style.display === "none" || sec.style.display === "";
         if (isHidden) {
@@ -634,14 +633,11 @@
         }
       }
 
-      // ── Backdrop click to close ────────────────────────────────────────────
       document
         .getElementById("chittaiBackdrop")
         .addEventListener("click", function (e) {
           if (e.target === this) closeChittai();
         });
-
-      // ── Init ───────────────────────────────────────────────────────────────
       document.getElementById("chittaiDate").valueAsDate = new Date();
       document.getElementById("payDate").valueAsDate = new Date();
       loadCompanies();
