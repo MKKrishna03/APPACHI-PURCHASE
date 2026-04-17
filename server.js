@@ -7,6 +7,7 @@ net.Socket.prototype.connect = function (options, ...args) {
   return originalConnect.call(this, options, ...args);
 };
 require("dotenv").config();
+process.env.TZ = "Asia/Kolkata";
 const express = require("express");
 const { Pool } = require("pg");
 const path = require("path");
@@ -559,7 +560,7 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id, created_at
        FROM vouchers
        ${where}
        ORDER BY created_at DESC`,
@@ -631,6 +632,15 @@ app.post("/api/labour", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/api/chittai/list/all", async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM chittai ORDER BY date DESC`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/chittai/list", async (req, res) => {
   const { profile_id, is_paid } = req.query;
   if (!profile_id) return res.json([]);
