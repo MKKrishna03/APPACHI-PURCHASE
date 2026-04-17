@@ -300,13 +300,14 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 20px;
+        padding: 16px;
         box-shadow: var(--shadow-sm);
         transition:
           box-shadow 0.2s,
           transform 0.2s;
         display: flex;
         flex-direction: column;
+        height: 340px;
       }
       .dash-card:hover {
         box-shadow: var(--shadow);
@@ -363,7 +364,7 @@
       .pending-list {
         flex: 1;
         overflow-y: auto;
-        max-height: 320px;
+        max-height: 200px;
       }
       .pending-list::-webkit-scrollbar {
         width: 4px;
@@ -782,12 +783,28 @@
           <div class="card-placeholder">Coming soon</div>
         </div>
 
-        <!-- Card 3: Placeholder -->
+        <!-- Card 3: Today's Activity -->
         <div class="dash-card">
           <div class="dash-card-header">
-            <span class="dash-card-title">Quick Actions</span>
+            <span class="dash-card-title">Today's Activity</span>
+            <input
+              type="date"
+              id="activityDate"
+              style="
+                font-size: 11px;
+                padding: 4px 8px;
+                border: 1px solid var(--border-strong);
+                border-radius: 6px;
+                background: var(--surface-2);
+                color: var(--ink);
+                font-family: inherit;
+              "
+              onchange="loadActivity(this.value)"
+            />
           </div>
-          <div class="card-placeholder">Coming soon</div>
+          <div class="pending-list" id="activityList">
+            <div class="empty-msg">Loading...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1348,9 +1365,72 @@
           if (e.target === this) closeCompanyListModal();
         });
 
+      // ── Today's Activity ──
+      async function loadActivity(dateVal) {
+        const el = document.getElementById("activityList");
+        el.innerHTML = '<div class="empty-msg">Loading...</div>';
+        try {
+          const [vRes, cRes] = await Promise.all([
+            fetch(`/api/vouchers/list`),
+            fetch(`/api/chittai/list/all`),
+          ]);
+          const vouchers = await vRes.json().catch(() => []);
+          const chittaisRaw = await cRes.text();
+          const chittais = (() => {
+            try {
+              return JSON.parse(chittaisRaw);
+            } catch (e) {
+              return [];
+            }
+          })();
+          const all = [
+            ...(Array.isArray(vouchers) ? vouchers : []).map((v) => ({
+              label: v.voucher_type,
+              sub: v.bill_no || "-",
+              date: v.created_at,
+              amount: v.total_value,
+              company:
+                companies.find((c) => String(c.id) === String(v.profile_id))
+                  ?.name || "-",
+            })),
+            ...(Array.isArray(chittais) ? chittais : []).map((c) => ({
+              label: "Chittai",
+              sub: c.chittai_no,
+              date: c.created_at,
+              amount: c.rtgs_amount,
+              company:
+                companies.find((co) => String(co.id) === String(c.profile_id))
+                  ?.alias || "-",
+            })),
+          ].filter((x) => x.date && x.date.toString().slice(0, 10) === dateVal);
+          if (!all.length) {
+            el.innerHTML = '<div class="empty-msg">No activity</div>';
+            return;
+          }
+          el.innerHTML = all
+            .map(
+              (x) => `
+            <div class="pending-item">
+              <div>
+                <div class="pending-item-id">${x.company}</div>
+                <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${x.date ? x.date.toString().slice(11, 16) : ""}</span></div>
+              </div>
+              <span class="pending-tag">₹${Number(x.amount || 0).toLocaleString("en-IN")}</span>
+            </div>`,
+            )
+            .join("");
+        } catch (e) {
+          el.innerHTML =
+            '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
       // ── Init ──
       loadCompanies();
       loadPendingVouchers();
+      const _actDate = document.getElementById("activityDate");
+      _actDate.value = new Date().toISOString().split("T")[0];
+      loadActivity(_actDate.value);
     </script>
   </body>
 </html>
