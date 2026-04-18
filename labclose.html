@@ -1165,6 +1165,19 @@
         }
       }
 
+      function displayItemsRaw(items) {
+        const tbody = document.getElementById("itemsTable");
+        rowCount = items.length;
+        tbody.innerHTML = items
+          .map((item, index) => {
+            const qty = parseFloat(item.quantity) || 0;
+            const rate = parseFloat(item.rate) || 0;
+            const taxable = parseFloat(item.amount) || 0;
+            return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description || ""}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
+          })
+          .join("");
+      }
+
       function displayItems(items) {
         const tbody = document.getElementById("itemsTable");
         rowCount = items.length;
@@ -1366,7 +1379,155 @@
         loadDescriptions();
         loadRecentReceipts();
         loadRecentPayments();
+        const editId = new URLSearchParams(location.search).get("edit");
+        if (editId) loadEditReceipt(editId);
       };
+
+      async function loadEditReceipt(id) {
+        try {
+          const res = await fetch(`/api/labour/${id}`);
+          const d = await res.json();
+          const l = d.labour;
+          document.getElementById("companySelect").value = l.profile_id;
+          await loadCompanyLabourBills();
+          const issueRes = await fetch("/api/labour");
+          const allBills = await issueRes.json();
+          const issueBill = allBills.find(
+            (b) =>
+              b.voucher_type === "ISSUE VOUCHER" &&
+              b.issue_number === l.issue_number &&
+              String(b.profile_id) === String(l.profile_id),
+          );
+          if (issueBill && document.getElementById(`card_${issueBill.id}`)) {
+            selectLabourBill(
+              issueBill.id,
+              issueBill.issue_number,
+              issueBill.company_name,
+              issueBill.date,
+            );
+          } else {
+            document.getElementById("billDetails").classList.add("show");
+            document.getElementById("emptyState").style.display = "none";
+            document.getElementById("issueNumber").textContent =
+              l.issue_number || "";
+            document.getElementById("companyName").textContent =
+              l.company_name || "";
+            selectedLabourId = issueBill ? issueBill.id : null;
+          }
+          // Fix timezone shift: parse date parts directly
+          document.getElementById("closingDate").value = l.date
+            ? (() => {
+                const d = new Date(l.date);
+                return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                  .toISOString()
+                  .slice(0, 10);
+              })()
+            : "";
+          document.getElementById("receiptBillNo").value =
+            l.receipt_bill_no || "";
+
+          // prefill receipt's own items with stored values (no recalculation)
+          displayItemsRaw(d.items || []);
+
+          // prefill totals
+          if (l.taxable_total != null)
+            document.getElementById("billTaxable").value = parseFloat(
+              l.taxable_total,
+            ).toFixed(2);
+          if (l.cgst != null)
+            document.getElementById("billCgst").value = parseFloat(
+              l.cgst,
+            ).toFixed(2);
+          if (l.sgst != null)
+            document.getElementById("billSgst").value = parseFloat(
+              l.sgst,
+            ).toFixed(2);
+          if (l.igst != null)
+            document.getElementById("billIgst").value = parseFloat(
+              l.igst,
+            ).toFixed(2);
+          if (l.round_off != null)
+            document.getElementById("billRoundOff").value = parseFloat(
+              l.round_off,
+            ).toFixed(2);
+          if (l.total != null)
+            document.getElementById("billTotal").value = parseFloat(
+              l.total,
+            ).toFixed(2);
+          if (l.tds != null)
+            document.getElementById("billTds").value = parseFloat(
+              l.tds,
+            ).toFixed(2);
+          if (l.bill_value_after_deduction != null)
+            document.getElementById("billValueAfterDeduction").value =
+              parseFloat(l.bill_value_after_deduction).toFixed(2);
+
+          // switch submit button to update mode
+          const btn = document.querySelector(".btn-submit");
+          btn.textContent = "Update Close Voucher →";
+          btn.onclick = () => updateCloseVoucher(id);
+        } catch (e) {
+          alert("Error loading: " + e.message);
+        }
+      }
+
+      async function updateCloseVoucher(id) {
+        const closingDate = document.getElementById("closingDate").value;
+        const receiptBillNo = document.getElementById("receiptBillNo").value;
+        if (!closingDate || !receiptBillNo) {
+          showMessage(
+            "Please fill closing date and receipt bill number",
+            "error",
+          );
+          return;
+        }
+        const items = [];
+        document.querySelectorAll("#itemsTable tr").forEach((row, index) => {
+          items.push({
+            sl_no: index + 1,
+            description: row.querySelector(".description").value || "",
+            quantity: parseFloat(row.querySelector(".quantity").value) || 0,
+            rate: parseFloat(row.querySelector(".rate").value) || 0,
+            amount: parseFloat(row.querySelector(".taxable").value) || 0,
+          });
+        });
+        try {
+          const res = await fetch(`/api/labour/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              date: closingDate,
+              receipt_bill_no: receiptBillNo,
+              items,
+              taxable_total:
+                parseFloat(document.getElementById("billTaxable").value) || 0,
+              cgst: parseFloat(document.getElementById("billCgst").value) || 0,
+              sgst: parseFloat(document.getElementById("billSgst").value) || 0,
+              igst: parseFloat(document.getElementById("billIgst").value) || 0,
+              round_off:
+                parseFloat(document.getElementById("billRoundOff").value) || 0,
+              total:
+                parseFloat(document.getElementById("billTotal").value) || 0,
+              tds: parseFloat(document.getElementById("billTds").value) || 0,
+              bill_value_after_deduction:
+                parseFloat(
+                  document.getElementById("billValueAfterDeduction").value,
+                ) || 0,
+            }),
+          });
+          const result = await res.json();
+          if (result.status === "SUCCESS") {
+            showMessage("Updated successfully!", "success");
+            setTimeout(() => {
+              location.href = "/";
+            }, 1500);
+          } else {
+            showMessage("Error: " + result.error, "error");
+          }
+        } catch (e) {
+          showMessage("Error: " + e.message, "error");
+        }
+      }
     </script>
   </body>
 </html>

@@ -1311,24 +1311,24 @@
         el.innerHTML = Object.entries(grouped)
           .map(
             ([company, bills], i) => `
-          <div style="margin-bottom:6px;position:relative;">
-            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;">
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--surface-2);">
               <div>
                 <div style="font-weight:600;font-size:13px;color:var(--accent)">${company}</div>
                 <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
               </div>
               <span id="parrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
             </div>
-            <div id="pgroup_${i}" style="display:none;position:fixed;z-index:9999;min-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);padding:6px;">
+            <div id="pgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
               ${bills
                 .map(
                   (b) => `
-                <div class="pending-item" style="margin-bottom:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
                   <div>
-                    <div class="pending-item-id">${b.issue_number || "-"}</div>
-                    <div class="pending-item-sub">${b.date ? new Date(b.date).toLocaleDateString() : "-"}</div>
+                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.issue_number || "-"}</div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
                   </div>
-                  <span class="pending-tag">Pending</span>
+                  <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Pending</span>
                 </div>`,
                 )
                 .join("")}
@@ -1340,7 +1340,6 @@
 
       function togglePendingGroup(event, i) {
         event.stopPropagation();
-        const trigger = event.currentTarget;
         const body = document.getElementById(`pgroup_${i}`);
         const arrow = document.getElementById(`parrow_${i}`);
         const isOpen = body.style.display === "block";
@@ -1351,11 +1350,10 @@
           .querySelectorAll('[id^="parrow_"]')
           .forEach((a) => (a.style.transform = ""));
         if (!isOpen) {
-          const rect = trigger.getBoundingClientRect();
           body.style.display = "block";
-          body.style.top = window.scrollY + rect.bottom + 4 + "px";
-          body.style.left = window.scrollX + rect.left + "px";
           arrow.style.transform = "rotate(180deg)";
+          event.currentTarget.style.background = "var(--accent-light)";
+          event.currentTarget.style.borderBottom = "1px solid var(--accent-2)";
         }
       }
 
@@ -1366,6 +1364,12 @@
         document
           .querySelectorAll('[id^="parrow_"]')
           .forEach((a) => (a.style.transform = ""));
+        document
+          .querySelectorAll('[onclick^="togglePendingGroup"]')
+          .forEach((el) => {
+            el.style.background = "var(--surface-2)";
+            el.style.borderBottom = "";
+          });
       });
 
       function filterPending(q) {
@@ -1421,9 +1425,10 @@
         const el = document.getElementById("activityList");
         el.innerHTML = '<div class="empty-msg">Loading...</div>';
         try {
-          const [vRes, cRes] = await Promise.all([
+          const [vRes, cRes, lRes] = await Promise.all([
             fetch(`/api/vouchers/list`),
             fetch(`/api/chittai/list/all`),
+            fetch(`/api/labour`),
           ]);
           const vouchers = await vRes.json().catch(() => []);
           const chittaisRaw = await cRes.text();
@@ -1434,6 +1439,7 @@
               return [];
             }
           })();
+          const labourAll = await lRes.json().catch(() => []);
           const all = [
             ...(Array.isArray(vouchers) ? vouchers : []).map((v) => ({
               label: v.voucher_type,
@@ -1452,6 +1458,13 @@
               company:
                 companies.find((co) => String(co.id) === String(c.profile_id))
                   ?.alias || "-",
+            })),
+            ...(Array.isArray(labourAll) ? labourAll : []).map((b) => ({
+              label: b.voucher_type,
+              sub: b.issue_number || b.receipt_bill_no || "-",
+              date: b.created_at,
+              amount: b.total || 0,
+              company: b.company_name || "-",
             })),
           ].filter((x) => x.date && x.date.toString().slice(0, 10) === dateVal);
           if (!all.length) {
