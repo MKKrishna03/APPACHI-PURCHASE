@@ -1302,20 +1302,71 @@
           el.innerHTML = '<div class="empty-msg">No pending vouchers</div>';
           return;
         }
-        el.innerHTML = list
+        const grouped = {};
+        list.forEach((b) => {
+          const k = b.company_name || "-";
+          if (!grouped[k]) grouped[k] = [];
+          grouped[k].push(b);
+        });
+        el.innerHTML = Object.entries(grouped)
           .map(
-            (b) => `
-          <div class="pending-item">
-            <div>
-              <div class="pending-item-id">${b.issue_number || "-"}</div>
-              <div class="pending-item-sub">${b.company_name || "-"} · ${b.date ? new Date(b.date).toLocaleDateString() : "-"}</div>
+            ([company, bills], i) => `
+          <div style="margin-bottom:6px;position:relative;">
+            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--accent)">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
+              </div>
+              <span id="parrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
             </div>
-            <span class="pending-tag">Pending</span>
-          </div>
-        `,
+            <div id="pgroup_${i}" style="display:none;position:fixed;z-index:9999;min-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);padding:6px;">
+              ${bills
+                .map(
+                  (b) => `
+                <div class="pending-item" style="margin-bottom:4px;">
+                  <div>
+                    <div class="pending-item-id">${b.issue_number || "-"}</div>
+                    <div class="pending-item-sub">${b.date ? new Date(b.date).toLocaleDateString() : "-"}</div>
+                  </div>
+                  <span class="pending-tag">Pending</span>
+                </div>`,
+                )
+                .join("")}
+            </div>
+          </div>`,
           )
           .join("");
       }
+
+      function togglePendingGroup(event, i) {
+        event.stopPropagation();
+        const trigger = event.currentTarget;
+        const body = document.getElementById(`pgroup_${i}`);
+        const arrow = document.getElementById(`parrow_${i}`);
+        const isOpen = body.style.display === "block";
+        document
+          .querySelectorAll('[id^="pgroup_"]')
+          .forEach((g) => (g.style.display = "none"));
+        document
+          .querySelectorAll('[id^="parrow_"]')
+          .forEach((a) => (a.style.transform = ""));
+        if (!isOpen) {
+          const rect = trigger.getBoundingClientRect();
+          body.style.display = "block";
+          body.style.top = window.scrollY + rect.bottom + 4 + "px";
+          body.style.left = window.scrollX + rect.left + "px";
+          arrow.style.transform = "rotate(180deg)";
+        }
+      }
+
+      document.addEventListener("click", () => {
+        document
+          .querySelectorAll('[id^="pgroup_"]')
+          .forEach((g) => (g.style.display = "none"));
+        document
+          .querySelectorAll('[id^="parrow_"]')
+          .forEach((a) => (a.style.transform = ""));
+      });
 
       function filterPending(q) {
         const all = window._pendingVouchers || [];
