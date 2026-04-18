@@ -399,6 +399,14 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     partial_qty,
     items,
     payment_voucher_id,
+    taxable_total,
+    cgst,
+    sgst,
+    igst,
+    round_off,
+    total,
+    tds,
+    bill_value_after_deduction,
   } = req.body;
 
   try {
@@ -420,8 +428,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     );
 
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [
         labour.profile_id,
         labour.company_name,
@@ -429,6 +437,14 @@ app.post("/api/close-issue-voucher", async (req, res) => {
         labour.issue_number,
         "Receipt Voucher",
         req.body.bill_no || null,
+        taxable_total || null,
+        cgst || null,
+        sgst || null,
+        igst || null,
+        round_off || null,
+        total || null,
+        tds || null,
+        bill_value_after_deduction || null,
       ],
     );
 
