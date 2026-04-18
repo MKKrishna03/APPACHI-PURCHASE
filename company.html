@@ -649,6 +649,17 @@
       </div>
     </div>
 
+    <!-- Bill Detail Popup -->
+    <div id="billPopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2000;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:16px;padding:28px;min-width:400px;max-width:600px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.15);position:relative;">
+        <button onclick="closeBillPopup()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:#8888aa;">✕</button>
+        <div id="billPopupContent"></div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;">
+          <button id="billEditBtn" onclick="goEditBill()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       // ── URL PARAMS ──
       const params = new URLSearchParams(location.search);
@@ -1097,7 +1108,7 @@
           ? issues
               .map(
                 (b) => `<tr>
-              <td>${b.issue_number || "-"}</td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('issue',${b.id},'${b.issue_number}')">${b.issue_number || "-"}</span></td>
               <td>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
               <td>${b.labour_item_type || "-"}</td>
               <td><span class="tag ${closedSet.has(b.issue_number) ? "tag-done" : "tag-pending"}">${closedSet.has(b.issue_number) ? "Closed" : "Pending"}</span></td>
@@ -1110,8 +1121,8 @@
           ? receipts
               .map(
                 (b) => `<tr>
-              <td>${b.issue_number || "-"}</td>
-              <td>${b.receipt_bill_no || "-"}</td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('receipt',${b.id},'${b.issue_number}')">${b.issue_number || "-"}</span></td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('receipt',${b.id},'${b.receipt_bill_no}')">${b.receipt_bill_no || "-"}</span></td>
               <td>${b.date ?new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
               <td>₹${parseFloat(b.total || 0).toLocaleString("en-IN")}</td>
             </tr>`,
@@ -1127,7 +1138,7 @@
           ? txns
               .map(
                 (v) => `<tr>
-              <td>${v.bill_no || "-"}</td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('txn',${v.id},'${v.bill_no}')">${v.bill_no || "-"}</span></td>
               <td>${v.voucher_type || "-"}</td>
               <td>${v.date ? new Date(v.date).toLocaleDateString("en-IN") : "-"}</td>
               <td>₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</td>
@@ -1143,10 +1154,10 @@
         document.getElementById("chittaiCount").textContent = myChittai.length;
         document.getElementById("sumChittai").textContent = myChittai.length;
         document.getElementById("chittaiTable").innerHTML = myChittai.length
-          ? myChittai
+         ? myChittai
               .map(
                 (c) => `<tr>
-              <td>${c.chittai_no || "-"}</td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('chittai',${c.id},'${c.chittai_no}')">${c.chittai_no || "-"}</span></td>
               <td>${c.date ? new Date(c.date).toLocaleDateString("en-IN") : "-"}</td>
               <td>${parseFloat(c.weight || 0).toLocaleString("en-IN")} g</td>
               <td>₹${parseFloat(c.rtgs_amount || 0).toLocaleString("en-IN")}</td>
@@ -1190,6 +1201,84 @@
       activePreset = 10;
 
       loadAll();
+
+      let _popupType = null, _popupId = null;
+
+      async function showBillPopup(type, id, label) {
+        _popupType = type;
+        _popupId = id;
+        const el = document.getElementById('billPopupContent');
+        el.innerHTML = '<div style="color:#8888aa;padding:20px 0;">Loading...</div>';
+        document.getElementById('billPopup').style.display = 'flex';
+
+        try {
+          if (type === 'issue' || type === 'receipt') {
+            const res = await fetch(`/api/labour/${id}`);
+            const d = await res.json();
+            const l = d.labour;
+            const items = d.items || [];
+            const rows = items.map(i => `<tr><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${i.sl_no}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${i.description||'-'}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.quantity||0).toFixed(2)}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.rate||0).toFixed(2)}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.amount||0).toFixed(2)}</td></tr>`).join('');
+            el.innerHTML = `
+              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">${l.voucher_type}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:13px;">
+                <div><span style="color:#8888aa;">Issue No</span><br><strong style="color:#2d6a4f;">${l.issue_number||'-'}</strong></div>
+                <div><span style="color:#8888aa;">Date</span><br><strong>${l.date?new Date(l.date).toLocaleDateString('en-GB'):'-'}</strong></div>
+                <div><span style="color:#8888aa;">Company</span><br><strong>${l.company_name||'-'}</strong></div>
+                ${l.receipt_bill_no?`<div><span style="color:#8888aa;">Receipt Bill No</span><br><strong>${l.receipt_bill_no}</strong></div>`:''}
+                ${l.total?`<div><span style="color:#8888aa;">Total</span><br><strong>₹${parseFloat(l.total).toLocaleString('en-IN')}</strong></div>`:''}
+              </div>
+              ${items.length?`<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#f9f9f6;"><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Sl</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Desc</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Qty</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Rate</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Amt</th></tr></thead><tbody>${rows}</tbody></table>`:''}`;
+          } else if (type === 'txn') {
+            const res = await fetch(`/api/vouchers/list?profile_id=${profileId}`);
+            const all = await res.json();
+            const v = all.find(x => x.id == id);
+            if (!v) { el.innerHTML = '<div style="color:#b5301e;">Not found</div>'; return; }
+            el.innerHTML = `
+              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">${v.voucher_type}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+                <div><span style="color:#8888aa;">Bill No</span><br><strong style="color:#2d6a4f;">${v.bill_no||'-'}</strong></div>
+                <div><span style="color:#8888aa;">Date</span><br><strong>${v.date?new Date(v.date).toLocaleDateString('en-IN'):'-'}</strong></div>
+                <div><span style="color:#8888aa;">Type</span><br><strong>${v.voucher_type||'-'}</strong></div>
+                <div><span style="color:#8888aa;">Entry</span><br><strong>${v.entry_type||'-'}</strong></div>
+                <div><span style="color:#8888aa;">Amount</span><br><strong>₹${parseFloat(v.total_value||0).toLocaleString('en-IN')}</strong></div>
+              </div>`;
+          } else if (type === 'chittai') {
+            const res = await fetch(`/api/chittai/list/all`);
+            const all = await res.json();
+            const c = all.find(x => x.id == id);
+            if (!c) { el.innerHTML = '<div style="color:#b5301e;">Not found</div>'; return; }
+            el.innerHTML = `
+              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Chittai</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+                <div><span style="color:#8888aa;">Chittai No</span><br><strong style="color:#2d6a4f;">${c.chittai_no||'-'}</strong></div>
+                <div><span style="color:#8888aa;">Date</span><br><strong>${c.date?new Date(c.date).toLocaleDateString('en-IN'):'-'}</strong></div>
+                <div><span style="color:#8888aa;">Weight</span><br><strong>${parseFloat(c.weight||0).toLocaleString('en-IN')} g</strong></div>
+                <div><span style="color:#8888aa;">Rate</span><br><strong>₹${parseFloat(c.rate||0).toLocaleString('en-IN')}</strong></div>
+                <div><span style="color:#8888aa;">Value</span><br><strong>₹${parseFloat(c.value||0).toLocaleString('en-IN')}</strong></div>
+                <div><span style="color:#8888aa;">TDS</span><br><strong>₹${parseFloat(c.tds||0).toLocaleString('en-IN')}</strong></div>
+                <div><span style="color:#8888aa;">RTGS Amount</span><br><strong>₹${parseFloat(c.rtgs_amount||0).toLocaleString('en-IN')}</strong></div>
+                <div><span style="color:#8888aa;">Status</span><br><strong>${c.is_paid?'Paid':'Unpaid'}</strong></div>
+              </div>`;
+          }
+        } catch(e) {
+          el.innerHTML = '<div style="color:#b5301e;">Error loading details</div>';
+        }
+      }
+
+      function closeBillPopup() {
+        document.getElementById('billPopup').style.display = 'none';
+      }
+
+      function goEditBill() {
+        if (_popupType === 'issue') window.location.href = `/labour?edit=${_popupId}`;
+        else if (_popupType === 'receipt') window.location.href = `/labclose?edit=${_popupId}`;
+        else if (_popupType === 'txn') window.location.href = `/transaction?edit=${_popupId}`;
+        else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
+      }
+
+      document.getElementById('billPopup').addEventListener('click', function(e) {
+        if (e.target === this) closeBillPopup();
+      });
     </script>
   </body>
 </html>

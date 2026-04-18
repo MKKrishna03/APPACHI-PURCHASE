@@ -688,9 +688,45 @@
 
       document.getElementById("newDate").value = todayValue();
       document.getElementById("againstDate").value = todayValue();
-      loadCompanies().catch((err) =>
-        setMessage("Unable to load companies: " + err.message, "error"),
-      );
+      loadCompanies()
+        .then(async () => {
+          const editId = new URLSearchParams(location.search).get("edit");
+          if (editId) {
+            try {
+              const res = await fetch(`/api/vouchers/list`);
+              const all = await res.json();
+              const v = all.find((x) => String(x.id) === String(editId));
+              if (!v) return;
+              companySelect.value = v.profile_id;
+              transactionKind.value = v.voucher_type;
+              updateSaveLabel();
+              entryType.value = v.entry_type || "new";
+              updateSections();
+              if (v.entry_type === "against") {
+                await loadCompanyVouchers();
+                againstVoucherType.value = v.voucher_type;
+                populateBillNumbers();
+                againstBillNo.value = v.bill_no || "";
+                document.getElementById("againstDate").value = v.date
+                  ? v.date.toString().slice(0, 10)
+                  : "";
+                document.getElementById("againstAmount").value =
+                  v.total_value || "";
+              } else {
+                document.getElementById("newDate").value = v.date
+                  ? v.date.toString().slice(0, 10)
+                  : "";
+                document.getElementById("newAmount").value =
+                  v.total_value || "";
+              }
+            } catch (e) {
+              setMessage("Error loading: " + e.message, "error");
+            }
+          }
+        })
+        .catch((err) =>
+          setMessage("Unable to load companies: " + err.message, "error"),
+        );
     </script>
   </body>
 </html>

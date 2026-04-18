@@ -39,6 +39,20 @@ async function initDB() {
   await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false`,
   );
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS taxable_total NUMERIC`,
+  );
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS cgst NUMERIC`);
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS sgst NUMERIC`);
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS igst NUMERIC`);
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS round_off NUMERIC`,
+  );
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS total NUMERIC`);
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS tds NUMERIC`);
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS bill_value_after_deduction NUMERIC`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -745,6 +759,79 @@ app.get("/api/descriptions", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.put("/api/labour/:id", async (req, res) => {
+  const {
+    profile_id,
+    company_name,
+    date,
+    issue_number,
+    labour_item_type,
+    items,
+    receipt_bill_no,
+    taxable_total,
+    cgst,
+    sgst,
+    igst,
+    round_off,
+    total,
+    tds,
+    bill_value_after_deduction,
+  } = req.body;
+  try {
+    if (profile_id !== undefined) {
+      await pool.query(
+        `UPDATE labour SET profile_id=$1, company_name=$2, date=$3, issue_number=$4, labour_item_type=$5 WHERE id=$6`,
+        [
+          profile_id,
+          company_name,
+          date,
+          issue_number,
+          labour_item_type,
+          req.params.id,
+        ],
+      );
+    } else {
+      await pool.query(
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10 WHERE id=$11`,
+        [
+          date,
+          receipt_bill_no,
+          taxable_total || null,
+          cgst || null,
+          sgst || null,
+          igst || null,
+          round_off || null,
+          total || null,
+          tds || null,
+          bill_value_after_deduction || null,
+          req.params.id,
+        ],
+      );
+    }
+    if (items && items.length) {
+      await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [
+        req.params.id,
+      ]);
+      for (const item of items) {
+        await pool.query(
+          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            req.params.id,
+            item.sl_no,
+            item.description,
+            item.quantity,
+            item.rate,
+            item.amount,
+          ],
+        );
+      }
+    }
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/labclose", (req, res) =>
   res.sendFile(path.join(__dirname, "labclose.html")),
 );

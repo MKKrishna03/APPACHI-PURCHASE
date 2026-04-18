@@ -682,8 +682,101 @@
         loadLabourItemTypesDropdown();
         loadRecentEntries();
         document.getElementById("date").valueAsDate = new Date();
-        addRow();
+        const editId = new URLSearchParams(location.search).get("edit");
+        if (editId) {
+          await loadEditLabour(editId);
+        } else {
+          addRow();
+        }
       };
+
+      async function loadEditLabour(id) {
+        try {
+          const res = await fetch(`/api/labour/${id}`);
+          const d = await res.json();
+          const l = d.labour;
+          const company = companies.find(
+            (c) => String(c.id) === String(l.profile_id),
+          );
+          if (company)
+            document.getElementById("companySelect").value = company.alias;
+          document.getElementById("date").value = l.date
+            ? l.date.toString().slice(0, 10)
+            : "";
+          document.getElementById("issueNumber").value = l.issue_number || "";
+          await loadLabourItemTypesDropdown();
+          document.getElementById("labourItemType").value =
+            l.labour_item_type || "";
+          const tbody = document.getElementById("itemsTable");
+          tbody.innerHTML = "";
+          rowCount = 0;
+          (d.items || []).forEach((item, i) => {
+            rowCount++;
+            const rn = rowCount;
+            const row = document.createElement("tr");
+            row.id = `row-${rn}`;
+            row.innerHTML = `<td><input type="number" value="${item.sl_no}" readonly></td><td><input type="text" class="description" value="${item.description || ""}" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${item.quantity || 0}"></td><td><input type="number" class="rate" step="0.01" value="${item.rate || 0}"></td><td><input type="number" class="amount" step="0.01" value="${item.amount || 0}" readonly></td><td><button class="btn btn-danger" onclick="deleteRow(${rn})">Delete</button></td>`;
+            tbody.appendChild(row);
+            row
+              .querySelector(".quantity")
+              .addEventListener("input", () => calculateAmount(rn));
+            row
+              .querySelector(".rate")
+              .addEventListener("input", () => calculateAmount(rn));
+          });
+          calculateTotal();
+          document.querySelector(
+            '.btn[onclick="submitLabourVoucher()"]',
+          ).textContent = "Update Voucher";
+          document.querySelector(
+            '.btn[onclick="submitLabourVoucher()"]',
+          ).onclick = () => updateLabourVoucher(id);
+        } catch (e) {
+          alert("Error loading voucher: " + e.message);
+        }
+      }
+
+      async function updateLabourVoucher(id) {
+        const companyAlias = document.getElementById("companySelect").value;
+        const date = document.getElementById("date").value;
+        const issueNumber = document.getElementById("issueNumber").value;
+        const labourItemType = document.getElementById("labourItemType").value;
+        if (!companyAlias || !date || !issueNumber || !labourItemType) {
+          alert("Please fill all required fields");
+          return;
+        }
+        const items = [];
+        document.querySelectorAll("#itemsTable tr").forEach((row, index) => {
+          const quantity = parseFloat(row.querySelector(".quantity").value);
+          if (quantity)
+            items.push({
+              sl_no: index + 1,
+              description: row.querySelector(".description").value || "",
+              quantity,
+              rate: parseFloat(row.querySelector(".rate").value) || 0,
+              amount: parseFloat(row.querySelector(".amount").value) || 0,
+            });
+        });
+        const company = companies.find((c) => c.alias === companyAlias);
+        try {
+          await fetch(`/api/labour/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              profile_id: company.id,
+              company_name: company.company,
+              date,
+              issue_number: issueNumber,
+              labour_item_type: labourItemType,
+              items,
+            }),
+          });
+          alert("Updated successfully!");
+          window.location.href = "/";
+        } catch (e) {
+          alert(e.message);
+        }
+      }
     </script>
   </body>
 </html>
