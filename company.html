@@ -333,7 +333,12 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         padding: 18px 20px;
-        box-shadow: var(--shadow-sm);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+        transition: box-shadow 0.2s, transform 0.2s;
+      }
+      .summary-card:hover {
+        box-shadow: 0 8px 28px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+        transform: translateY(-2px);
       }
       .summary-label {
         font-size: 11px;
@@ -372,7 +377,12 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         padding: 20px;
-        box-shadow: var(--shadow-sm);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+        transition: box-shadow 0.2s, transform 0.2s;
+      }
+      .card:hover {
+        box-shadow: 0 8px 28px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+        transform: translateY(-2px);
       }
       .card-header {
         display: flex;
