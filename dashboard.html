@@ -677,8 +677,6 @@
         <span style="font-size: 12px; letter-spacing: 0.05em">MENU</span>
       </button>
       <div class="sidebar-content">
-        <div class="sidebar-label">Management</div>
-
         <div class="sidebar-section" id="companySection">
           <div
             class="sidebar-section-header"
@@ -722,8 +720,6 @@
           </div>
         </div>
 
-        <div class="sidebar-label" style="padding-top: 12px">Finance</div>
-
         <div class="sidebar-section" id="transactionSection">
           <div
             class="sidebar-section-header"
@@ -745,6 +741,41 @@
             <span><span class="sidebar-section-icon">▸</span> Chittai</span>
           </div>
         </div>
+
+        <div class="sidebar-section" id="reportsSection">
+          <div
+            class="sidebar-section-header"
+            onclick="toggleSection('reportsSection')"
+          >
+            <span><span class="sidebar-section-icon">▸</span> Reports</span>
+          </div>
+          <div class="sidebar-section-content">
+            <div
+              class="sidebar-option"
+              onclick="window.location.href = '/reports/transaction'"
+            >
+              Transaction Report
+            </div>
+            <div
+              class="sidebar-option"
+              onclick="window.location.href = '/reports/iv-rv'"
+            >
+              I/V - R/V Report
+            </div>
+            <div
+              class="sidebar-option"
+              onclick="window.location.href = '/reports/tds'"
+            >
+              TDS Report
+            </div>
+            <div
+              class="sidebar-option"
+              onclick="window.location.href = '/reports/chittai'"
+            >
+              Chittai Report
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -752,7 +783,7 @@
       <!-- Dashboard Header -->
       <div class="dash-header">
         <h1>Dashboard</h1>
-        <p>Overview of your business operations</p>
+        <p>Purchases</p>
       </div>
 
       <!-- Top 3 Cards Row -->
@@ -775,12 +806,22 @@
           </div>
         </div>
 
-        <!-- Card 2: Placeholder -->
+        <!-- Card 2: Pending Payments -->
         <div class="dash-card">
           <div class="dash-card-header">
-            <span class="dash-card-title">Overview</span>
+            <span class="dash-card-title">Pending Payments</span>
+            <span class="dash-card-badge" id="pendingPayCount">0</span>
           </div>
-          <div class="card-placeholder">Coming soon</div>
+          <input
+            type="text"
+            class="pending-search"
+            id="pendingPaySearch"
+            placeholder="Search..."
+            oninput="filterPendingPay(this.value)"
+          />
+          <div class="pending-list" id="pendingPayList">
+            <div class="empty-msg">Loading...</div>
+          </div>
         </div>
 
         <!-- Card 3: Today's Activity -->
@@ -1465,7 +1506,12 @@
               amount: b.total || 0,
               company: b.company_name || "-",
             })),
-          ].filter((x) => x.date && x.date.toString().slice(0, 10) === dateVal);
+          ].filter((x) => {
+            if (!x.date) return false;
+            const d = new Date(x.date);
+            const local = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+            return local.toISOString().slice(0, 10) === dateVal;
+          });
           if (!all.length) {
             el.innerHTML = '<div class="empty-msg">No activity</div>';
             return;
@@ -1476,7 +1522,16 @@
             <div class="pending-item">
               <div>
                 <div class="pending-item-id">${x.company}</div>
-                <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${x.date ? x.date.toString().slice(11, 16) : ""}</span></div>
+                <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${
+                  x.date
+                    ? (() => {
+                        const d = new Date(x.date);
+                        return new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+                          .toISOString()
+                          .slice(11, 16);
+                      })()
+                    : ""
+                }</span></div>
               </div>
               <span class="pending-tag">₹${Number(x.amount || 0).toLocaleString("en-IN")}</span>
             </div>`,
@@ -1488,9 +1543,116 @@
         }
       }
 
+      // ── Pending Payments ──
+      async function loadPendingPayments() {
+        try {
+          const [labourRes, voucherRes, profileRes] = await Promise.all([
+            fetch("/api/labour").then((r) => r.json()),
+            fetch("/api/vouchers/list").then((r) => r.json()),
+            fetch("/api/profile/all").then((r) => r.json()),
+          ]);
+          const linkedIds = new Set(
+            voucherRes
+              .filter((v) => v.linked_labour_id)
+              .map((v) => v.linked_labour_id),
+          );
+          const receipts = labourRes.filter(
+            (b) => b.voucher_type === "Receipt Voucher" && !linkedIds.has(b.id),
+          );
+          receipts.forEach((b) => {
+            const p = profileRes.find(
+              (c) => String(c.id) === String(b.profile_id),
+            );
+            if (p) b.company_name = p.company || p.alias;
+          });
+          window._pendingPayVouchers = receipts;
+          document.getElementById("pendingPayCount").textContent =
+            receipts.length;
+          renderPendingPay(receipts);
+        } catch (e) {
+          document.getElementById("pendingPayList").innerHTML =
+            '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderPendingPay(list) {
+        const el = document.getElementById("pendingPayList");
+        if (!list.length) {
+          el.innerHTML = '<div class="empty-msg">No pending payments</div>';
+          return;
+        }
+        const grouped = {};
+        list.forEach((b) => {
+          const k = b.company_name || "-";
+          if (!grouped[k]) grouped[k] = [];
+          grouped[k].push(b);
+        });
+        el.innerHTML = Object.entries(grouped)
+          .map(
+            ([company, bills], i) => `
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="togglePayGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending payment${bills.length > 1 ? "s" : ""}</div>
+              </div>
+              <span id="payarrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="paygroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+              ${bills
+                .map(
+                  (b) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                  <div>
+                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.receipt_bill_no || b.issue_number || "-"}</div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Unpaid</span>
+                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.bill_value_after_deduction || b.total || 0).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>`,
+                )
+                .join("")}
+            </div>
+          </div>`,
+          )
+          .join("");
+      }
+
+      function togglePayGroup(event, i) {
+        event.stopPropagation();
+        const body = document.getElementById(`paygroup_${i}`);
+        const arrow = document.getElementById(`payarrow_${i}`);
+        const isOpen = body.style.display === "block";
+        document
+          .querySelectorAll('[id^="paygroup_"]')
+          .forEach((g) => (g.style.display = "none"));
+        document
+          .querySelectorAll('[id^="payarrow_"]')
+          .forEach((a) => (a.style.transform = ""));
+        if (!isOpen) {
+          body.style.display = "block";
+          arrow.style.transform = "rotate(180deg)";
+        }
+      }
+
+      function filterPendingPay(q) {
+        const all = window._pendingPayVouchers || [];
+        const f = q.toLowerCase();
+        renderPendingPay(
+          all.filter(
+            (b) =>
+              (b.receipt_bill_no || "").toLowerCase().includes(f) ||
+              (b.company_name || "").toLowerCase().includes(f),
+          ),
+        );
+      }
+
       // ── Init ──
       loadCompanies();
       loadPendingVouchers();
+      loadPendingPayments();
       const _actDate = document.getElementById("activityDate");
       _actDate.value = new Date().toISOString().split("T")[0];
       loadActivity(_actDate.value);
