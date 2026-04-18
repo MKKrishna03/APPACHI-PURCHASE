@@ -1076,7 +1076,7 @@
         companyList.innerHTML = companies
           .map(
             (c) =>
-              `<div class="company-card">${String(c.name || "").trim()}</div>`,
+              `<div class="company-card" style="cursor:pointer;" onclick="window.location.href='/company?id=${c.id}'">${String(c.name || "").trim()}</div>`,
           )
           .join("");
       }
