@@ -748,3 +748,6 @@ app.get("/api/descriptions", async (req, res) => {
 app.get("/labclose", (req, res) =>
   res.sendFile(path.join(__dirname, "labclose.html")),
 );
+app.get("/company", (req, res) =>
+  res.sendFile(path.join(__dirname, "company.html")),
+);
