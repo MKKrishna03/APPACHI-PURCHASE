@@ -546,11 +546,37 @@ app.post("/api/vouchers", async (req, res) => {
     total_value,
   } = req.body;
   try {
+    let linked_labour_id = null;
+    if (
+      entry_type === "against" &&
+      bill_no &&
+      voucher_type &&
+      voucher_type.toLowerCase().includes("labour")
+    ) {
+      const labourMatch = await pool.query(
+        `SELECT id FROM labour WHERE receipt_bill_no = $1 AND profile_id = $2 AND voucher_type = 'Receipt Voucher' LIMIT 1`,
+        [bill_no, profile_id],
+      );
+      if (labourMatch.rows[0]) linked_labour_id = labourMatch.rows[0].id;
+    }
+    let linked_chittai_id = null;
+    if (entry_type === "against" && bill_no) {
+      const chittaiMatch = await pool.query(
+        `SELECT id FROM chittai WHERE chittai_no = $1 AND profile_id = $2 LIMIT 1`,
+        [bill_no, profile_id],
+      );
+      if (chittaiMatch.rows[0]) {
+        linked_chittai_id = chittaiMatch.rows[0].id;
+        await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [
+          linked_chittai_id,
+        ]);
+      }
+    }
     const result = await pool.query(
       `INSERT INTO vouchers
         (profile_id,voucher_type,date,bill_no,entry_type,description,
-         qty,rate,va,taxable_value,tax_percent,igst,cgst,sgst,tax_amount,total_value)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+         qty,rate,va,taxable_value,tax_percent,igst,cgst,sgst,tax_amount,total_value,linked_labour_id,linked_chittai_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [
         profile_id,
         voucher_type,
@@ -568,6 +594,8 @@ app.post("/api/vouchers", async (req, res) => {
         num(sgst),
         num(tax_amount),
         num(total_value),
+        linked_labour_id,
+        linked_chittai_id,
       ],
     );
     res.json(result.rows[0]);
@@ -594,7 +622,7 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id, created_at
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id, linked_chittai_id, created_at
        FROM vouchers
        ${where}
        ORDER BY created_at DESC`,
@@ -748,6 +776,25 @@ app.post("/api/chittai", async (req, res) => {
         rtgs_amount,
       ],
     );
+    const chittai_id = result.rows[0].id;
+    const { is_paid, pay_date, pay_amount, pay_mop } = req.body;
+    if (is_paid && pay_date && pay_amount && pay_mop) {
+      await pool.query(
+        `INSERT INTO vouchers (profile_id, voucher_type, date, bill_no, entry_type, description, total_value, linked_chittai_id)
+         VALUES ($1,'Chittai Payment',$2,$3,'against',$4,$5,$6)`,
+        [
+          profile_id,
+          pay_date,
+          chittai_no,
+          `Payment against Chittai ${chittai_no} via ${pay_mop}`,
+          pay_amount,
+          chittai_id,
+        ],
+      );
+      await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [
+        chittai_id,
+      ]);
+    }
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -848,6 +895,9 @@ app.put("/api/labour/:id", async (req, res) => {
 
 app.get("/labclose", (req, res) =>
   res.sendFile(path.join(__dirname, "labclose.html")),
+);
+app.get("/reports/transaction", (req, res) =>
+  res.sendFile(path.join(__dirname, "report.html")),
 );
 app.get("/company", (req, res) =>
   res.sendFile(path.join(__dirname, "company.html")),
