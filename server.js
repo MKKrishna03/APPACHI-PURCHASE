@@ -279,6 +279,10 @@ app.put("/api/profile/:alias", async (req, res) => {
         alias,
       ],
     );
+    await pool.query(
+      `UPDATE labour l SET company_name = p.company_name FROM profiles p WHERE l.profile_id = p.id AND p.alias = $1`,
+      [d["ALIAS"]],
+    );
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -745,6 +749,16 @@ app.post("/api/chittai", async (req, res) => {
       ],
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/api/tax-formats", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name, percent FROM tax_format ORDER BY percent ASC",
+    );
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -462,6 +462,46 @@
             </tr>
           </thead>
           <tbody id="itemsTable"></tbody>
+          <tfoot>
+            <tr style="background: var(--surface-2); font-weight: 600">
+              <td
+                style="padding: 8px 12px; font-size: 12px; color: var(--ink-2)"
+              >
+                Total
+              </td>
+              <td></td>
+              <td>
+                <input
+                  type="number"
+                  id="footQty"
+                  readonly
+                  style="
+                    width: 100%;
+                    border: none;
+                    background: var(--surface-3);
+                    font-weight: 600;
+                    padding: 5px 12px;
+                  "
+                />
+              </td>
+              <td></td>
+              <td>
+                <input
+                  type="number"
+                  id="footAmt"
+                  readonly
+                  style="
+                    width: 100%;
+                    border: none;
+                    background: var(--surface-3);
+                    font-weight: 600;
+                    padding: 5px 12px;
+                  "
+                />
+              </td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
         <datalist id="descriptionList"></datalist>
 
@@ -552,7 +592,13 @@
                     `<tr><td>${it.sl_no}</td><td>${it.description || "-"}</td><td>${parseFloat(it.quantity).toFixed(2)}</td><td>${parseFloat(it.rate).toFixed(2)}</td><td>${parseFloat(it.amount).toFixed(2)}</td></tr>`,
                 )
                 .join("");
-              return `<div class="recent-card"><div class="recent-card-header" onclick="toggleRecent(${i})"><div><div class="recent-card-title">${bill.issue_number}</div><div class="recent-card-sub">${bill.company_name || ""} · ${new Date(bill.date).toLocaleDateString()}</div></div><span class="recent-card-arrow" id="arrow_r${i}">▼</span></div><div class="recent-card-body" id="body_r${i}"><p><strong>Company:</strong> ${bill.company_name || "-"}</p><p><strong>Date:</strong> ${new Date(bill.date).toLocaleDateString()}</p><p><strong>Item Type:</strong> ${bill.labour_item_type || "-"}</p><p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p><p><strong>Total Amount:</strong> ₹${totalAmt.toFixed(2)}</p><table class="recent-items-table"><thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>`;
+              const companyObj = companies.find(
+                (c) => String(c.id) === String(bill.profile_id),
+              );
+              const displayName = companyObj
+                ? companyObj.company || companyObj.alias
+                : bill.company_name || "";
+              return `<div class="recent-card"><div class="recent-card-header" onclick="toggleRecent(${i})"><div><div class="recent-card-title">${bill.issue_number}</div><div class="recent-card-sub">${displayName} · ${new Date(bill.date).toLocaleDateString()}</div></div><span class="recent-card-arrow" id="arrow_r${i}">▼</span></div><div class="recent-card-body" id="body_r${i}"><p><strong>Company:</strong> ${displayName}</p><p><strong>Date:</strong> ${new Date(bill.date).toLocaleDateString()}</p><p><strong>Item Type:</strong> ${bill.labour_item_type || "-"}</p><p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p><p><strong>Total Amount:</strong> ₹${totalAmt.toFixed(2)}</p><table class="recent-items-table"><thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>`;
             }),
           );
           list.innerHTML = rendered.join("");
@@ -597,6 +643,14 @@
           .querySelectorAll(".amount")
           .forEach((i) => (total += parseFloat(i.value) || 0));
         document.getElementById("totalAmount").textContent = total.toFixed(2);
+        let fQty = 0;
+        document
+          .querySelectorAll("#itemsTable .quantity")
+          .forEach((i) => (fQty += parseFloat(i.value) || 0));
+        if (document.getElementById("footQty"))
+          document.getElementById("footQty").value = fQty.toFixed(2);
+        if (document.getElementById("footAmt"))
+          document.getElementById("footAmt").value = total.toFixed(2);
       }
 
       function deleteRow(rowId) {
@@ -680,7 +734,7 @@
         await loadCompanies();
         loadDescriptions();
         loadLabourItemTypesDropdown();
-        loadRecentEntries();
+        await loadRecentEntries();
         document.getElementById("date").valueAsDate = new Date();
         const editId = new URLSearchParams(location.search).get("edit");
         if (editId) {
@@ -772,7 +826,7 @@
             }),
           });
           alert("Updated successfully!");
-          window.location.href = "/";
+          window.history.back();
         } catch (e) {
           alert(e.message);
         }
