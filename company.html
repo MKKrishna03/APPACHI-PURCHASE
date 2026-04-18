@@ -944,18 +944,12 @@
         const d = new Date(cal0Year, cal0Month - 1, 1);
         cal0Month = d.getMonth();
         cal0Year = d.getFullYear();
-        const d1 = new Date(cal0Year, cal0Month + 1, 1);
-        cal1Month = d1.getMonth();
-        cal1Year = d1.getFullYear();
         renderBothCals();
       }
       function nextMonth() {
         const d = new Date(cal1Year, cal1Month + 1, 1);
         cal1Month = d.getMonth();
         cal1Year = d.getFullYear();
-        const d0 = new Date(cal1Year, cal1Month - 1, 1);
-        cal0Month = d0.getMonth();
-        cal0Year = d0.getFullYear();
         renderBothCals();
       }
 
@@ -992,7 +986,7 @@
 
       function pickDay(year, month, day) {
         const d = new Date(year, month, day);
-        if (!drpStart || drpSelecting === "end" || (drpStart && drpEnd)) {
+        if (!drpStart || (drpStart && drpEnd)) {
           drpStart = d;
           drpEnd = null;
           drpSelecting = "end";
@@ -1002,7 +996,8 @@
             .forEach((el, j) =>
               el.classList.toggle("active", j === activePreset),
             );
-        } else {
+          renderBothCals();
+        } else if (drpSelecting === "end") {
           if (d < drpStart) {
             drpEnd = drpStart;
             drpStart = d;
@@ -1010,8 +1005,8 @@
             drpEnd = d;
           }
           drpSelecting = null;
+          renderBothCals();
         }
-        renderBothCals();
       }
 
       function toggleDRP() {
@@ -1222,7 +1217,7 @@
               <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">${l.voucher_type}</div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:13px;">
                 <div><span style="color:#8888aa;">Issue No</span><br><strong style="color:#2d6a4f;">${l.issue_number||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Date</span><br><strong>${l.date?new Date(l.date).toLocaleDateString('en-GB'):'-'}</strong></div>
+                <div><span style="color:#8888aa;">Date</span><br><strong>${l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-'}</strong></div>
                 <div><span style="color:#8888aa;">Company</span><br><strong>${l.company_name||'-'}</strong></div>
                 ${l.receipt_bill_no?`<div><span style="color:#8888aa;">Receipt Bill No</span><br><strong>${l.receipt_bill_no}</strong></div>`:''}
                 ${l.total?`<div><span style="color:#8888aa;">Total</span><br><strong>₹${parseFloat(l.total).toLocaleString('en-IN')}</strong></div>`:''}
@@ -1272,8 +1267,17 @@
       function goEditBill() {
         if (_popupType === 'issue') window.location.href = `/labour?edit=${_popupId}`;
         else if (_popupType === 'receipt') window.location.href = `/labclose?edit=${_popupId}`;
-        else if (_popupType === 'txn') window.location.href = `/transaction?edit=${_popupId}`;
-        else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
+else if (_popupType === 'txn') {
+          // Check if it's a chittai payment — redirect to chittai edit instead
+          fetch('/api/vouchers/list').then(r=>r.json()).then(all => {
+            const v = all.find(x => x.id == _popupId);
+            if (v && v.linked_chittai_id) {
+              window.location.href = `/chittai?edit=${v.linked_chittai_id}`;
+            } else {
+              window.location.href = `/transaction?edit=${_popupId}`;
+            }
+          });
+        }        else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
       }
 
       document.getElementById('billPopup').addEventListener('click', function(e) {

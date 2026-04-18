@@ -604,7 +604,18 @@ app.post("/api/vouchers", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.patch("/api/vouchers/:id", async (req, res) => {
+  const { date, total_value, description } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE vouchers SET date=$1, total_value=$2, description=$3 WHERE id=$4 RETURNING *`,
+      [date, total_value, description, req.params.id],
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get("/api/vouchers/list", async (req, res) => {
   const { profile_id, voucher_type, unlinked_only } = req.query;
   try {
@@ -622,7 +633,7 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, linked_labour_id, linked_chittai_id, created_at
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, description, linked_labour_id, linked_chittai_id, created_at
        FROM vouchers
        ${where}
        ORDER BY created_at DESC`,
@@ -718,12 +729,44 @@ app.get("/api/chittai/list", async (req, res) => {
 });
 
 app.patch("/api/chittai/:id", async (req, res) => {
-  const { is_paid } = req.body;
+  const {
+    is_paid,
+    profile_id,
+    chittai_no,
+    date,
+    weight,
+    rate,
+    value,
+    others,
+    total,
+    tds,
+    rtgs_amount,
+  } = req.body;
   try {
-    const result = await pool.query(
-      `UPDATE chittai SET is_paid = $1 WHERE id = $2 RETURNING *`,
-      [is_paid, req.params.id],
-    );
+    let result;
+    if (profile_id !== undefined) {
+      result = await pool.query(
+        `UPDATE chittai SET profile_id=$1, chittai_no=$2, date=$3, weight=$4, rate=$5, value=$6, others=$7, total=$8, tds=$9, rtgs_amount=$10 WHERE id=$11 RETURNING *`,
+        [
+          profile_id,
+          chittai_no,
+          date,
+          weight,
+          rate,
+          value,
+          others || 0,
+          total,
+          tds || 0,
+          rtgs_amount,
+          req.params.id,
+        ],
+      );
+    } else {
+      result = await pool.query(
+        `UPDATE chittai SET is_paid = $1 WHERE id = $2 RETURNING *`,
+        [is_paid, req.params.id],
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -804,6 +847,16 @@ app.get("/api/tax-formats", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT id, name, percent FROM tax_format ORDER BY percent ASC",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/api/descriptions/metal", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT name, metal_type FROM descriptions ORDER BY name",
     );
     res.json(result.rows);
   } catch (err) {
@@ -897,7 +950,10 @@ app.get("/labclose", (req, res) =>
   res.sendFile(path.join(__dirname, "labclose.html")),
 );
 app.get("/reports/transaction", (req, res) =>
-  res.sendFile(path.join(__dirname, "report.html")),
+  res.sendFile(path.join(__dirname, "trnsrpt.html")),
+);
+app.get("/reports/iv-rv", (req, res) =>
+  res.sendFile(path.join(__dirname, "vhrrpt.html")),
 );
 app.get("/company", (req, res) =>
   res.sendFile(path.join(__dirname, "company.html")),

@@ -526,10 +526,12 @@
       }
 
       function closeChittai() {
-        document.getElementById("chittaiBackdrop").classList.remove("show");
         try {
           window.parent.closeChittaiModal();
         } catch (e) {}
+        if (window.self === window.top) {
+          window.history.back();
+        }
       }
 
       async function loadCompanies() {
@@ -659,6 +661,155 @@
       document.getElementById("payDate").valueAsDate = new Date();
       loadCompanies();
       refreshChittaiNo();
+
+      const editId = new URLSearchParams(location.search).get("edit");
+      if (editId) loadEditChittai(editId);
+
+      async function loadEditChittai(id) {
+        try {
+          const res = await fetch("/api/chittai/list/all");
+          const all = await res.json();
+          const c = all.find((x) => String(x.id) === String(id));
+          if (!c) return;
+          // Load companies fresh without cache
+          const cRes = await fetch("/api/profiles/list");
+          companyCache = await cRes.json();
+          const sel = document.getElementById("chittaiCompany");
+          sel.innerHTML =
+            '<option value="">— Select Company —</option>' +
+            companyCache
+              .map((co) => `<option value="${co.id}">${co.alias}</option>`)
+              .join("");
+          sel.value = c.profile_id;
+          // Fix date timezone
+          const ist = new Date(
+            new Date(c.date).getTime() + 5.5 * 60 * 60 * 1000,
+          );
+          const dateParts = ist.toISOString().slice(0, 10);
+          document.getElementById("chittaiDate").value = dateParts;
+          document.getElementById("chittaiNo").value = c.chittai_no || "";
+          document.getElementById("chittaiNoBadge").textContent =
+            c.chittai_no || "";
+          document.getElementById("chittaiWeight").value = c.weight || "";
+          document.getElementById("chittaiRate").value = c.rate || "";
+          document.getElementById("chittaiValue").value = c.value || "";
+          document.getElementById("chittaiRnd").value = c.rnd || "";
+          document.getElementById("chittaiOthers").value = c.others || "";
+          document.getElementById("chittaiTotal").value = c.total || "";
+          document.getElementById("chittaiTds").value = c.tds || "";
+          document.getElementById("chittaiRtgs").value = c.rtgs_amount || "";
+          // Auto-open payment section if payment exists
+          const vRes = await fetch("/api/vouchers/list");
+          const vouchers = await vRes.json();
+          const payVoucher = vouchers.find((v) => v.linked_chittai_id == id);
+          if (payVoucher) {
+            document.getElementById("paymentSection").style.display = "block";
+            document.getElementById("addPayBtn").textContent =
+              "− Remove Payment";
+            document.getElementById("saveChittaiBtn").textContent =
+              "Save Chittai & Payment";
+            const istPayDate = payVoucher.date
+              ? (() => {
+                  const ist = new Date(
+                    new Date(payVoucher.date).getTime() + 5.5 * 60 * 60 * 1000,
+                  );
+                  return ist.toISOString().slice(0, 10);
+                })()
+              : "";
+            document.getElementById("payDate").value = istPayDate;
+            document.getElementById("payAmount").value =
+              payVoucher.total_value || "";
+            // Extract MOP from description
+            const desc = payVoucher.description || "";
+            const mopMatch = desc.match(/via (.+)$/);
+            if (mopMatch)
+              document.getElementById("payMop").value = mopMatch[1].trim();
+          }
+          const btn = document.getElementById("saveChittaiBtn");
+          btn.textContent = payVoucher
+            ? "Save Chittai & Payment"
+            : "Update Chittai";
+          btn.onclick = () => updateChittai(id, payVoucher?.id);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      /**
+       * Update Chittai by given id
+       * @param {number} id
+       * @returns {Promise} resolve with updated Chittai data or reject with error message
+       */
+      async function updateChittai(id, payVoucherId) {
+        const profile_id = document.getElementById("chittaiCompany").value,
+          date = document.getElementById("chittaiDate").value,
+          chittai_no = document.getElementById("chittaiNo").value,
+          weight = document.getElementById("chittaiWeight").value,
+          rate = document.getElementById("chittaiRate").value,
+          value = document.getElementById("chittaiValue").value,
+          others = document.getElementById("chittaiOthers").value,
+          total = document.getElementById("chittaiTotal").value,
+          tds = document.getElementById("chittaiTds").value,
+          rtgs = document.getElementById("chittaiRtgs").value,
+          msg = document.getElementById("chittaiMsg");
+        if (!profile_id || !date || !weight || !rate) {
+          msg.textContent = "Please fill Company, Date, Weight and Rate.";
+          msg.className = "message error";
+          return;
+        }
+        try {
+          const res = await fetch(`/api/chittai/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              profile_id,
+              chittai_no,
+              date,
+              weight,
+              rate,
+              value,
+              others,
+              total,
+              tds,
+              rtgs_amount: rtgs,
+            }),
+          });
+          const data = await res.json();
+          if (data.id) {
+            const payDate = document.getElementById("payDate").value;
+            const payAmount = document.getElementById("payAmount").value;
+            const payMop = document.getElementById("payMop").value;
+            const payVisible =
+              document.getElementById("paymentSection").style.display !==
+              "none";
+            if (payVisible && payDate && payAmount && payMop && payVoucherId) {
+              await fetch(`/api/vouchers/${payVoucherId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  date: payDate,
+                  total_value: payAmount,
+                  description: `Payment against Chittai ${chittai_no} via ${payMop}`,
+                }),
+              });
+            }
+            msg.textContent = "Chittai updated!";
+            msg.className = "message success";
+            setTimeout(() => {
+              try {
+                window.parent.closeChittaiModal();
+              } catch (e) {}
+              window.history.back();
+            }, 1200);
+          } else {
+            msg.textContent = data.error || "Failed to update.";
+            msg.className = "message error";
+          }
+        } catch (e) {
+          msg.textContent = "Network error: " + e.message;
+          msg.className = "message error";
+        }
+      }
     </script>
   </body>
 </html>

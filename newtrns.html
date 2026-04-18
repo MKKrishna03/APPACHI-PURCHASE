@@ -528,7 +528,7 @@
         });
       }
 
-      function populateBillNumbers() {
+      async function populateBillNumbers() {
         againstBillNo.innerHTML = '<option value="">Select Bill No</option>';
         againstHint.textContent = "";
         againstHint.classList.remove("show");
@@ -697,25 +697,54 @@
               const all = await res.json();
               const v = all.find((x) => String(x.id) === String(editId));
               if (!v) return;
+              if (v.voucher_type === "Chittai Payment" && v.linked_chittai_id) {
+                window.location.href = `/chittai?edit=${v.linked_chittai_id}`;
+                return;
+              }
               companySelect.value = v.profile_id;
-              transactionKind.value = v.voucher_type;
+              if (v.voucher_type === "Chittai Payment") {
+                transactionKind.value = "Payment Voucher";
+              } else {
+                transactionKind.value = v.voucher_type;
+              }
               updateSaveLabel();
               entryType.value = v.entry_type || "new";
               updateSections();
               if (v.entry_type === "against") {
                 await loadCompanyVouchers();
-                againstVoucherType.value = v.voucher_type;
-                populateBillNumbers();
+                const chittaiMatch = openChittais.find(
+                  (c) => c.chittai_no === v.bill_no,
+                );
+                const labourMatch = labourReceiptVouchers.find(
+                  (l) => (l.receipt_bill_no || `ID-${l.id}`) === v.bill_no,
+                );
+                if (chittaiMatch) againstVoucherType.value = "Chittai";
+                else if (labourMatch)
+                  againstVoucherType.value = "Receipt Voucher";
+                else againstVoucherType.value = v.voucher_type;
+                await populateBillNumbers();
                 againstBillNo.value = v.bill_no || "";
-                document.getElementById("againstDate").value = v.date
-                  ? v.date.toString().slice(0, 10)
+                const istDate = v.date
+                  ? (() => {
+                      const ist = new Date(
+                        new Date(v.date).getTime() + 5.5 * 60 * 60 * 1000,
+                      );
+                      return ist.toISOString().slice(0, 10);
+                    })()
                   : "";
+                document.getElementById("againstDate").value = istDate;
                 document.getElementById("againstAmount").value =
                   v.total_value || "";
               } else {
-                document.getElementById("newDate").value = v.date
-                  ? v.date.toString().slice(0, 10)
+                const istDate = v.date
+                  ? (() => {
+                      const ist = new Date(
+                        new Date(v.date).getTime() + 5.5 * 60 * 60 * 1000,
+                      );
+                      return ist.toISOString().slice(0, 10);
+                    })()
                   : "";
+                document.getElementById("newDate").value = istDate;
                 document.getElementById("newAmount").value =
                   v.total_value || "";
               }
