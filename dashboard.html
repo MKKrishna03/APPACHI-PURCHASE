@@ -1312,10 +1312,9 @@
           .map(
             ([company, bills], i) => `
           <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--surface-2);">
+            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
               <div>
-                <div style="font-weight:600;font-size:13px;color:var(--accent)">${company}</div>
-                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
+<div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
               </div>
               <span id="parrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
             </div>

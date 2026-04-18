@@ -748,11 +748,53 @@
                   <th>Description</th>
                   <th>Qty / g</th>
                   <th>Rate / g</th>
+                  <th>Tax %</th>
                   <th>Taxable</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="itemsTable"></tbody>
+              <tfoot>
+                <tr style="background: var(--surface-2); font-weight: 600">
+                  <td
+                    colspan="2"
+                    style="
+                      padding: 7px 6px;
+                      font-size: 12px;
+                      color: var(--ink-2);
+                    "
+                  >
+                    Total
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      id="footQty"
+                      readonly
+                      style="
+                        width: 80px;
+                        font-weight: 600;
+                        background: var(--surface-3);
+                      "
+                    />
+                  </td>
+                  <td></td>
+                  <td></td>
+                  <td>
+                    <input
+                      type="number"
+                      id="footTaxable"
+                      readonly
+                      style="
+                        width: 80px;
+                        font-weight: 600;
+                        background: var(--surface-3);
+                      "
+                    />
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
           <datalist id="descriptionList"></datalist>
@@ -787,7 +829,7 @@
               style="display: flex; gap: 12px; align-items: center"
             >
               <span style="color: var(--ink-3); width: 200px; text-align: right"
-                >CGST 2.5%</span
+                >CGST %</span
               ><input
                 type="number"
                 id="billCgst"
@@ -800,7 +842,7 @@
               style="display: flex; gap: 12px; align-items: center"
             >
               <span style="color: var(--ink-3); width: 200px; text-align: right"
-                >SGST 2.5%</span
+                >SGST %</span
               ><input
                 type="number"
                 id="billSgst"
@@ -813,7 +855,7 @@
               style="display: flex; gap: 12px; align-items: center"
             >
               <span style="color: var(--ink-3); width: 200px; text-align: right"
-                >IGST 5%</span
+                >IGST %</span
               ><input
                 type="number"
                 id="billIgst"
@@ -1014,7 +1056,7 @@
                     `<tr><td>${it.sl_no}</td><td>${it.description || "-"}</td><td>${parseFloat(it.quantity).toFixed(2)}</td><td>${parseFloat(it.rate).toFixed(2)}</td><td>${parseFloat(it.amount).toFixed(2)}</td></tr>`,
                 )
                 .join("");
-              return `<div class="receipt-card"><div class="receipt-card-head" onclick="toggleRecent(${i})"><div><div class="receipt-title">${bill.issue_number}</div><div class="receipt-sub">${bill.company_name || ""} · ${new Date(bill.date).toLocaleDateString()}</div></div><span class="section-icon" id="rarrow_${i}">▾</span></div><div class="receipt-body" id="rbody_${i}"><p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p><table class="receipt-mini-table"><thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+              return `<div class="receipt-card"><div class="receipt-card-head" onclick="toggleRecent(${i})"><div><div class="receipt-title">${bill.issue_number}</div><div class="receipt-sub">${companies.find((c) => String(c.id) === String(bill.profile_id))?.company || bill.company_name || ""} · ${new Date(bill.date).toLocaleDateString()}</div></div><span class="section-icon" id="rarrow_${i}">▾</span></div><div class="receipt-body" id="rbody_${i}"><p><strong>Total Qty:</strong> ${totalQty.toFixed(2)} g</p><table class="receipt-mini-table"><thead><tr><th>#</th><th>Desc</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
             }),
           );
           list.innerHTML = rendered.join("");
@@ -1173,7 +1215,7 @@
             const qty = parseFloat(item.quantity) || 0;
             const rate = parseFloat(item.rate) || 0;
             const taxable = parseFloat(item.amount) || 0;
-            return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description || ""}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
+            return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description || ""}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><select class="tax-percent" onchange="calculateAmount(${index})" style="width:80px;">${taxOptions(item.tax_percent)}</select></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
           })
           .join("");
       }
@@ -1197,23 +1239,7 @@
                 : parseFloat(item.quantity);
             const rate = parseFloat(item.rate) || 0;
             const taxable = qty * rate;
-            const cgst =
-              selectedGstType === "CGST_SGST"
-                ? (taxable * 0.025).toFixed(2)
-                : "0.00";
-            const sgst =
-              selectedGstType === "CGST_SGST"
-                ? (taxable * 0.025).toFixed(2)
-                : "0.00";
-            const igst =
-              selectedGstType === "IGST" ? (taxable * 0.05).toFixed(2) : "0.00";
-            const total = (
-              taxable +
-              parseFloat(cgst) +
-              parseFloat(sgst) +
-              parseFloat(igst)
-            ).toFixed(2);
-            return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
+            return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><select class="tax-percent" onchange="calculateAmount(${index})" style="width:80px;">${taxOptions(item.tax_percent)}</select></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
           })
           .join("");
       }
@@ -1223,8 +1249,10 @@
         if (!row) return;
         const qty = parseFloat(row.querySelector(".quantity").value) || 0;
         const rate = parseFloat(row.querySelector(".rate").value) || 0;
-        const taxable = qty * rate;
-        row.querySelector(".taxable").value = taxable.toFixed(2);
+        const taxPct = parseFloat(row.querySelector(".tax-percent").value) || 0;
+        const base = qty * rate;
+        row.querySelector(".taxable").value = base.toFixed(2);
+        row._taxPct = taxPct;
         updateBillTotals();
       }
 
@@ -1233,7 +1261,7 @@
         const tbody = document.getElementById("itemsTable");
         const row = document.createElement("tr");
         row.id = `row_${rowCount}`;
-        row.innerHTML = `<td><input type="number" value="${rowCount}" readonly style="width:44px;"></td><td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td><td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
+        row.innerHTML = `<td><input type="number" value="${rowCount}" readonly style="width:44px;"></td><td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" placeholder="0.00" onchange="calculateAmount(${rowCount})" style="width:80px;"></td><td><select class="tax-percent" onchange="calculateAmount(${rowCount})" style="width:80px;">${taxOptions()}</select></td><td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
         tbody.appendChild(row);
       }
 
@@ -1242,16 +1270,51 @@
         if (row) row.remove();
         updateBillTotals();
       }
+      let taxFormats = [];
 
+      async function loadTaxFormats() {
+        const res = await fetch("/api/tax-formats");
+        taxFormats = await res.json();
+      }
+
+      function taxOptions(selected = 0) {
+        return (
+          `<option value="0">0%</option>` +
+          taxFormats
+            .map(
+              (t) =>
+                `<option value="${t.percent}" ${parseFloat(t.percent) === parseFloat(selected) ? "selected" : ""}>${t.percent}%</option>`,
+            )
+            .join("")
+        );
+      }
       function updateBillTotals() {
         let taxable = 0;
         document.querySelectorAll("#itemsTable tr").forEach((row) => {
           taxable += parseFloat(row.querySelector(".taxable")?.value) || 0;
         });
-        const cgst = selectedGstType === "CGST_SGST" ? taxable * 0.025 : 0;
-        const sgst = selectedGstType === "CGST_SGST" ? taxable * 0.025 : 0;
-        const igst = selectedGstType === "IGST" ? taxable * 0.05 : 0;
+        let cgst = 0,
+          sgst = 0,
+          igst = 0;
+        document.querySelectorAll("#itemsTable tr").forEach((row) => {
+          const base = parseFloat(row.querySelector(".taxable")?.value) || 0;
+          const pct = row._taxPct || 0;
+          if (selectedGstType === "CGST_SGST") {
+            cgst += (base * (pct / 2)) / 100;
+            sgst += (base * (pct / 2)) / 100;
+          } else {
+            igst += (base * pct) / 100;
+          }
+        });
         document.getElementById("billTaxable").value = taxable.toFixed(2);
+        let footQty = 0;
+        document.querySelectorAll("#itemsTable tr").forEach((row) => {
+          footQty += parseFloat(row.querySelector(".quantity")?.value) || 0;
+        });
+        if (document.getElementById("footQty"))
+          document.getElementById("footQty").value = footQty.toFixed(2);
+        if (document.getElementById("footTaxable"))
+          document.getElementById("footTaxable").value = taxable.toFixed(2);
         document.getElementById("billCgst").value = cgst.toFixed(2);
         document.getElementById("billSgst").value = sgst.toFixed(2);
         document.getElementById("billIgst").value = igst.toFixed(2);
@@ -1321,6 +1384,8 @@
             description: row.querySelector(".description").value || "",
             quantity: parseFloat(row.querySelector(".quantity").value) || 0,
             rate: parseFloat(row.querySelector(".rate").value) || 0,
+            tax_percent:
+              parseFloat(row.querySelector(".tax-percent").value) || 0,
             amount: parseFloat(row.querySelector(".taxable").value) || 0,
           });
         });
@@ -1377,7 +1442,8 @@
       window.onload = async () => {
         await loadCompanies();
         loadDescriptions();
-        loadRecentReceipts();
+        await loadTaxFormats();
+        await loadRecentReceipts();
         loadRecentPayments();
         const editId = new URLSearchParams(location.search).get("edit");
         if (editId) loadEditReceipt(editId);
@@ -1519,7 +1585,7 @@
           if (result.status === "SUCCESS") {
             showMessage("Updated successfully!", "success");
             setTimeout(() => {
-              location.href = "/";
+              window.history.back();
             }, 1500);
           } else {
             showMessage("Error: " + result.error, "error");

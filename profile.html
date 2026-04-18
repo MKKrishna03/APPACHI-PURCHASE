@@ -625,7 +625,7 @@
           .trim()
           .replace(/[:\\/\?\*\[\]']/g, "")
           .replace(/\s+/g, " ")
-          .substring(0, 50);
+          .substring(0, 16);
       }
 
       async function initPage() {
@@ -875,6 +875,9 @@
           if (el.tagName === "SELECT") {
             el.value = value || "";
             if (key === "STATE") {
+              setTimeout(() => {
+                el.value = value || "";
+              }, 50);
               const sc = document.querySelector('[data-key="STATE CODE"]');
               if (sc) sc.value = STATE_CODES[value] || "";
             }
