@@ -1269,7 +1269,7 @@
               const dateStr = row.date ? fmt(row.date) : "-";
               return `<tr>
               <td>${dateStr}</td>
-              <td style="color:var(--ink);font-weight:500;">${row.companyName}</td>
+              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.companyName}</td>
               <td class="mono">${row.issueNo || "-"}</td>
               <td style="font-family:'DM Mono',monospace;text-align:right;">${row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
               <td class="mono">${row.billNo}</td>

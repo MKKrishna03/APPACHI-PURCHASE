@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Transaction Report</title>
+    <title>TDS Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -18,20 +18,14 @@
         --ink-2: #444466;
         --ink-3: #8888aa;
         --accent: #2d6a4f;
-        --accent-2: #52b788;
         --accent-light: #d8f3dc;
-        --blue: #1d6fa4;
-        --blue-light: #dbeeff;
         --danger: #b5301e;
-        --danger-light: #fce8e6;
         --amber: #b5620a;
         --amber-light: #fef0d6;
         --border: rgba(0, 0, 0, 0.08);
         --border-strong: rgba(0, 0, 0, 0.14);
         --radius: 10px;
         --radius-lg: 16px;
-        --shadow-sm:
-          0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
       }
       * {
@@ -84,7 +78,6 @@
         color: var(--ink);
         letter-spacing: -0.3px;
       }
-
       .date-range-btn {
         display: flex;
         align-items: center;
@@ -122,7 +115,7 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--shadow);
         display: none;
         flex-direction: row;
         overflow: hidden;
@@ -263,20 +256,6 @@
         color: #fff !important;
         border-radius: 50% !important;
       }
-      .drp-day.start.in-range {
-        border-radius: 50% 0 0 50% !important;
-      }
-      .drp-day.end.in-range {
-        border-radius: 0 50% 50% 0 !important;
-      }
-      .drp-day.disabled {
-        color: var(--ink-3);
-        cursor: default;
-        opacity: 0.4;
-      }
-      .drp-day.empty {
-        cursor: default;
-      }
       .drp-day.today {
         font-weight: 700;
       }
@@ -317,7 +296,6 @@
       .main {
         padding: 28px;
       }
-
       .filters {
         display: flex;
         gap: 16px;
@@ -351,7 +329,7 @@
 
       .summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 16px;
         margin-bottom: 24px;
       }
@@ -455,10 +433,6 @@
         font-size: 12px;
         color: var(--ink-2);
       }
-      tbody td:nth-child(4),
-      tbody td:nth-child(5) {
-        text-align: right;
-      }
       tfoot td {
         padding: 10px 12px;
         font-size: 12px;
@@ -471,11 +445,15 @@
       tfoot td:first-child {
         text-align: left;
       }
-      tfoot td:nth-child(4),
-      tfoot td:nth-child(5) {
-        text-align: right;
-      }
 
+      .mono {
+        font-family: "DM Mono", monospace;
+        color: var(--accent);
+        font-size: 11px;
+      }
+      .num {
+        font-family: "DM Mono", monospace;
+      }
       .tag {
         display: inline-flex;
         align-items: center;
@@ -484,15 +462,14 @@
         font-size: 10px;
         font-weight: 600;
       }
-      .tag-paid {
+      .tag-purchase {
         background: var(--accent-light);
         color: var(--accent);
       }
-      .tag-unpaid {
+      .tag-voucher {
         background: var(--amber-light);
         color: var(--amber);
       }
-
       .empty-state {
         text-align: center;
         padding: 48px 24px;
@@ -505,12 +482,6 @@
         color: var(--ink-3);
         font-size: 13px;
       }
-
-      .mono {
-        font-family: "DM Mono", monospace;
-        color: var(--accent);
-        font-size: 11px;
-      }
     </style>
   </head>
   <body>
@@ -519,9 +490,9 @@
         <div class="breadcrumb">
           <a href="/">Dashboard</a>
           <span>/</span>
-          <span>Transaction Report</span>
+          <span>TDS Report</span>
         </div>
-        <div class="page-title">Transaction Report</div>
+        <div class="page-title">TDS Report</div>
       </div>
       <button class="date-range-btn" onclick="toggleDRP()">
         <svg
@@ -595,48 +566,48 @@
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
+        <select id="sourceFilter" onchange="loadReport()">
+          <option value="">— All Sources —</option>
+          <option value="labour">Labour</option>
+          <option value="purchase">Purchase</option>
+        </select>
       </div>
 
       <div class="summary-grid">
         <div class="summary-card">
-          <div class="summary-label">Total Bills</div>
+          <div class="summary-label">Total Records</div>
           <div class="summary-value" id="sumCount">—</div>
         </div>
         <div class="summary-card">
+          <div class="summary-label">Total TDS</div>
+          <div class="summary-value" id="sumTds">—</div>
+        </div>
+        <div class="summary-card">
           <div class="summary-label">Bill Value</div>
-          <div class="summary-value" id="sumBillValue">—</div>
+          <div class="summary-value" id="sumBillVal">—</div>
           <div class="summary-sub">after deduction</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">Payment Received</div>
-          <div class="summary-value" id="sumPayment">—</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">Balance</div>
-          <div class="summary-value" id="sumBalance">—</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Payment Transactions</span>
+          <span class="card-title">TDS Particulars</span>
           <span class="card-badge" id="rowCount">0</span>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Bill No</th>
-                <th>Company</th>
                 <th>Date</th>
+                <th>Company</th>
+                <th>Bill No</th>
+                <th style="text-align: right">TDS Amount</th>
                 <th style="text-align: right">Bill Value</th>
-                <th style="text-align: right">Payment Amount</th>
-                <th>Status</th>
               </tr>
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="7" class="loading-state">
+                <td colspan="5" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
@@ -644,9 +615,8 @@
             <tfoot id="reportFoot" style="display: none">
               <tr>
                 <td colspan="3">Total</td>
-                <td id="footBillValue">—</td>
-                <td id="footPayment">—</td>
-                <td></td>
+                <td id="footTds" style="text-align: right">—</td>
+                <td id="footBillVal" style="text-align: right">—</td>
               </tr>
             </tfoot>
           </table>
@@ -666,6 +636,11 @@
       function fmt(d) {
         if (!d) return "";
         return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      }
+      function fmtDate(dateStr) {
+        if (!dateStr) return "-";
+        const d = new Date(new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000);
+        return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
       }
 
       function getFinYear(offset = 0) {
@@ -800,7 +775,6 @@
           )
           .join("");
       }
-
       function selectPreset(i) {
         activePreset = i;
         document
@@ -815,7 +789,6 @@
           renderBothCals();
         }
       }
-
       function syncCalendarsToRange() {
         const ref = drpStart || today;
         cal0Month = ref.getMonth();
@@ -867,7 +840,7 @@
           for (let col = 0; col < 7; col++) {
             const ci = row * 7 + col;
             if (ci < offset || dayNum > daysInMonth) {
-              cells += `<td><span class="drp-day empty"></span></td>`;
+              cells += `<td></td>`;
             } else {
               const d = new Date(year, month, dayNum);
               let cls = "drp-day";
@@ -898,7 +871,6 @@
             <tbody>${cells}</tbody>
           </table>`;
       }
-
       function renderBothCals() {
         renderCal("cal0", cal0Month, cal0Year, "prevMonth()", null);
         renderCal("cal1", cal1Month, cal1Year, null, "nextMonth()");
@@ -951,6 +923,12 @@
           drpStart = d;
           drpEnd = null;
           drpSelecting = "end";
+          activePreset = presets.length - 1;
+          document
+            .querySelectorAll(".drp-preset")
+            .forEach((el, j) =>
+              el.classList.toggle("active", j === activePreset),
+            );
           renderBothCals();
         } else if (drpSelecting === "end") {
           if (d < drpStart) {
@@ -996,6 +974,19 @@
         }
       }
 
+      function inRange(dateStr) {
+        if (!dateStr) return false;
+        const ist = new Date(
+          new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
+        );
+        const n = new Date(
+          ist.getUTCFullYear(),
+          ist.getUTCMonth(),
+          ist.getUTCDate(),
+        );
+        return n >= drpStart && n <= drpEnd;
+      }
+
       async function loadCompanies() {
         try {
           const res = await fetch("/api/profile/all");
@@ -1015,129 +1006,123 @@
       async function loadReport() {
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
+        const sourceFilter = document.getElementById("sourceFilter").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="loading-state">Loading...</td></tr>`;
 
         try {
-          const [labourRes, voucherRes, profileRes, chittaiRes] =
-            await Promise.all([
-              fetch("/api/labour").then((r) => r.json()),
-              fetch("/api/vouchers/list").then((r) => r.json()),
-              fetch("/api/profile/all").then((r) => r.json()),
-              fetch("/api/chittai/list/all").then((r) => r.json()),
-            ]);
+          const [labourRes, chittaiRes, profileRes] = await Promise.all([
+            fetch("/api/labour").then((r) => r.json()),
+            fetch("/api/chittai/list/all").then((r) => r.json()),
+            fetch("/api/profile/all").then((r) => r.json()),
+          ]);
 
-          const inRange = (dateStr) => {
-            if (!dateStr) return false;
-            const ist = new Date(
-              new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
-            );
-            const normalized = new Date(
-              ist.getUTCFullYear(),
-              ist.getUTCMonth(),
-              ist.getUTCDate(),
-            );
-            return normalized >= drpStart && normalized <= drpEnd;
-          };
+          const rows = [];
 
-          let receipts = voucherRes.filter((v) => inRange(v.date));
-
-          if (companyId) {
-            receipts = receipts.filter(
-              (b) => String(b.profile_id) === String(companyId),
+          // PURCHASE — from Receipt Vouchers (labour) with tds > 0
+          if (sourceFilter === "" || sourceFilter === "labour") {
+            const receipts = labourRes.filter(
+              (l) =>
+                l.voucher_type === "Receipt Voucher" &&
+                parseFloat(l.tds || 0) > 0 &&
+                inRange(l.date),
             );
+            receipts.forEach((l) => {
+              if (companyId && String(l.profile_id) !== String(companyId))
+                return;
+              const p = profileRes.find(
+                (x) => String(x.id) === String(l.profile_id),
+              );
+              rows.push({
+                date: l.date,
+                company: p ? p.company || p.alias : "-",
+                billNo: l.receipt_bill_no || "-",
+                tds: parseFloat(l.tds || 0),
+                billValue: parseFloat(
+                  l.bill_value_after_deduction || l.total || 0,
+                ),
+                source: "purchase",
+                profile_id: l.profile_id,
+              });
+            });
           }
 
-          receipts.forEach((b) => {
-            const p = profileRes.find(
-              (c) => String(c.id) === String(b.profile_id),
+          // VOUCHER — from Chittai with tds > 0
+          if (sourceFilter === "" || sourceFilter === "purchase") {
+            // Purchase TDS — placeholder for future
+          }
+          if (false) {
+            const chittais = chittaiRes.filter(
+              (c) => parseFloat(c.tds || 0) > 0 && inRange(c.date),
             );
-            b._companyName = p ? p.company || p.alias : "-";
-            const labour = labourRes.find((l) => l.id === b.linked_labour_id);
-            const chittai = chittaiRes.find(
-              (c) => c.id === b.linked_chittai_id,
-            );
-            b._issueNo = chittai
-              ? chittai.chittai_no
-              : labour
-                ? labour.issue_number
-                : "-";
-            b._billNo = b.bill_no || "-";
-            b._billValue = chittai
-              ? parseFloat(chittai.rtgs_amount || 0)
-              : labour
-                ? parseFloat(
-                    labour.bill_value_after_deduction || labour.total || 0,
-                  )
-                : 0;
-          });
+            chittais.forEach((c) => {
+              if (companyId && String(c.profile_id) !== String(companyId))
+                return;
+              const p = profileRes.find(
+                (x) => String(x.id) === String(c.profile_id),
+              );
+              rows.push({
+                date: c.date,
+                company: p ? p.company || p.alias : "-",
+                billNo: c.chittai_no || "-",
+                tds: parseFloat(c.tds || 0),
+                billValue: parseFloat(c.rtgs_amount || 0),
+                source: "voucher",
+              });
+            });
+          }
 
-          document.getElementById("rowCount").textContent = receipts.length;
+          // Sort by date desc
+          rows.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-          if (!receipts.length) {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No payment transactions found for selected range</td></tr>`;
+          document.getElementById("rowCount").textContent = rows.length;
+
+          if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No TDS records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0);
             return;
           }
 
-          let totalBillValue = 0,
-            totalPayment = 0;
-
-          tbody.innerHTML = receipts
-            .map((b) => {
-              const billVal = b._billValue || 0;
-              const payAmt = parseFloat(b.total_value || 0);
-              totalBillValue += billVal;
-              totalPayment += payAmt;
-              const date = b.date
-                ? (() => {
-                    const d = new Date(
-                      new Date(b.date).getTime() + 5.5 * 60 * 60 * 1000,
-                    );
-                    return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
-                  })()
-                : "-";
+          let totalTds = 0,
+            totalBillVal = 0;
+          tbody.innerHTML = rows
+            .map((row) => {
+              totalTds += row.tds;
+              totalBillVal += row.billValue;
               return `<tr>
-              <td class="mono">${b._billNo}</td>
-              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td>
-              <td>${date}</td>
-             <td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>
-              <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td>
-              <td><span class="tag tag-paid">Paid</span></td>
-            </tr>`;
+              <td>${fmtDate(row.date)}</td>
+              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.company}</td>
+              <td class="mono">${row.billNo}</td>
+              <td class="num" style="text-align:right;color:var(--danger);font-weight:600;">₹${Math.round(row.tds).toLocaleString("en-IN")}</td>
+              <td class="num" style="text-align:right;">₹${Math.round(row.billValue).toLocaleString("en-IN")}</td>
+              </tr>`;
             })
             .join("");
 
-          document.getElementById("footBillValue").textContent =
-            `₹${Math.round(totalBillValue).toLocaleString("en-IN")}`;
-          document.getElementById("footPayment").textContent =
-            `₹${Math.round(totalPayment).toLocaleString("en-IN")}`;
+          document.getElementById("footTds").textContent =
+            "₹" + Math.round(totalTds).toLocaleString("en-IN");
+          document.getElementById("footBillVal").textContent =
+            "₹" + Math.round(totalBillVal).toLocaleString("en-IN");
           document.getElementById("reportFoot").style.display = "";
-          updateSummary(receipts.length, totalBillValue, totalPayment);
+          updateSummary(rows.length, totalTds, totalBillVal);
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
-      function updateSummary(count, billValue, payment) {
+      function updateSummary(count, tds, billVal) {
         document.getElementById("sumCount").textContent = count;
-        document.getElementById("sumBillValue").textContent =
-          billValue > 0
-            ? `₹${Math.round(billValue).toLocaleString("en-IN")}`
+        document.getElementById("sumTds").textContent =
+          tds > 0 ? "₹" + Math.round(tds).toLocaleString("en-IN") : "₹0";
+        document.getElementById("sumBillVal").textContent =
+          billVal > 0
+            ? "₹" + Math.round(billVal).toLocaleString("en-IN")
             : "₹0";
-        document.getElementById("sumPayment").textContent =
-          payment > 0
-            ? `₹${Math.round(payment).toLocaleString("en-IN")}`
-            : "₹0";
-        const balance = billValue - payment;
-        document.getElementById("sumBalance").textContent =
-          `₹${Math.round(Math.abs(balance)).toLocaleString("en-IN")}`;
       }
 
       buildPresets();
       loadCompanies();
-
       const defaultRange = getFinYear(0);
       drpStart = defaultRange.start;
       drpEnd = defaultRange.end;

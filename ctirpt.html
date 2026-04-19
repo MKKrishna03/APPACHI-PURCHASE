@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Transaction Report</title>
+    <title>Chittai Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -30,8 +30,6 @@
         --border-strong: rgba(0, 0, 0, 0.14);
         --radius: 10px;
         --radius-lg: 16px;
-        --shadow-sm:
-          0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
       }
       * {
@@ -47,6 +45,7 @@
         font-size: 14px;
       }
 
+      /* TOPBAR */
       .topbar {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
@@ -84,7 +83,6 @@
         color: var(--ink);
         letter-spacing: -0.3px;
       }
-
       .date-range-btn {
         display: flex;
         align-items: center;
@@ -105,6 +103,7 @@
         color: var(--accent);
       }
 
+      /* DATE RANGE PICKER */
       .drp-backdrop {
         position: fixed;
         inset: 0;
@@ -122,7 +121,7 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--shadow);
         display: none;
         flex-direction: row;
         overflow: hidden;
@@ -263,20 +262,6 @@
         color: #fff !important;
         border-radius: 50% !important;
       }
-      .drp-day.start.in-range {
-        border-radius: 50% 0 0 50% !important;
-      }
-      .drp-day.end.in-range {
-        border-radius: 0 50% 50% 0 !important;
-      }
-      .drp-day.disabled {
-        color: var(--ink-3);
-        cursor: default;
-        opacity: 0.4;
-      }
-      .drp-day.empty {
-        cursor: default;
-      }
       .drp-day.today {
         font-weight: 700;
       }
@@ -314,10 +299,10 @@
         background: #245c43;
       }
 
+      /* MAIN */
       .main {
         padding: 28px;
       }
-
       .filters {
         display: flex;
         gap: 16px;
@@ -349,9 +334,10 @@
         box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1);
       }
 
+      /* SUMMARY */
       .summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 16px;
         margin-bottom: 24px;
       }
@@ -392,6 +378,7 @@
         margin-top: 4px;
       }
 
+      /* CARD & TABLE */
       .card {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -455,10 +442,6 @@
         font-size: 12px;
         color: var(--ink-2);
       }
-      tbody td:nth-child(4),
-      tbody td:nth-child(5) {
-        text-align: right;
-      }
       tfoot td {
         padding: 10px 12px;
         font-size: 12px;
@@ -471,9 +454,26 @@
       tfoot td:first-child {
         text-align: left;
       }
-      tfoot td:nth-child(4),
-      tfoot td:nth-child(5) {
-        text-align: right;
+
+      .mono {
+        font-family: "DM Mono", monospace;
+        color: var(--accent);
+        font-size: 11px;
+      }
+      .num {
+        font-family: "DM Mono", monospace;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+      .loading-state {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--ink-3);
+        font-size: 13px;
       }
 
       .tag {
@@ -488,28 +488,19 @@
         background: var(--accent-light);
         color: var(--accent);
       }
-      .tag-unpaid {
+      .tag-pending {
         background: var(--amber-light);
         color: var(--amber);
       }
-
-      .empty-state {
-        text-align: center;
-        padding: 48px 24px;
-        color: var(--ink-3);
-        font-size: 13px;
+      .tag-over {
+        background: var(--blue-light);
+        color: var(--blue);
       }
-      .loading-state {
-        text-align: center;
-        padding: 48px 24px;
-        color: var(--ink-3);
-        font-size: 13px;
+      .neg {
+        color: var(--danger);
       }
-
-      .mono {
-        font-family: "DM Mono", monospace;
+      .pos {
         color: var(--accent);
-        font-size: 11px;
       }
     </style>
   </head>
@@ -519,9 +510,9 @@
         <div class="breadcrumb">
           <a href="/">Dashboard</a>
           <span>/</span>
-          <span>Transaction Report</span>
+          <span>Chittai Report</span>
         </div>
-        <div class="page-title">Transaction Report</div>
+        <div class="page-title">Chittai Report</div>
       </div>
       <button class="date-range-btn" onclick="toggleDRP()">
         <svg
@@ -599,44 +590,51 @@
 
       <div class="summary-grid">
         <div class="summary-card">
-          <div class="summary-label">Total Bills</div>
+          <div class="summary-label">Total Chittai</div>
           <div class="summary-value" id="sumCount">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Bill Value</div>
-          <div class="summary-value" id="sumBillValue">—</div>
-          <div class="summary-sub">after deduction</div>
+          <div class="summary-label">Total Weight</div>
+          <div class="summary-value" id="sumWeight">—</div>
+          <div class="summary-sub">grams</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">RTGS Amount</div>
+          <div class="summary-value" id="sumRtgs">—</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Payment Received</div>
           <div class="summary-value" id="sumPayment">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Balance</div>
-          <div class="summary-value" id="sumBalance">—</div>
+          <div class="summary-label">Difference</div>
+          <div class="summary-value" id="sumDiff">—</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Payment Transactions</span>
+          <span class="card-title">Chittai Particulars</span>
           <span class="card-badge" id="rowCount">0</span>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Bill No</th>
-                <th>Company</th>
                 <th>Date</th>
-                <th style="text-align: right">Bill Value</th>
+                <th>Chittai No</th>
+                <th>Company</th>
+                <th style="text-align: right">Weight (g)</th>
+                <th style="text-align: right">RTGS Amount</th>
+                <th style="text-align: right">TDS</th>
+                <th>Payment Date</th>
                 <th style="text-align: right">Payment Amount</th>
-                <th>Status</th>
+                <th style="text-align: right">Difference</th>
               </tr>
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="7" class="loading-state">
+                <td colspan="9" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
@@ -644,9 +642,12 @@
             <tfoot id="reportFoot" style="display: none">
               <tr>
                 <td colspan="3">Total</td>
-                <td id="footBillValue">—</td>
-                <td id="footPayment">—</td>
+                <td id="footWeight" style="text-align: right">—</td>
+                <td id="footRtgs" style="text-align: right">—</td>
+                <td id="footTds" style="text-align: right">—</td>
                 <td></td>
+                <td id="footPayment" style="text-align: right">—</td>
+                <td id="footDiff" style="text-align: right">—</td>
               </tr>
             </tfoot>
           </table>
@@ -666,6 +667,11 @@
       function fmt(d) {
         if (!d) return "";
         return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      }
+      function fmtDate(dateStr) {
+        if (!dateStr) return "-";
+        const d = new Date(new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000);
+        return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
       }
 
       function getFinYear(offset = 0) {
@@ -800,7 +806,6 @@
           )
           .join("");
       }
-
       function selectPreset(i) {
         activePreset = i;
         document
@@ -815,7 +820,6 @@
           renderBothCals();
         }
       }
-
       function syncCalendarsToRange() {
         const ref = drpStart || today;
         cal0Month = ref.getMonth();
@@ -867,7 +871,7 @@
           for (let col = 0; col < 7; col++) {
             const ci = row * 7 + col;
             if (ci < offset || dayNum > daysInMonth) {
-              cells += `<td><span class="drp-day empty"></span></td>`;
+              cells += `<td></td>`;
             } else {
               const d = new Date(year, month, dayNum);
               let cls = "drp-day";
@@ -898,7 +902,6 @@
             <tbody>${cells}</tbody>
           </table>`;
       }
-
       function renderBothCals() {
         renderCal("cal0", cal0Month, cal0Year, "prevMonth()", null);
         renderCal("cal1", cal1Month, cal1Year, null, "nextMonth()");
@@ -951,6 +954,12 @@
           drpStart = d;
           drpEnd = null;
           drpSelecting = "end";
+          activePreset = presets.length - 1;
+          document
+            .querySelectorAll(".drp-preset")
+            .forEach((el, j) =>
+              el.classList.toggle("active", j === activePreset),
+            );
           renderBothCals();
         } else if (drpSelecting === "end") {
           if (d < drpStart) {
@@ -1012,127 +1021,158 @@
         } catch (e) {}
       }
 
+      function inRange(dateStr) {
+        if (!dateStr) return false;
+        const ist = new Date(
+          new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
+        );
+        const normalized = new Date(
+          ist.getUTCFullYear(),
+          ist.getUTCMonth(),
+          ist.getUTCDate(),
+        );
+        return normalized >= drpStart && normalized <= drpEnd;
+      }
+
       async function loadReport() {
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="loading-state">Loading...</td></tr>`;
 
         try {
-          const [labourRes, voucherRes, profileRes, chittaiRes] =
-            await Promise.all([
-              fetch("/api/labour").then((r) => r.json()),
-              fetch("/api/vouchers/list").then((r) => r.json()),
-              fetch("/api/profile/all").then((r) => r.json()),
-              fetch("/api/chittai/list/all").then((r) => r.json()),
-            ]);
+          const [chittaiRes, voucherRes, profileRes] = await Promise.all([
+            fetch("/api/chittai/list/all").then((r) => r.json()),
+            fetch("/api/vouchers/list").then((r) => r.json()),
+            fetch("/api/profile/all").then((r) => r.json()),
+          ]);
 
-          const inRange = (dateStr) => {
-            if (!dateStr) return false;
-            const ist = new Date(
-              new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
-            );
-            const normalized = new Date(
-              ist.getUTCFullYear(),
-              ist.getUTCMonth(),
-              ist.getUTCDate(),
-            );
-            return normalized >= drpStart && normalized <= drpEnd;
-          };
-
-          let receipts = voucherRes.filter((v) => inRange(v.date));
-
-          if (companyId) {
-            receipts = receipts.filter(
-              (b) => String(b.profile_id) === String(companyId),
-            );
-          }
-
-          receipts.forEach((b) => {
-            const p = profileRes.find(
-              (c) => String(c.id) === String(b.profile_id),
-            );
-            b._companyName = p ? p.company || p.alias : "-";
-            const labour = labourRes.find((l) => l.id === b.linked_labour_id);
-            const chittai = chittaiRes.find(
-              (c) => c.id === b.linked_chittai_id,
-            );
-            b._issueNo = chittai
-              ? chittai.chittai_no
-              : labour
-                ? labour.issue_number
-                : "-";
-            b._billNo = b.bill_no || "-";
-            b._billValue = chittai
-              ? parseFloat(chittai.rtgs_amount || 0)
-              : labour
-                ? parseFloat(
-                    labour.bill_value_after_deduction || labour.total || 0,
-                  )
-                : 0;
+          // Build payment map by linked_chittai_id
+          const paymentMap = {};
+          voucherRes.forEach((v) => {
+            if (v.linked_chittai_id) {
+              if (!paymentMap[v.linked_chittai_id])
+                paymentMap[v.linked_chittai_id] = [];
+              paymentMap[v.linked_chittai_id].push(v);
+            }
           });
 
-          document.getElementById("rowCount").textContent = receipts.length;
+          let rows = chittaiRes.filter((c) => inRange(c.date));
+          if (companyId)
+            rows = rows.filter(
+              (c) => String(c.profile_id) === String(companyId),
+            );
 
-          if (!receipts.length) {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No payment transactions found for selected range</td></tr>`;
+          document.getElementById("rowCount").textContent = rows.length;
+
+          if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
-            updateSummary(0, 0, 0);
+            updateSummary(0, 0, 0, 0, 0);
             return;
           }
 
-          let totalBillValue = 0,
+          let totalWeight = 0,
+            totalRtgs = 0,
+            totalTds = 0,
             totalPayment = 0;
 
-          tbody.innerHTML = receipts
-            .map((b) => {
-              const billVal = b._billValue || 0;
-              const payAmt = parseFloat(b.total_value || 0);
-              totalBillValue += billVal;
+          tbody.innerHTML = rows
+            .map((c) => {
+              const p = profileRes.find(
+                (x) => String(x.id) === String(c.profile_id),
+              );
+              const company = p ? p.company || p.alias : "-";
+              const weight = parseFloat(c.weight || 0);
+              const rtgs = parseFloat(c.rtgs_amount || 0);
+              const tds = parseFloat(c.tds || 0);
+              const payments = paymentMap[c.id] || [];
+              const payAmt = payments.reduce(
+                (s, v) => s + parseFloat(v.total_value || 0),
+                0,
+              );
+              const payDate = payments.length
+                ? payments[payments.length - 1].date
+                : null;
+              const diff = payAmt - rtgs;
+
+              totalWeight += weight;
+              totalRtgs += rtgs;
+              totalTds += tds;
               totalPayment += payAmt;
-              const date = b.date
-                ? (() => {
-                    const d = new Date(
-                      new Date(b.date).getTime() + 5.5 * 60 * 60 * 1000,
-                    );
-                    return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
-                  })()
-                : "-";
+
+              const diffClass = diff > 0 ? "pos" : diff < 0 ? "neg" : "";
+              const diffSign = diff > 0 ? "+" : "";
+
               return `<tr>
-              <td class="mono">${b._billNo}</td>
-              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td>
-              <td>${date}</td>
-             <td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>
-              <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td>
-              <td><span class="tag tag-paid">Paid</span></td>
+              <td>${fmtDate(c.date)}</td>
+              <td class="mono">${c.chittai_no || "-"}</td>
+              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${c.profile_id}'">${company}</td>
+              <td class="num" style="text-align:right;">${weight > 0 ? weight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+              <td class="num" style="text-align:right;">${rtgs > 0 ? "₹" + Math.round(rtgs).toLocaleString("en-IN") : "-"}</td>
+              <td class="num" style="text-align:right;">${tds > 0 ? "₹" + Math.round(tds).toLocaleString("en-IN") : "-"}</td>
+              <td>${payDate ? fmtDate(payDate) : "-"}</td>
+              <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${payAmt > 0 ? "₹" + Math.round(payAmt).toLocaleString("en-IN") : "-"}</td>
+              <td class="num ${diffClass}" style="text-align:right;font-weight:600;">${diff !== 0 ? diffSign + "₹" + Math.round(Math.abs(diff)).toLocaleString("en-IN") : "—"}</td>
             </tr>`;
             })
             .join("");
 
-          document.getElementById("footBillValue").textContent =
-            `₹${Math.round(totalBillValue).toLocaleString("en-IN")}`;
+          const totalDiff = totalPayment - totalRtgs;
+          document.getElementById("footWeight").textContent =
+            totalWeight.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }) + " g";
+          document.getElementById("footRtgs").textContent =
+            "₹" + Math.round(totalRtgs).toLocaleString("en-IN");
+          document.getElementById("footTds").textContent =
+            "₹" + Math.round(totalTds).toLocaleString("en-IN");
           document.getElementById("footPayment").textContent =
-            `₹${Math.round(totalPayment).toLocaleString("en-IN")}`;
+            "₹" + Math.round(totalPayment).toLocaleString("en-IN");
+          document.getElementById("footDiff").textContent =
+            (totalDiff >= 0 ? "+" : "") +
+            "₹" +
+            Math.round(totalDiff).toLocaleString("en-IN");
           document.getElementById("reportFoot").style.display = "";
-          updateSummary(receipts.length, totalBillValue, totalPayment);
+          updateSummary(
+            rows.length,
+            totalWeight,
+            totalRtgs,
+            totalPayment,
+            totalDiff,
+          );
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
-      function updateSummary(count, billValue, payment) {
+      function updateSummary(count, weight, rtgs, payment, diff) {
         document.getElementById("sumCount").textContent = count;
-        document.getElementById("sumBillValue").textContent =
-          billValue > 0
-            ? `₹${Math.round(billValue).toLocaleString("en-IN")}`
-            : "₹0";
+        document.getElementById("sumWeight").textContent =
+          weight > 0
+            ? weight.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : "0";
+        document.getElementById("sumRtgs").textContent =
+          rtgs > 0 ? "₹" + Math.round(rtgs).toLocaleString("en-IN") : "₹0";
         document.getElementById("sumPayment").textContent =
           payment > 0
-            ? `₹${Math.round(payment).toLocaleString("en-IN")}`
+            ? "₹" + Math.round(payment).toLocaleString("en-IN")
             : "₹0";
-        const balance = billValue - payment;
-        document.getElementById("sumBalance").textContent =
-          `₹${Math.round(Math.abs(balance)).toLocaleString("en-IN")}`;
+        const el = document.getElementById("sumDiff");
+        el.textContent =
+          (diff >= 0 ? "+" : "") +
+          "₹" +
+          Math.round(Math.abs(diff)).toLocaleString("en-IN");
+        el.style.color =
+          diff > 0
+            ? "var(--accent)"
+            : diff < 0
+              ? "var(--danger)"
+              : "var(--ink)";
       }
 
       buildPresets();
