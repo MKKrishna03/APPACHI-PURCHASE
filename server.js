@@ -621,7 +621,7 @@ app.get("/api/vouchers/list", async (req, res) => {
   try {
     const params = [];
     let where = "";
-    if (profile_id) {
+    if (profile_id && profile_id !== "undefined" && profile_id !== "null") {
       params.push(profile_id);
       where += `${where ? " AND" : " WHERE"} profile_id = $${params.length}`;
     }
@@ -954,6 +954,12 @@ app.get("/reports/transaction", (req, res) =>
 );
 app.get("/reports/iv-rv", (req, res) =>
   res.sendFile(path.join(__dirname, "vhrrpt.html")),
+);
+app.get("/reports/chittai", (req, res) =>
+  res.sendFile(path.join(__dirname, "ctirpt.html")),
+);
+app.get("/reports/tds", (req, res) =>
+  res.sendFile(path.join(__dirname, "tds.html")),
 );
 app.get("/company", (req, res) =>
   res.sendFile(path.join(__dirname, "company.html")),
