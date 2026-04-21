@@ -680,6 +680,176 @@ app.get("/receipt", (req, res) =>
 app.get("/payment", (req, res) =>
   res.sendFile(path.join(__dirname, "newtrns.html")),
 );
+app.get("/api/reminders", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, title, to_char(date,'YYYY-MM-DD') as date, to_char(time,'HH24:MI') as time, notes, company, alerted_day_before, alerted_on_day FROM reminders ORDER BY date ASC, time ASC",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/reminders", async (req, res) => {
+  const { title, date, time, notes, company } = req.body;
+  try {
+    const result = await pool.query(
+      "INSERT INTO reminders (title, date, time, notes, company) VALUES ($1, $2::date, $3, $4, $5) RETURNING *",
+      [title, date, time, notes || null, company || null],
+    );
+    res.json({ status: "SUCCESS", reminder: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete("/api/reminders/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM reminders WHERE id=$1", [req.params.id]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.patch("/api/reminders/:id/alerted", async (req, res) => {
+  const { type } = req.body;
+  try {
+    const col = type === "day_before" ? "alerted_day_before" : "alerted_on_day";
+    await pool.query(`UPDATE reminders SET ${col}=true WHERE id=$1`, [
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ── PURCHASE ROUTES ──
+app.get("/api/purchases/list", async (req, res) => {
+  const { profile_id, unlinked_only } = req.query;
+  try {
+    let where = "";
+    const params = [];
+    if (profile_id) {
+      params.push(profile_id);
+      where = `WHERE profile_id = $1`;
+    }
+    const result = await pool.query(
+      `SELECT * FROM purchases ${where} ORDER BY created_at DESC`,
+      params,
+    );
+    let purchases = result.rows;
+
+    if (unlinked_only === "true") {
+      // Sum all voucher payments linked to each purchase
+      const vRes = await pool.query(
+        `SELECT linked_purchase_id, SUM(total_value::numeric) as paid
+         FROM vouchers
+         WHERE linked_purchase_id IS NOT NULL
+         GROUP BY linked_purchase_id`,
+      );
+      const paidMap = {};
+      vRes.rows.forEach((r) => {
+        paidMap[parseInt(r.linked_purchase_id)] = parseFloat(r.paid || 0);
+      });
+
+      // Also check payments linked via bill_no match (belt and suspenders)
+      const billRes = await pool.query(
+        `SELECT p.id, COALESCE(SUM(v.total_value::numeric), 0) as paid
+         FROM purchases p
+         LEFT JOIN vouchers v ON v.bill_no = p.bill_no
+           AND v.profile_id = p.profile_id
+           AND v.entry_type = 'against'
+         GROUP BY p.id`,
+      );
+      billRes.rows.forEach((r) => {
+        const existing = paidMap[parseInt(r.id)] || 0;
+        const byBill = parseFloat(r.paid || 0);
+        // Use whichever is higher
+        paidMap[parseInt(r.id)] = Math.max(existing, byBill);
+      });
+
+      purchases = purchases.filter((p) => {
+        const paid = paidMap[p.id] || 0;
+        const due = parseFloat(p.net_value || p.total_value || 0);
+        return due > 0 && paid < due - 0.01;
+      });
+    }
+
+    res.json(purchases);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/purchases", async (req, res) => {
+  const {
+    profile_id,
+    date,
+    bill_no,
+    description,
+    taxable_value,
+    cgst,
+    sgst,
+    igst,
+    round_off,
+    total_value,
+    tds,
+    net_value,
+    linked_voucher_ids,
+    linked_chittai_ids,
+  } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
+        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [
+        profile_id,
+        date,
+        bill_no,
+        description,
+        taxable_value,
+        cgst,
+        sgst,
+        igst,
+        round_off,
+        total_value,
+        tds,
+        net_value,
+        linked_voucher_ids && linked_voucher_ids.length
+          ? linked_voucher_ids[0]
+          : null,
+        linked_chittai_ids && linked_chittai_ids.length
+          ? linked_chittai_ids[0]
+          : null,
+      ],
+    );
+    const purchaseId = result.rows[0].id;
+    // Link all vouchers back to this purchase
+    if (linked_voucher_ids && linked_voucher_ids.length) {
+      for (const vid of linked_voucher_ids) {
+        await pool.query(
+          `UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`,
+          [purchaseId, vid],
+        );
+      }
+    }
+    if (linked_chittai_ids && linked_chittai_ids.length) {
+      for (const cid of linked_chittai_ids) {
+        await pool.query(
+          `UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`,
+          [purchaseId, cid],
+        );
+      }
+    }
+    res.json({ status: "SUCCESS", id: purchaseId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/purchase", (req, res) =>
+  res.sendFile(path.join(__dirname, "purchase.html")),
+);
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
 app.post("/api/labour", async (req, res) => {
   const {

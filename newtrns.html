@@ -478,24 +478,32 @@
         resetVoucherSelectors();
         labourReceiptVouchers = [];
         if (!companySelect.value) return;
-        const [vouchersRes, chittaiRes, labourRes] = await Promise.all([
-          fetch(
-            `/api/vouchers/list?profile_id=${encodeURIComponent(companySelect.value)}&unlinked_only=true`,
-          ),
-          fetch(
-            `/api/chittai/list?profile_id=${encodeURIComponent(companySelect.value)}&is_paid=false`,
-          ),
-          fetch(
-            `/api/labour/list?profile_id=${encodeURIComponent(companySelect.value)}&voucher_type=Receipt Voucher`,
-          ),
-        ]);
+        const [vouchersRes, chittaiRes, labourRes, purchasesRes] =
+          await Promise.all([
+            fetch(
+              `/api/vouchers/list?profile_id=${encodeURIComponent(companySelect.value)}&unlinked_only=true`,
+            ),
+            fetch(
+              `/api/chittai/list?profile_id=${encodeURIComponent(companySelect.value)}&is_paid=false`,
+            ),
+            fetch(
+              `/api/labour/list?profile_id=${encodeURIComponent(companySelect.value)}&voucher_type=Receipt Voucher`,
+            ),
+            fetch(
+              `/api/purchases/list?profile_id=${encodeURIComponent(companySelect.value)}&unlinked_only=true`,
+            ),
+          ]);
         const vouchersData = await vouchersRes.json();
         const chittaiData = await chittaiRes.json();
         const labourData = await labourRes.json();
+        const purchasesData = purchasesRes.ok ? await purchasesRes.json() : [];
         openChittais = Array.isArray(chittaiData) ? chittaiData : [];
         companyVouchers = Array.isArray(vouchersData) ? vouchersData : [];
         labourReceiptVouchers = Array.isArray(labourData)
           ? labourData.filter((l) => l.voucher_type === "Receipt Voucher")
+          : [];
+        window._openPurchases = Array.isArray(purchasesData)
+          ? purchasesData
           : [];
         const voucherTypes = [
           ...new Set(
@@ -513,6 +521,10 @@
           ].forEach((t) => {
             if (!voucherTypes.includes(t)) voucherTypes.push(t);
           });
+        }
+        if (window._openPurchases && window._openPurchases.length) {
+          if (!voucherTypes.includes("Purchase Voucher"))
+            voucherTypes.push("Purchase Voucher");
         }
         if (!voucherTypes.length) {
           againstHint.textContent =
@@ -560,6 +572,23 @@
             o.value = lv.receipt_bill_no || `ID-${lv.id}`;
             o.textContent = lv.receipt_bill_no || `ID-${lv.id}`;
             o.dataset.amount = "";
+            againstBillNo.appendChild(o);
+          });
+          return;
+        }
+        if (againstVoucherType.value === "Purchase Voucher") {
+          const purchases = window._openPurchases || [];
+          if (!purchases.length) {
+            againstHint.textContent =
+              "No purchase vouchers found for this company.";
+            againstHint.classList.add("show");
+            return;
+          }
+          purchases.forEach((p) => {
+            const o = document.createElement("option");
+            o.value = p.bill_no || `PUR-${p.id}`;
+            o.textContent = `${p.bill_no || `PUR-${p.id}`} · ₹${parseFloat(p.net_value || p.total_value || 0).toLocaleString("en-IN")}`;
+            o.dataset.amount = p.net_value || p.total_value || "";
             againstBillNo.appendChild(o);
           });
           return;

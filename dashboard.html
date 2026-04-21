@@ -647,6 +647,323 @@
         border: 1px dashed var(--border-strong);
       }
 
+      /* ── REMINDER BELL ── */
+      .bell-btn {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        width: 38px;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 18px;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+      .bell-btn:hover {
+        background: var(--surface-2);
+        border-color: var(--accent);
+      }
+      .bell-btn.ringing {
+        animation: bellRing 0.5s ease;
+      }
+      @keyframes bellRing {
+        0%,
+        100% {
+          transform: rotate(0);
+        }
+        20% {
+          transform: rotate(-18deg);
+        }
+        40% {
+          transform: rotate(18deg);
+        }
+        60% {
+          transform: rotate(-12deg);
+        }
+        80% {
+          transform: rotate(12deg);
+        }
+      }
+      .bell-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #e53935;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        display: none;
+      }
+
+      /* Reminder Panel */
+      .reminder-panel {
+        position: fixed;
+        top: 0;
+        right: -420px;
+        width: 400px;
+        height: 100vh;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+      }
+      .reminder-panel.open {
+        right: 0;
+      }
+      .rp-header {
+        padding: 20px 20px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .rp-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .rp-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: var(--ink-3);
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: background 0.15s;
+      }
+      .rp-close:hover {
+        background: var(--surface-2);
+        color: var(--ink);
+      }
+      .rp-add-btn {
+        margin: 14px 16px 0;
+        padding: 10px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .rp-add-btn:hover {
+        background: #245c43;
+      }
+      .rp-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px;
+      }
+      .rp-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .rp-list::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 2px;
+      }
+
+      .reminder-item {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        border-left: 3px solid var(--accent);
+        position: relative;
+      }
+      .reminder-item.today {
+        border-left-color: #e53935;
+      }
+      .reminder-item.tomorrow {
+        border-left-color: var(--amber);
+      }
+      .ri-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 4px;
+      }
+      .ri-meta {
+        font-size: 11px;
+        color: var(--ink-3);
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .ri-company {
+        display: inline-block;
+        padding: 1px 8px;
+        background: var(--accent-light);
+        color: var(--accent);
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-top: 5px;
+      }
+      .ri-notes {
+        font-size: 11px;
+        color: var(--ink-2);
+        margin-top: 5px;
+      }
+      .ri-del {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--ink-3);
+        font-size: 14px;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+      .ri-del:hover {
+        background: #fce8e6;
+        color: #b5301e;
+      }
+      .ri-empty {
+        text-align: center;
+        color: var(--ink-3);
+        font-size: 12px;
+        padding: 40px 0;
+      }
+
+      /* Add Reminder Form */
+      .rp-form {
+        display: none;
+        padding: 14px 16px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .rp-form.show {
+        display: block;
+      }
+      .rp-field {
+        margin-bottom: 10px;
+      }
+      .rp-field label {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+      }
+      .rp-field input,
+      .rp-field textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        font-size: 12px;
+        font-family: inherit;
+        background: var(--surface);
+        color: var(--ink);
+        transition: border-color 0.15s;
+      }
+      .rp-field input:focus,
+      .rp-field textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(45, 106, 79, 0.08);
+      }
+      .rp-field textarea {
+        resize: none;
+        height: 60px;
+      }
+      .rp-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .rp-save {
+        width: 100%;
+        padding: 9px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 4px;
+        transition: background 0.15s;
+      }
+      .rp-save:hover {
+        background: #245c43;
+      }
+
+      /* Toast alert */
+      .reminder-toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: var(--ink);
+        color: #fff;
+        border-radius: 14px;
+        padding: 14px 18px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        max-width: 320px;
+        transform: translateY(80px);
+        opacity: 0;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        border-left: 4px solid var(--accent-2);
+      }
+      .reminder-toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      .rt-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--accent-2);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
+      }
+      .rt-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 3px;
+      }
+      .rt-sub {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
       @media (max-width: 900px) {
         .cards-row {
           grid-template-columns: 1fr;
@@ -742,6 +1059,16 @@
           </div>
         </div>
 
+        <div class="sidebar-section" id="purchaseSection">
+          <div
+            class="sidebar-section-header"
+            onclick="window.location.href = '/purchase'"
+            style="cursor: pointer"
+          >
+            <span><span class="sidebar-section-icon">▸</span> Purchase</span>
+          </div>
+        </div>
+
         <div class="sidebar-section" id="reportsSection">
           <div
             class="sidebar-section-header"
@@ -776,6 +1103,11 @@
             </div>
           </div>
         </div>
+      <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.08);margin-top:auto;">
+        <button class="logoutButton" onclick="doLogout()" style="width:100%;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Log Out
+        </button>
       </div>
     </aside>
 
@@ -793,12 +1125,13 @@
           <h1>Dashboard</h1>
           <p>Purchases</p>
         </div>
-        <button class="logoutButton" onclick="doLogout()">
-          <span class="button-text">Log Out</span>
-          <span class="door">
-            <span class="doorway"></span>
-            <span class="figure"></span>
-          </span>
+        <button
+          class="bell-btn"
+          id="bellBtn"
+          onclick="window.toggleReminderPanel()"
+        >
+          🔔
+          <span class="bell-badge" id="bellBadge">0</span>
         </button>
       </div>
 
@@ -1049,117 +1382,198 @@
 
     <iframe id="chittaiFrame" src="/chittai" style="display: none"></iframe>
 
+    <!-- Clock Widget -->
+    <div
+      id="dashClock"
+      style="
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        font-family: &quot;DM Mono&quot;, monospace;
+        color: var(--ink-2);
+        z-index: 5;
+        pointer-events: none;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px 24px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      "
+    ></div>
+
+    <!-- Reminder Panel -->
+    <div class="reminder-panel" id="reminderPanel">
+      <div class="rp-header">
+        <div class="rp-title">🔔 Reminders</div>
+        <button class="rp-close" onclick="toggleReminderPanel()">✕</button>
+      </div>
+      <button class="rp-add-btn" onclick="toggleRpForm()">
+        ＋ Add Reminder
+      </button>
+      <div class="rp-form" id="rpForm">
+        <div class="rp-field">
+          <label>Title</label>
+          <input type="text" id="ri-title" placeholder="Appointment title" />
+        </div>
+        <div class="rp-form-row">
+          <div class="rp-field">
+            <label>Date</label>
+            <input type="date" id="ri-date" />
+          </div>
+          <div class="rp-field">
+            <label>Time</label>
+            <div style="display: flex; gap: 6px">
+              <select
+                id="ri-hour"
+                style="
+                  flex: 1;
+                  padding: 8px 10px;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 8px;
+                  font-size: 12px;
+                  font-family: inherit;
+                  background: var(--surface);
+                  color: var(--ink);
+                "
+              >
+                <option value="01">01</option>
+                <option value="02">02</option>
+                <option value="03">03</option>
+                <option value="04">04</option>
+                <option value="05">05</option>
+                <option value="06">06</option>
+                <option value="07">07</option>
+                <option value="08">08</option>
+                <option value="09">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12" selected>12</option>
+              </select>
+              <select
+                id="ri-min"
+                style="
+                  flex: 1;
+                  padding: 8px 10px;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 8px;
+                  font-size: 12px;
+                  font-family: inherit;
+                  background: var(--surface);
+                  color: var(--ink);
+                "
+              >
+                <option value="00" selected>00</option>
+                <option value="05">05</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+                <option value="35">35</option>
+                <option value="40">40</option>
+                <option value="45">45</option>
+                <option value="50">50</option>
+                <option value="55">55</option>
+              </select>
+              <select
+                id="ri-ampm"
+                style="
+                  flex: 1;
+                  padding: 8px 10px;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 8px;
+                  font-size: 12px;
+                  font-family: inherit;
+                  background: var(--surface);
+                  color: var(--ink);
+                "
+              >
+                <option value="AM" selected>AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <
+        <div class="rp-field" style="position: relative">
+          <label>Notes &amp; Company (type @ to tag company)</label>
+          <textarea
+            id="ri-notes"
+            placeholder="Add notes... type @ to tag a company"
+            style="height: 70px"
+          ></textarea>
+          <div
+            id="companyDropdown"
+            style="
+              display: none;
+              position: absolute;
+              left: 0;
+              right: 0;
+              background: var(--surface);
+              border: 1px solid var(--border-strong);
+              border-radius: 8px;
+              box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+              z-index: 100;
+              max-height: 160px;
+              overflow-y: auto;
+            "
+          ></div>
+        </div>
+        <button class="rp-save" onclick="saveReminder()">Save Reminder</button>
+      </div>
+      <div class="rp-list" id="rpList">
+        <div class="ri-empty">No reminders yet</div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="reminder-toast" id="reminderToast">
+      <div class="rt-label" id="toastLabel">Reminder</div>
+      <div class="rt-title" id="toastTitle"></div>
+      <div class="rt-sub" id="toastSub"></div>
+    </div>
+
+    <!-- Alert Sound -->
+    <audio
+      id="alertSound"
+      src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+      preload="auto"
+    ></audio>
+
     <style>
       .logoutButton {
-        --figure-duration: 400;
-        position: relative;
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 16px 10px 20px;
-        background: var(--ink);
-        color: #fff;
-        border: none;
+        gap: 7px;
+        padding: 9px 16px;
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.6);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 10px;
         font-family: inherit;
         font-size: 13px;
         font-weight: 600;
         cursor: pointer;
-        overflow: hidden;
-        transition: background 0.2s;
+        transition: all 0.2s;
         flex-shrink: 0;
       }
       .logoutButton:hover {
-        background: #2a2a4a;
-      }
-      .door {
-        position: relative;
-        width: 28px;
-        height: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-      }
-      .doorway {
-        position: absolute;
-        right: 0;
-        width: 18px;
-        height: 22px;
-        border: 2px solid rgba(255, 255, 255, 0.8);
-        border-radius: 2px 6px 6px 2px;
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .doorway::after {
-        content: "";
-        position: absolute;
-        right: 3px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 3px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.6);
-      }
-      .figure {
-        position: absolute;
-        left: 0;
-        width: 10px;
-        height: 18px;
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 3px 3px 2px 2px;
-        transition:
-          transform calc(var(--figure-duration) * 1ms)
-            cubic-bezier(0.7, 0.1, 1, 1),
-          opacity calc(var(--figure-duration) * 0.25ms) linear
-            calc(var(--figure-duration) * 0.75ms);
-      }
-      .figure::before {
-        content: "";
-        position: absolute;
-        top: -6px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.9);
-      }
-      .logoutButton:hover .figure {
-        transform: translateX(18px);
-        opacity: 0;
-      }
-      .logoutButton.falling .figure {
-        animation: spin calc(var(--figure-duration) * 1ms) infinite linear;
-        bottom: -1000px;
-        opacity: 0;
-        transition:
-          transform calc(var(--figure-duration) * 1ms) linear,
-          bottom calc(var(--figure-duration) * 1ms) cubic-bezier(0.7, 0.1, 1, 1)
-            100ms,
-          opacity calc(var(--figure-duration) * 0.25ms) linear
-            calc(var(--figure-duration) * 0.75ms);
-      }
-      @keyframes spin {
-        from {
-          transform: rotate(0deg);
-        }
-        to {
-          transform: rotate(360deg);
-        }
+        background: rgba(181,48,30,0.2);
+        color: #ff8a80;
+        border-color: rgba(181,48,30,0.4);
       }
     </style>
 
     <script>
       function doLogout() {
-        const btn = document.querySelector(".logoutButton");
-        btn.classList.add("falling");
+        if (!confirm("Are you sure you want to log out?")) return;
         localStorage.removeItem("auth_user");
         localStorage.removeItem("auth_exp");
         sessionStorage.removeItem("auth_user");
-        setTimeout(() => {
-          window.location.href = "/login";
-        }, 600);
+        window.location.href = "/login";
       }
       const receiptBackdrop = document.getElementById("receiptBackdrop");
       const paymentBackdrop = document.getElementById("paymentBackdrop");
@@ -1249,6 +1663,12 @@
           .join("");
       }
 
+      function toIST(dateStr) {
+        if (!dateStr) return "";
+        const d = new Date(dateStr);
+        const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+        return ist;
+      }
       function formatDateDDMMYYYY(value) {
         if (!value) return "";
         if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
@@ -1479,28 +1899,28 @@
         el.innerHTML = Object.entries(grouped)
           .map(
             ([company, bills], i) => `
-          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
-              <div>
-<div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
-              </div>
-              <span id="parrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
-            </div>
-            <div id="pgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
-              ${bills
-                .map(
-                  (b) => `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
-                  <div>
-                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.issue_number || "-"}</div>
-                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                  <div onclick="togglePendingGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+                    <div>
+      <div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending bill${bills.length > 1 ? "s" : ""}</div>
+                    </div>
+                    <span id="parrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
                   </div>
-                  <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Pending</span>
+                  <div id="pgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+                    ${bills
+                      .map(
+                        (b) => `
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                        <div>
+                          <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.issue_number || "-"}</div>
+                          <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                        </div>
+                        <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Pending</span>
+                      </div>`,
+                      )
+                      .join("")}
+                  </div>
                 </div>`,
-                )
-                .join("")}
-            </div>
-          </div>`,
           )
           .join("");
       }
@@ -1592,10 +2012,11 @@
         const el = document.getElementById("activityList");
         el.innerHTML = '<div class="empty-msg">Loading...</div>';
         try {
-          const [vRes, cRes, lRes] = await Promise.all([
+          const [vRes, cRes, lRes, pRes] = await Promise.all([
             fetch(`/api/vouchers/list`),
             fetch(`/api/chittai/list/all`),
             fetch(`/api/labour`),
+            fetch(`/api/purchases/list`),
           ]);
           const vouchers = await vRes.json().catch(() => []);
           const chittaisRaw = await cRes.text();
@@ -1607,6 +2028,7 @@
             }
           })();
           const labourAll = await lRes.json().catch(() => []);
+          const purchasesAll = await pRes.json().catch(() => []);
           const all = [
             ...(Array.isArray(vouchers) ? vouchers : []).map((v) => ({
               label: v.voucher_type,
@@ -1633,35 +2055,37 @@
               amount: b.total || 0,
               company: b.company_name || "-",
             })),
+            ...(Array.isArray(purchasesAll) ? purchasesAll : []).map((p) => ({
+              label: "Purchase Voucher",
+              sub: p.bill_no || "-",
+              date: p.created_at,
+              amount: p.net_value || p.total_value || 0,
+              company: companies.find((c) => String(c.id) === String(p.profile_id))?.name || "-",
+            })),
           ].filter((x) => {
             if (!x.date) return false;
-            const d = new Date(x.date);
-            const local = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-            return local.toISOString().slice(0, 10) === dateVal;
+            const ist = toIST(x.date);
+            const pad = (n) => String(n).padStart(2, "0");
+            const istDate = `${ist.getFullYear()}-${pad(ist.getMonth() + 1)}-${pad(ist.getDate())}`;
+            return istDate === dateVal;
           });
           if (!all.length) {
             el.innerHTML = '<div class="empty-msg">No activity</div>';
             return;
           }
+          all.sort((a, b) => new Date(b.date) - new Date(a.date));
           el.innerHTML = all
             .map(
               (x) => `
-            <div class="pending-item">
-              <div>
-                <div class="pending-item-id">${x.company}</div>
-                <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${
-                  x.date
-                    ? (() => {
-                        const d = new Date(x.date);
-                        return new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
-                          .toISOString()
-                          .slice(11, 16);
-                      })()
-                    : ""
-                }</span></div>
-              </div>
-              <span class="pending-tag">₹${Number(x.amount || 0).toLocaleString("en-IN")}</span>
-            </div>`,
+                  <div class="pending-item">
+                    <div>
+                      <div class="pending-item-id">${x.company}</div>
+                      <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${
+                        x.date ? toIST(x.date).toTimeString().slice(0, 5) : ""
+                      }</span></div>
+                    </div>
+                    <span class="pending-tag">₹${Number(x.amount || 0).toLocaleString("en-IN")}</span>
+                  </div>`,
             )
             .join("");
         } catch (e) {
@@ -1717,32 +2141,32 @@
         el.innerHTML = Object.entries(grouped)
           .map(
             ([company, bills], i) => `
-          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div onclick="togglePayGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
-              <div>
-                <div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
-                <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending payment${bills.length > 1 ? "s" : ""}</div>
-              </div>
-              <span id="payarrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
-            </div>
-            <div id="paygroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
-              ${bills
-                .map(
-                  (b) => `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
-                  <div>
-                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.receipt_bill_no || b.issue_number || "-"}</div>
-                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                  <div onclick="togglePayGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+                    <div>
+                      <div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
+                      <div style="font-size:11px;color:var(--ink-3)">${bills.length} pending payment${bills.length > 1 ? "s" : ""}</div>
+                    </div>
+                    <span id="payarrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
                   </div>
-                  <div style="text-align:right;">
-                    <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Unpaid</span>
-                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.bill_value_after_deduction || b.total || 0).toLocaleString("en-IN")}</div>
+                  <div id="paygroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+                    ${bills
+                      .map(
+                        (b) => `
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                        <div>
+                          <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.receipt_bill_no || b.issue_number || "-"}</div>
+                          <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                        </div>
+                        <div style="text-align:right;">
+                          <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Unpaid</span>
+                          <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.bill_value_after_deduction || b.total || 0).toLocaleString("en-IN")}</div>
+                        </div>
+                      </div>`,
+                      )
+                      .join("")}
                   </div>
                 </div>`,
-                )
-                .join("")}
-            </div>
-          </div>`,
           )
           .join("");
       }
@@ -1776,8 +2200,366 @@
         );
       }
 
+      // ── REMINDERS ──
+      let reminders = [];
+
+      window.toggleReminderPanel = function () {
+        document.getElementById("reminderPanel").classList.toggle("open");
+      };
+
+      // @ mention autocomplete
+      document
+        .getElementById("ri-notes")
+        .addEventListener("input", function () {
+          const val = this.value;
+          const cursor = this.selectionStart;
+          const textBefore = val.slice(0, cursor);
+          const atIdx = textBefore.lastIndexOf("@");
+          const dropdown = document.getElementById("companyDropdown");
+          if (
+            atIdx === -1 ||
+            (textBefore.slice(atIdx).includes(" ") &&
+              textBefore.slice(atIdx + 1).trim() === "")
+          ) {
+            dropdown.style.display = "none";
+            return;
+          }
+          const query = textBefore.slice(atIdx + 1).toLowerCase();
+          const matches = companies
+            .filter((c) => (c.name || "").toLowerCase().includes(query))
+            .slice(0, 6);
+          if (!matches.length) {
+            dropdown.style.display = "none";
+            return;
+          }
+          dropdown.style.display = "block";
+          dropdown.innerHTML = matches
+            .map(
+              (c) => `
+          <div onclick="insertCompanyTag('${c.name.replace(/'/g, "\\'")}');event.preventDefault();" style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--ink);border-bottom:1px solid var(--border);transition:background 0.1s;"
+            onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background=''">
+            <span style="color:var(--accent);font-weight:700;">@</span>${c.name}
+          </div>`,
+            )
+            .join("");
+        });
+
+      document
+        .getElementById("ri-notes")
+        .addEventListener("keydown", function (e) {
+          const dropdown = document.getElementById("companyDropdown");
+          if (dropdown.style.display === "none") return;
+          if (e.key === "Escape") {
+            dropdown.style.display = "none";
+          }
+        });
+
+      document.addEventListener("click", function (e) {
+        if (
+          !e.target.closest("#companyDropdown") &&
+          e.target.id !== "ri-notes"
+        ) {
+          document.getElementById("companyDropdown").style.display = "none";
+        }
+      });
+
+      window.toggleReminderExpand = function (id) {
+        const body = document.getElementById(`ri_body_${id}`);
+        if (!body) return;
+        const isOpen = body.style.display === "block";
+        body.style.display = isOpen ? "none" : "block";
+      };
+
+      window.insertCompanyTag = function (name) {
+        const ta = document.getElementById("ri-notes");
+        const val = ta.value;
+        const cursor = ta.selectionStart;
+        const atIdx = val.slice(0, cursor).lastIndexOf("@");
+        ta.value = val.slice(0, atIdx) + "@" + name + " " + val.slice(cursor);
+        ta.focus();
+        document.getElementById("companyDropdown").style.display = "none";
+      };
+
+      window.toggleRpForm = function () {
+        const f = document.getElementById("rpForm");
+        f.classList.toggle("show");
+        if (f.classList.contains("show")) {
+          document.getElementById("ri-date").value = new Date()
+            .toISOString()
+            .split("T")[0];
+          document.getElementById("ri-hour").value = "09";
+          document.getElementById("ri-min").value = "00";
+          document.getElementById("ri-ampm").value = "AM";
+        }
+      };
+
+      window.saveReminder = async function () {
+        const title = document.getElementById("ri-title").value.trim();
+        const notesVal = document.getElementById("ri-notes").value;
+        const companyMatch = notesVal.match(/@([\w\s]+?)(?=\s|$)/);
+        const company = companyMatch ? companyMatch[1].trim() : "";
+        const date = document.getElementById("ri-date").value;
+        let h = parseInt(document.getElementById("ri-hour").value);
+        const m = document.getElementById("ri-min").value;
+        const ampm = document.getElementById("ri-ampm").value;
+        if (ampm === "PM" && h !== 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        const time = `${String(h).padStart(2, "0")}:${m}`;
+        const notes = document.getElementById("ri-notes").value.trim();
+        if (!date) {
+          alert("Date is required");
+          return;
+        }
+        if (!title && !document.getElementById("ri-notes").value.trim()) {
+          alert("Either title or notes is required");
+          return;
+        }
+        const res = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, date: date, time, notes, company }),
+        });
+        const data = await res.json();
+        if (data.status === "SUCCESS") {
+          document.getElementById("ri-title").value = "";
+          document.getElementById("ri-notes").value = "";
+          document.getElementById("rpForm").classList.remove("show");
+          loadReminders();
+        }
+      };
+
+      window.deleteReminder = async function (id) {
+        await fetch(`/api/reminders/${id}`, { method: "DELETE" });
+        loadReminders();
+      };
+
+      async function loadReminders() {
+        const res = await fetch("/api/reminders");
+        reminders = await res.json();
+        renderReminders();
+        updateBellBadge();
+      }
+
+      function fmt12(timeStr) {
+        const [hh, mm] = timeStr.slice(0, 5).split(":").map(Number);
+        const ap = hh >= 12 ? "PM" : "AM";
+        const h12 = hh % 12 || 12;
+        return `${String(h12).padStart(2, "0")}:${String(mm).padStart(2, "0")} ${ap}`;
+      }
+
+      function renderReminders() {
+        const el = document.getElementById("rpList");
+        if (!reminders.length) {
+          el.innerHTML =
+            '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No reminders yet<br><span style="font-size:11px;opacity:0.6;">Click + Add Reminder to create one</span></div>';
+          return;
+        }
+        const _n = new Date();
+        const _p = (n) => String(n).padStart(2, "0");
+        const today = `${_n.getFullYear()}-${_p(_n.getMonth() + 1)}-${_p(_n.getDate())}`;
+        const _t = new Date(_n);
+        _t.setDate(_t.getDate() + 1);
+        const tomorrow = `${_t.getFullYear()}-${_p(_t.getMonth() + 1)}-${_p(_t.getDate())}`;
+
+        // Group by date
+        const groups = {};
+        reminders.forEach((r) => {
+          const d = r.date.slice(0, 10);
+          if (!groups[d]) groups[d] = [];
+          groups[d].push(r);
+        });
+
+        el.innerHTML = Object.entries(groups)
+          .map(([date, items]) => {
+            const isToday = date === today;
+            const isTomorrow = date === tomorrow;
+            const labelColor = isToday
+              ? "#e53935"
+              : isTomorrow
+                ? "var(--amber)"
+                : "var(--ink-3)";
+            const label = isToday
+              ? "TODAY"
+              : isTomorrow
+                ? "TOMORROW"
+                : toIST(date + "T00:00:00Z").toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  });
+            return `
+            <div style="margin-bottom:16px;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:${labelColor};text-transform:uppercase;margin-bottom:8px;padding-left:2px;">${label}</div>
+              ${items
+                .map((r) => {
+                  const notes = r.notes || "";
+                  const companyTag = notes.match(/@([\w\s]+?)(?=\s|$)/);
+                  const company =
+                    r.company || (companyTag ? companyTag[1].trim() : "");
+                  const cleanNotes = notes
+                    .replace(/@[\w\s]+?(?=\s|$)/g, "")
+                    .trim();
+                  return `
+                <div id="ri_${r.id}" onclick="toggleReminderExpand(${r.id})" style="cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;border-left:3px solid ${isToday ? "#e53935" : isTomorrow ? "var(--amber)" : "var(--accent)"};transition:background 0.15s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface-2)'">
+                  <div style="display:flex;gap:10px;align-items:flex-start;">
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px;">${r.title || cleanNotes.slice(0, 40)}</div>
+                      <div style="font-size:11px;color:var(--ink-3);">⏰ ${fmt12(r.time)} ${company ? `· <span style="color:var(--accent);font-weight:600;">@${company}</span>` : ""}</div>
+                    </div>
+                    <button onclick="event.stopPropagation();deleteReminder(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--ink-3);font-size:13px;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;" onmouseover="this.style.background='#fce8e6';this.style.color='#b5301e'" onmouseout="this.style.background='';this.style.color='var(--ink-3)'">✕</button>
+                  </div>
+                  <div id="ri_body_${r.id}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                    ${company ? `<div style="margin-bottom:4px;"><span style="display:inline-block;padding:1px 8px;background:var(--accent-light);color:var(--accent);border-radius:99px;font-size:10px;font-weight:600;">@${company}</span></div>` : ""}
+                    ${cleanNotes ? `<div style="font-size:12px;color:var(--ink-2);line-height:1.5;">${cleanNotes}</div>` : "<div style='font-size:11px;color:var(--ink-3);font-style:italic;'>No notes</div>"}
+                  </div>
+                </div>`;
+                })
+                .join("")}
+            </div>`;
+          })
+          .join("");
+      }
+
+      function updateBellBadge() {
+        const _n2 = new Date();
+        const _p2 = (n) => String(n).padStart(2, "0");
+        const today = `${_n2.getFullYear()}-${_p2(_n2.getMonth() + 1)}-${_p2(_n2.getDate())}`;
+        const _t2 = new Date(_n2);
+        _t2.setDate(_t2.getDate() + 1);
+        const tomorrow = `${_t2.getFullYear()}-${_p2(_t2.getMonth() + 1)}-${_p2(_t2.getDate())}`;
+        const urgent = reminders.filter(
+          (r) =>
+            r.date.slice(0, 10) === today || r.date.slice(0, 10) === tomorrow,
+        ).length;
+        const badge = document.getElementById("bellBadge");
+        badge.textContent = urgent;
+        badge.style.display = urgent > 0 ? "flex" : "none";
+        if (urgent > 0)
+          document.getElementById("bellBtn").classList.add("ringing");
+        else document.getElementById("bellBtn").classList.remove("ringing");
+      }
+
+      function showToast(label, title, sub) {
+        document.getElementById("toastLabel").textContent = label;
+        document.getElementById("toastTitle").textContent = title;
+        document.getElementById("toastSub").textContent = sub;
+        const t = document.getElementById("reminderToast");
+        t.classList.add("show");
+        try {
+          document.getElementById("alertSound").play();
+        } catch (e) {}
+        setTimeout(() => t.classList.remove("show"), 6000);
+      }
+
+      function checkReminders() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const tom = new Date(now);
+        tom.setDate(tom.getDate() + 1);
+        const tomorrowStr = `${tom.getFullYear()}-${pad(tom.getMonth() + 1)}-${pad(tom.getDate())}`;
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+
+        reminders.forEach(async (r) => {
+          const rDate = r.date.slice(0, 10); // already stored as text date, no conversion needed
+          const [rH, rM] = r.time.slice(0, 5).split(":").map(Number);
+          const rMins = rH * 60 + rM;
+          const rTime = r.time.slice(0, 5);
+
+          // Day before: alert if today is the day before AND current time >= reminder time AND not yet alerted
+          if (
+            rDate === tomorrowStr &&
+            nowMins >= rMins &&
+            !r.alerted_day_before
+          ) {
+            showToast("⏰ Tomorrow", r.title, `${r.company || ""} — ${rTime}`);
+            if (Notification.permission === "granted")
+              new Notification("Reminder Tomorrow: " + r.title, {
+                body: (r.company || "") + " at " + rTime,
+              });
+            await fetch(`/api/reminders/${r.id}/alerted`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "day_before" }),
+            });
+            r.alerted_day_before = true;
+          }
+
+          // Past overdue: alert if date already passed and never alerted
+          const rDateObj = new Date(rDate);
+          const todayDateObj = new Date(todayStr);
+          if (rDateObj < todayDateObj && !r.alerted_on_day) {
+            showToast(
+              "⚠ Overdue",
+              r.title,
+              `${r.company || ""} — was ${rDate} ${rTime}`,
+            );
+            if (Notification.permission === "granted")
+              new Notification("⚠ Overdue: " + r.title, {
+                body: `Was scheduled ${rDate} at ${rTime}`,
+              });
+            await fetch(`/api/reminders/${r.id}/alerted`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "on_day" }),
+            });
+            r.alerted_on_day = true;
+          }
+          // Same day: alert if today is the day AND current time >= reminder time AND not yet alerted
+          if (rDate === todayStr && nowMins >= rMins && !r.alerted_on_day) {
+            showToast("🔴 NOW", r.title, `${r.company || ""} — ${rTime}`);
+            if (Notification.permission === "granted")
+              new Notification("🔴 Reminder: " + r.title, {
+                body: (r.company || "") + " at " + rTime,
+              });
+            await fetch(`/api/reminders/${r.id}/alerted`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "on_day" }),
+            });
+            r.alerted_on_day = true;
+            document.getElementById("bellBtn").classList.add("ringing");
+            setTimeout(
+              () =>
+                document.getElementById("bellBtn").classList.remove("ringing"),
+              1000,
+            );
+          }
+        });
+      }
+
+      // Request notification permission
+      if (Notification.permission === "default")
+        Notification.requestPermission();
+
+      // Check every minute + immediately on load
+      setInterval(checkReminders, 60000);
+      setTimeout(checkReminders, 2000);
+
+      // ── CLOCK ──
+      function updateDashClock() {
+        const now = new Date();
+        const t = now.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+        const d = now.toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        });
+        document.getElementById("dashClock").innerHTML =
+          `<div style="font-size:22px;font-weight:600;letter-spacing:0.04em;">${t}</div><div style="font-size:12px;margin-top:2px;opacity:0.7;">${d}</div>`;
+      }
+      updateDashClock();
+      setInterval(updateDashClock, 1000);
+
       // ── Init ──
       loadCompanies();
+      loadReminders();
       loadPendingVouchers();
       loadPendingPayments();
       const _actDate = document.getElementById("activityDate");
