@@ -11,6 +11,7 @@ process.env.TZ = "Asia/Kolkata";
 const express = require("express");
 const { Pool } = require("pg");
 const path = require("path");
+const bcrypt = require("bcrypt");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -126,6 +127,17 @@ alias TEXT UNIQUE NOT NULL,
       total_value NUMERIC,
       created_at TIMESTAMP DEFAULT NOW()
     );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auth_users (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT UNIQUE NOT NULL,
+      name TEXT,
+      email TEXT,
+      password TEXT,
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
   `);
   console.log("DB ready");
 }
@@ -946,6 +958,52 @@ app.put("/api/labour/:id", async (req, res) => {
   }
 });
 
+app.post("/api/auth/signup", async (req, res) => {
+  const { user_id, name, email, password } = req.body;
+  try {
+    const existing = await pool.query(
+      "SELECT * FROM auth_users WHERE user_id = $1",
+      [user_id],
+    );
+    if (!existing.rows[0])
+      return res.json({ error: "ID not found. Request your ID from admin." });
+    if (existing.rows[0].password)
+      return res.json({ error: "Account already exists for this ID." });
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      "UPDATE auth_users SET name=$1, email=$2, password=$3 WHERE user_id=$4",
+      [name, email, hash, user_id],
+    );
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { user_id, password } = req.body;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM auth_users WHERE user_id = $1",
+      [user_id],
+    );
+    const user = result.rows[0];
+    if (!user || !user.password)
+      return res.json({ error: "ID not found or account not set up." });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.json({ error: "Incorrect password." });
+    res.json({
+      status: "SUCCESS",
+      user: { id: user.user_id, name: user.name },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/login", (req, res) =>
+  res.sendFile(path.join(__dirname, "login.html")),
+);
 app.get("/labclose", (req, res) =>
   res.sendFile(path.join(__dirname, "labclose.html")),
 );
