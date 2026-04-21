@@ -933,6 +933,7 @@
       let companies = [];
       let closedBills = new Set();
       let selectedLabourId = null;
+      let selectedLabourIds = [];
       let selectedClosingType = {};
       let rowCount = 0;
       let selectedGstType = "CGST_SGST";
@@ -1169,14 +1170,31 @@
       }
 
       function selectLabourBill(labourId, issueNumber, companyName, billDate) {
+        if (selectedLabourIds.includes(labourId)) {
+          selectedLabourIds = selectedLabourIds.filter((id) => id !== labourId);
+          document
+            .getElementById(`card_${labourId}`)
+            .classList.remove("selected");
+          if (selectedLabourIds.length === 0) {
+            selectedLabourId = null;
+            document.getElementById("billDetails").classList.remove("show");
+            return;
+          }
+          labourId = selectedLabourIds[selectedLabourIds.length - 1];
+        } else {
+          selectedLabourIds.push(labourId);
+          document.getElementById(`card_${labourId}`).classList.add("selected");
+        }
         selectedLabourId = labourId;
-        document
-          .querySelectorAll(".bill-card")
-          .forEach((c) => c.classList.remove("selected"));
         document.getElementById(`card_${labourId}`).classList.add("selected");
         document.getElementById("billDetails").classList.add("show");
         document.getElementById("emptyState").style.display = "none";
-        document.getElementById("issueNumber").textContent = issueNumber;
+        document.getElementById("issueNumber").textContent = selectedLabourIds
+          .map((id) => {
+            const card = document.getElementById(`card_${id}`);
+            return card ? card.querySelector(".bill-card-id").textContent : id;
+          })
+          .join(", ");
         document.getElementById("companyName").textContent = companyName || "";
         document.getElementById("closingDate").value = "";
         document.getElementById("receiptBillNo").value = "";
@@ -1334,12 +1352,12 @@
         ).toFixed(2);
       }
       async function submitCloseVoucher() {
-        if (!selectedLabourId) {
+        if (!selectedLabourIds.length) {
           showMessage("Please select a labour bill", "error");
           return;
         }
         const closingDate = document.getElementById("closingDate").value;
-        const closingType = selectedClosingType[selectedLabourId];
+        const closingType = selectedClosingType[selectedLabourId] || "full";
         const receiptBillNo = document.getElementById("receiptBillNo").value;
         if (!closingDate) {
           showMessage("Please enter closing date", "error");
