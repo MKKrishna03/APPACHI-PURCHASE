@@ -781,9 +781,25 @@
 
     <div class="main">
       <!-- Dashboard Header -->
-      <div class="dash-header">
-        <h1>Dashboard</h1>
-        <p>Purchases</p>
+      <div
+        class="dash-header"
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+        "
+      >
+        <div>
+          <h1>Dashboard</h1>
+          <p>Purchases</p>
+        </div>
+        <button class="logoutButton" onclick="doLogout()">
+          <span class="button-text">Log Out</span>
+          <span class="door">
+            <span class="doorway"></span>
+            <span class="figure"></span>
+          </span>
+        </button>
       </div>
 
       <!-- Top 3 Cards Row -->
@@ -1033,7 +1049,118 @@
 
     <iframe id="chittaiFrame" src="/chittai" style="display: none"></iframe>
 
+    <style>
+      .logoutButton {
+        --figure-duration: 400;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px 10px 20px;
+        background: var(--ink);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        overflow: hidden;
+        transition: background 0.2s;
+        flex-shrink: 0;
+      }
+      .logoutButton:hover {
+        background: #2a2a4a;
+      }
+      .door {
+        position: relative;
+        width: 28px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .doorway {
+        position: absolute;
+        right: 0;
+        width: 18px;
+        height: 22px;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        border-radius: 2px 6px 6px 2px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .doorway::after {
+        content: "";
+        position: absolute;
+        right: 3px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.6);
+      }
+      .figure {
+        position: absolute;
+        left: 0;
+        width: 10px;
+        height: 18px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 3px 3px 2px 2px;
+        transition:
+          transform calc(var(--figure-duration) * 1ms)
+            cubic-bezier(0.7, 0.1, 1, 1),
+          opacity calc(var(--figure-duration) * 0.25ms) linear
+            calc(var(--figure-duration) * 0.75ms);
+      }
+      .figure::before {
+        content: "";
+        position: absolute;
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.9);
+      }
+      .logoutButton:hover .figure {
+        transform: translateX(18px);
+        opacity: 0;
+      }
+      .logoutButton.falling .figure {
+        animation: spin calc(var(--figure-duration) * 1ms) infinite linear;
+        bottom: -1000px;
+        opacity: 0;
+        transition:
+          transform calc(var(--figure-duration) * 1ms) linear,
+          bottom calc(var(--figure-duration) * 1ms) cubic-bezier(0.7, 0.1, 1, 1)
+            100ms,
+          opacity calc(var(--figure-duration) * 0.25ms) linear
+            calc(var(--figure-duration) * 0.75ms);
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+
     <script>
+      function doLogout() {
+        const btn = document.querySelector(".logoutButton");
+        btn.classList.add("falling");
+        localStorage.removeItem("auth_user");
+        localStorage.removeItem("auth_exp");
+        sessionStorage.removeItem("auth_user");
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 600);
+      }
       const receiptBackdrop = document.getElementById("receiptBackdrop");
       const paymentBackdrop = document.getElementById("paymentBackdrop");
 
