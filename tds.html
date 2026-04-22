@@ -482,6 +482,19 @@
         color: var(--ink-3);
         font-size: 13px;
       }
+      thead th.sortable {
+        cursor: pointer;
+        user-select: none;
+      }
+      thead th.sortable:hover {
+        color: var(--accent);
+        background: rgba(45, 106, 79, 0.06);
+      }
+      thead th .si {
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.4;
+      }
     </style>
   </head>
   <body>
@@ -598,11 +611,39 @@
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th>Bill No</th>
-                <th style="text-align: right">TDS Amount</th>
-                <th style="text-align: right">Bill Value</th>
+                <th class="sortable" data-col="date" onclick="sortBy('date')">
+                  Date<span class="si" id="si_date">▼</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="company"
+                  onclick="sortBy('company')"
+                >
+                  Company<span class="si" id="si_company">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="billNo"
+                  onclick="sortBy('billNo')"
+                >
+                  Bill No<span class="si" id="si_billNo">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="tds"
+                  onclick="sortBy('tds')"
+                  style="text-align: right"
+                >
+                  TDS Amount<span class="si" id="si_tds">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="billValue"
+                  onclick="sortBy('billValue')"
+                  style="text-align: right"
+                >
+                  Bill Value<span class="si" id="si_billValue">⇅</span>
+                </th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -1073,7 +1114,31 @@
           }
 
           // Sort by date desc
-          rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+          allRows=rows;
+        updateSortIcons();
+        renderRows();
+      }
+
+      let sortCol="date",sortDir="desc",allRows=[];
+      const sortCols=["date","company","billNo","tds","billValue"];
+      function updateSortIcons(){sortCols.forEach(col=>{const el=document.getElementById("si_"+col);if(!el)return;if(col===sortCol){el.textContent=sortDir==="asc"?"▲":"▼";el.style.opacity="1";el.style.color="var(--accent)";}else{el.textContent="⇅";el.style.opacity="0.4";el.style.color="";}});}
+      function sortBy(col){if(sortCol===col){sortDir=sortDir==="asc"?"desc":"asc";}else{sortCol=col;sortDir="asc";}updateSortIcons();renderRows();}
+      function getSortVal(row,col){switch(col){case"date":return row.date||"";case"company":return(row.company||"").toLowerCase();case"billNo":return(row.billNo||"").toLowerCase();case"tds":return row.tds||0;case"billValue":return row.billValue||0;default:return"";}}
+      function renderRows(){
+        const tbody=document.getElementById("reportTable");
+        const sorted=[...allRows].sort((a,b)=>{const va=getSortVal(a,sortCol),vb=getSortVal(b,sortCol);if(va<vb)return sortDir==="asc"?-1:1;if(va>vb)return sortDir==="asc"?1:-1;return 0;});
+        if(!sorted.length){tbody.innerHTML=`<tr><td colspan="5" class="empty-state">No TDS records found for selected range</td></tr>`;return;}
+        tbody.innerHTML=sorted.map(row=>`<tr>
+          <td>${fmtDate(row.date)}</td>
+          <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.company}</td>
+          <td class="mono">${row.billNo}</td>
+          <td class="num" style="text-align:right;color:var(--danger);font-weight:600;">₹${Math.round(row.tds).toLocaleString("en-IN")}</td>
+          <td class="num" style="text-align:right;">₹${Math.round(row.billValue).toLocaleString("en-IN")}</td>
+        </tr>`).join("");
+      }
+
+      function _unusedSort(){
+        rows.sort((a, b) => new Date(b.date) - new Date(a.date));
 
           document.getElementById("rowCount").textContent = rows.length;
 
@@ -1084,21 +1149,8 @@
             return;
           }
 
-          let totalTds = 0,
-            totalBillVal = 0;
-          tbody.innerHTML = rows
-            .map((row) => {
-              totalTds += row.tds;
-              totalBillVal += row.billValue;
-              return `<tr>
-              <td>${fmtDate(row.date)}</td>
-              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.company}</td>
-              <td class="mono">${row.billNo}</td>
-              <td class="num" style="text-align:right;color:var(--danger);font-weight:600;">₹${Math.round(row.tds).toLocaleString("en-IN")}</td>
-              <td class="num" style="text-align:right;">₹${Math.round(row.billValue).toLocaleString("en-IN")}</td>
-              </tr>`;
-            })
-            .join("");
+          let totalTds = 0, totalBillVal = 0;
+          rows.forEach(row=>{totalTds+=row.tds;totalBillVal+=row.billValue;});
 
           document.getElementById("footTds").textContent =
             "₹" + Math.round(totalTds).toLocaleString("en-IN");

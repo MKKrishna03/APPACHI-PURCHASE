@@ -8,6 +8,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+
     <style>
       :root {
         --bg: #f5f5f0;
@@ -502,6 +503,19 @@
       .pos {
         color: var(--accent);
       }
+      thead th.sortable {
+        cursor: pointer;
+        user-select: none;
+      }
+      thead th.sortable:hover {
+        color: var(--accent);
+        background: rgba(45, 106, 79, 0.06);
+      }
+      thead th .si {
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.4;
+      }
     </style>
   </head>
   <body>
@@ -621,15 +635,70 @@
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Chittai No</th>
-                <th>Company</th>
-                <th style="text-align: right">Weight (g)</th>
-                <th style="text-align: right">RTGS Amount</th>
-                <th style="text-align: right">TDS</th>
-                <th>Payment Date</th>
-                <th style="text-align: right">Payment Amount</th>
-                <th style="text-align: right">Difference</th>
+                <th class="sortable" data-col="date" onclick="sortBy('date')">
+                  Date<span class="si" id="si_date">▼</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="chittai_no"
+                  onclick="sortBy('chittai_no')"
+                >
+                  Chittai No<span class="si" id="si_chittai_no">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="company"
+                  onclick="sortBy('company')"
+                >
+                  Company<span class="si" id="si_company">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="weight"
+                  onclick="sortBy('weight')"
+                  style="text-align: right"
+                >
+                  Weight (g)<span class="si" id="si_weight">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="rtgs"
+                  onclick="sortBy('rtgs')"
+                  style="text-align: right"
+                >
+                  RTGS Amount<span class="si" id="si_rtgs">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="tds"
+                  onclick="sortBy('tds')"
+                  style="text-align: right"
+                >
+                  TDS<span class="si" id="si_tds">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="payDate"
+                  onclick="sortBy('payDate')"
+                >
+                  Payment Date<span class="si" id="si_payDate">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="payAmt"
+                  onclick="sortBy('payAmt')"
+                  style="text-align: right"
+                >
+                  Payment Amount<span class="si" id="si_payAmt">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="diff"
+                  onclick="sortBy('diff')"
+                  style="text-align: right"
+                >
+                  Difference<span class="si" id="si_diff">⇅</span>
+                </th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -1034,6 +1103,101 @@
         return normalized >= drpStart && normalized <= drpEnd;
       }
 
+      let sortCol = "date",
+        sortDir = "desc",
+        allRows = [];
+      const sortCols = [
+        "date",
+        "chittai_no",
+        "company",
+        "weight",
+        "rtgs",
+        "tds",
+        "payDate",
+        "payAmt",
+        "diff",
+      ];
+      function updateSortIcons() {
+        sortCols.forEach((col) => {
+          const el = document.getElementById("si_" + col);
+          if (!el) return;
+          if (col === sortCol) {
+            el.textContent = sortDir === "asc" ? "▲" : "▼";
+            el.style.opacity = "1";
+            el.style.color = "var(--accent)";
+          } else {
+            el.textContent = "⇅";
+            el.style.opacity = "0.4";
+            el.style.color = "";
+          }
+        });
+      }
+      function sortBy(col) {
+        if (sortCol === col) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortCol = col;
+          sortDir = "asc";
+        }
+        updateSortIcons();
+        renderRows();
+      }
+      function getSortVal(row, col) {
+        switch (col) {
+          case "date":
+            return row.date || "";
+          case "chittai_no":
+            return (row.chittai_no || "").toLowerCase();
+          case "company":
+            return (row.company || "").toLowerCase();
+          case "weight":
+            return row.weight || 0;
+          case "rtgs":
+            return row.rtgs || 0;
+          case "tds":
+            return row.tds || 0;
+          case "payDate":
+            return row.payDate || "";
+          case "payAmt":
+            return row.payAmt || 0;
+          case "diff":
+            return row.diff || 0;
+          default:
+            return "";
+        }
+      }
+      function renderRows() {
+        const tbody = document.getElementById("reportTable");
+        const sorted = [...allRows].sort((a, b) => {
+          const va = getSortVal(a, sortCol),
+            vb = getSortVal(b, sortCol);
+          if (va < vb) return sortDir === "asc" ? -1 : 1;
+          if (va > vb) return sortDir === "asc" ? 1 : -1;
+          return 0;
+        });
+        if (!sorted.length) {
+          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = sorted
+          .map((c) => {
+            const diffClass = c.diff > 0 ? "pos" : c.diff < 0 ? "neg" : "";
+            const diffSign = c.diff > 0 ? "+" : "";
+            return `<tr>
+            <td>${fmtDate(c.date)}</td>
+            <td class="mono">${c.chittai_no || "-"}</td>
+            <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${c.profile_id}'">${c.company}</td>
+            <td class="num" style="text-align:right;">${c.weight > 0 ? c.weight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            <td class="num" style="text-align:right;">${c.rtgs > 0 ? "₹" + Math.round(c.rtgs).toLocaleString("en-IN") : "-"}</td>
+            <td class="num" style="text-align:right;">${c.tds > 0 ? "₹" + Math.round(c.tds).toLocaleString("en-IN") : "-"}</td>
+            <td>${c.payDate ? fmtDate(c.payDate) : "-"}</td>
+            <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${c.payAmt > 0 ? "₹" + Math.round(c.payAmt).toLocaleString("en-IN") : "-"}</td>
+            <td class="num ${diffClass}" style="text-align:right;font-weight:600;">${c.diff !== 0 ? diffSign + "₹" + Math.round(Math.abs(c.diff)).toLocaleString("en-IN") : "—"}</td>
+          </tr>`;
+          })
+          .join("");
+      }
+
       async function loadReport() {
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
@@ -1076,9 +1240,45 @@
             totalRtgs = 0,
             totalTds = 0,
             totalPayment = 0;
+          allRows = rows.map((c) => {
+            const p = profileRes.find(
+              (x) => String(x.id) === String(c.profile_id),
+            );
+            const company = p ? p.company || p.alias : "-";
+            const weight = parseFloat(c.weight || 0);
+            const rtgs = parseFloat(c.rtgs_amount || 0);
+            const tds = parseFloat(c.tds || 0);
+            const payments = paymentMap[c.id] || [];
+            const payAmt = payments.reduce(
+              (s, v) => s + parseFloat(v.total_value || 0),
+              0,
+            );
+            const payDate = payments.length
+              ? payments[payments.length - 1].date
+              : null;
+            const diff = payAmt - rtgs;
+            totalWeight += weight;
+            totalRtgs += rtgs;
+            totalTds += tds;
+            totalPayment += payAmt;
+            return {
+              profile_id: c.profile_id,
+              company,
+              date: c.date,
+              chittai_no: c.chittai_no,
+              weight,
+              rtgs,
+              tds,
+              payAmt,
+              payDate,
+              diff,
+            };
+          });
+          updateSortIcons();
+          renderRows();
 
-          tbody.innerHTML = rows
-            .map((c) => {
+          if (false) {
+            rows.map((c) => {
               const p = profileRes.find(
                 (x) => String(x.id) === String(c.profile_id),
               );
@@ -1115,8 +1315,8 @@
               <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${payAmt > 0 ? "₹" + Math.round(payAmt).toLocaleString("en-IN") : "-"}</td>
               <td class="num ${diffClass}" style="text-align:right;font-weight:600;">${diff !== 0 ? diffSign + "₹" + Math.round(Math.abs(diff)).toLocaleString("en-IN") : "—"}</td>
             </tr>`;
-            })
-            .join("");
+            });
+          } // close if(false)
 
           const totalDiff = totalPayment - totalRtgs;
           document.getElementById("footWeight").textContent =

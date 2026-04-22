@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Transaction Report</title>
+    <title>Purchase Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -30,8 +30,6 @@
         --border-strong: rgba(0, 0, 0, 0.14);
         --radius: 10px;
         --radius-lg: 16px;
-        --shadow-sm:
-          0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
       }
       * {
@@ -46,7 +44,6 @@
         min-height: 100vh;
         font-size: 14px;
       }
-
       .topbar {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
@@ -84,7 +81,6 @@
         color: var(--ink);
         letter-spacing: -0.3px;
       }
-
       .date-range-btn {
         display: flex;
         align-items: center;
@@ -104,7 +100,6 @@
         border-color: var(--accent);
         color: var(--accent);
       }
-
       .drp-backdrop {
         position: fixed;
         inset: 0;
@@ -122,7 +117,7 @@
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--shadow);
         display: none;
         flex-direction: row;
         overflow: hidden;
@@ -263,20 +258,6 @@
         color: #fff !important;
         border-radius: 50% !important;
       }
-      .drp-day.start.in-range {
-        border-radius: 50% 0 0 50% !important;
-      }
-      .drp-day.end.in-range {
-        border-radius: 0 50% 50% 0 !important;
-      }
-      .drp-day.disabled {
-        color: var(--ink-3);
-        cursor: default;
-        opacity: 0.4;
-      }
-      .drp-day.empty {
-        cursor: default;
-      }
       .drp-day.today {
         font-weight: 700;
       }
@@ -302,9 +283,6 @@
         background: var(--surface-3);
         color: var(--ink-2);
       }
-      .drp-btn-cancel:hover {
-        background: var(--surface-2);
-      }
       .drp-btn-ok {
         background: var(--accent);
         color: #fff;
@@ -313,11 +291,9 @@
       .drp-btn-ok:hover {
         background: #245c43;
       }
-
       .main {
         padding: 28px;
       }
-
       .filters {
         display: flex;
         gap: 16px;
@@ -338,7 +314,7 @@
         background-repeat: no-repeat;
         background-position: right 10px center;
         cursor: pointer;
-        min-width: 220px;
+        min-width: 200px;
         transition:
           border-color 0.15s,
           box-shadow 0.15s;
@@ -348,10 +324,9 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1);
       }
-
       .summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 16px;
         margin-bottom: 24px;
       }
@@ -380,7 +355,7 @@
         margin-bottom: 8px;
       }
       .summary-value {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 700;
         color: var(--ink);
         font-family: "DM Mono", monospace;
@@ -391,7 +366,6 @@
         color: var(--ink-3);
         margin-top: 4px;
       }
-
       .card {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -422,7 +396,6 @@
         background: var(--accent-light);
         color: var(--accent);
       }
-
       .table-wrap {
         overflow-x: auto;
         border-radius: var(--radius);
@@ -443,6 +416,27 @@
         color: var(--ink-3);
         white-space: nowrap;
         border-bottom: 1px solid var(--border);
+        user-select: none;
+      }
+      thead th.sortable {
+        cursor: pointer;
+      }
+      thead th.sortable:hover {
+        color: var(--accent);
+        background: rgba(45, 106, 79, 0.06);
+      }
+      thead th .si {
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.4;
+      }
+      thead th.sort-asc .si {
+        opacity: 1;
+        color: var(--accent);
+      }
+      thead th.sort-desc .si {
+        opacity: 1;
+        color: var(--accent);
       }
       tbody tr:not(:last-child) td {
         border-bottom: 1px solid var(--border);
@@ -454,10 +448,6 @@
         padding: 10px 12px;
         font-size: 12px;
         color: var(--ink-2);
-      }
-      tbody td:nth-child(4),
-      tbody td:nth-child(5) {
-        text-align: right;
       }
       tfoot td {
         padding: 10px 12px;
@@ -471,28 +461,14 @@
       tfoot td:first-child {
         text-align: left;
       }
-      tfoot td:nth-child(4),
-      tfoot td:nth-child(5) {
-        text-align: right;
-      }
-
-      .tag {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 99px;
-        font-size: 10px;
-        font-weight: 600;
-      }
-      .tag-paid {
-        background: var(--accent-light);
+      .mono {
+        font-family: "DM Mono", monospace;
         color: var(--accent);
+        font-size: 11px;
       }
-      .tag-unpaid {
-        background: var(--amber-light);
-        color: var(--amber);
+      .num {
+        font-family: "DM Mono", monospace;
       }
-
       .empty-state {
         text-align: center;
         padding: 48px 24px;
@@ -505,24 +481,21 @@
         color: var(--ink-3);
         font-size: 13px;
       }
-
-      .mono {
-        font-family: "DM Mono", monospace;
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 10px;
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .tag-paid {
+        background: var(--accent-light);
         color: var(--accent);
-        font-size: 11px;
       }
-      thead th.sortable {
-        cursor: pointer;
-        user-select: none;
-      }
-      thead th.sortable:hover {
-        color: var(--accent);
-        background: rgba(45, 106, 79, 0.06);
-      }
-      thead th .si {
-        margin-left: 3px;
-        font-size: 9px;
-        opacity: 0.4;
+      .tag-unpaid {
+        background: var(--amber-light);
+        color: var(--amber);
       }
     </style>
   </head>
@@ -530,11 +503,9 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="breadcrumb">
-          <a href="/">Dashboard</a>
-          <span>/</span>
-          <span>Transaction Report</span>
+          <a href="/">Dashboard</a><span>/</span><span>Purchase Report</span>
         </div>
-        <div class="page-title">Transaction Report</div>
+        <div class="page-title">Purchase Report</div>
       </div>
       <button class="date-range-btn" onclick="toggleDRP()">
         <svg
@@ -608,6 +579,11 @@
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
+        <select id="payFilter" onchange="loadReport()">
+          <option value="">— All Status —</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
+        </select>
       </div>
 
       <div class="summary-grid">
@@ -616,36 +592,34 @@
           <div class="summary-value" id="sumCount">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Bill Value</div>
-          <div class="summary-value" id="sumBillValue">—</div>
-          <div class="summary-sub">after deduction</div>
+          <div class="summary-label">Value After Deduction</div>
+          <div class="summary-value" id="sumNet">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Payment Received</div>
-          <div class="summary-value" id="sumPayment">—</div>
+          <div class="summary-label">Total TDS</div>
+          <div class="summary-value" id="sumTds">—</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Paid Amount</div>
+          <div class="summary-value" id="sumPaid">—</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Balance</div>
           <div class="summary-value" id="sumBalance">—</div>
+          <div class="summary-sub">net − paid</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Payment Transactions</span>
+          <span class="card-title">Purchase Particulars</span>
           <span class="card-badge" id="rowCount">0</span>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th
-                  class="sortable"
-                  data-col="bill_no"
-                  onclick="sortBy('bill_no')"
-                >
-                  Bill No<span class="si" id="si_bill_no">⇅</span>
-                </th>
+                <th style="width: 44px; text-align: center">S.No</th>
                 <th
                   class="sortable"
                   data-col="company"
@@ -658,35 +632,69 @@
                 </th>
                 <th
                   class="sortable"
-                  data-col="billValue"
-                  onclick="sortBy('billValue')"
-                  style="text-align: right"
+                  data-col="bill_no"
+                  onclick="sortBy('bill_no')"
                 >
-                  Bill Value<span class="si" id="si_billValue">⇅</span>
+                  Bill No<span class="si" id="si_bill_no">⇅</span>
                 </th>
                 <th
                   class="sortable"
-                  data-col="payment"
-                  onclick="sortBy('payment')"
+                  data-col="taxable"
+                  onclick="sortBy('taxable')"
                   style="text-align: right"
                 >
-                  Payment Amount<span class="si" id="si_payment">⇅</span>
+                  Taxable<span class="si" id="si_taxable">⇅</span>
                 </th>
-                <th>Status</th>
+                <th
+                  class="sortable"
+                  data-col="gst"
+                  onclick="sortBy('gst')"
+                  style="text-align: right"
+                >
+                  Total GST<span class="si" id="si_gst">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="tds"
+                  onclick="sortBy('tds')"
+                  style="text-align: right"
+                >
+                  TDS<span class="si" id="si_tds">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="net"
+                  onclick="sortBy('net')"
+                  style="text-align: right"
+                >
+                  Value After Deduction<span class="si" id="si_net">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="paid"
+                  onclick="sortBy('paid')"
+                  style="text-align: right"
+                >
+                  Payment Amount<span class="si" id="si_paid">⇅</span>
+                </th>
+                <th style="text-align: center">Status</th>
               </tr>
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="7" class="loading-state">
+                <td colspan="10" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
             </tbody>
             <tfoot id="reportFoot" style="display: none">
               <tr>
-                <td colspan="3">Total</td>
-                <td id="footBillValue">—</td>
-                <td id="footPayment">—</td>
+                <td colspan="4">Total</td>
+                <td id="footTaxable" style="text-align: right">—</td>
+                <td id="footGst" style="text-align: right">—</td>
+                <td id="footTds" style="text-align: right">—</td>
+                <td id="footNet" style="text-align: right">—</td>
+                <td id="footPaid" style="text-align: right">—</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -699,8 +707,11 @@
       let drpStart = null,
         drpEnd = null,
         drpSelecting = null;
-      let cal0Month, cal0Year, cal1Month, cal1Year;
-      let activePreset = null;
+      let cal0Month,
+        cal0Year,
+        cal1Month,
+        cal1Year,
+        activePreset = null;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -708,15 +719,23 @@
         if (!d) return "";
         return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
       }
+      function fmtDate(dateStr) {
+        if (!dateStr) return "-";
+        const d = new Date(new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000);
+        return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+      }
+      function inr(n) {
+        return n > 0 ? "₹" + Math.round(n).toLocaleString("en-IN") : "-";
+      }
+      function inrZ(n) {
+        return "₹" + Math.round(n).toLocaleString("en-IN");
+      }
 
       function getFinYear(offset = 0) {
         const y = today.getFullYear(),
           m = today.getMonth();
-        const startYear = m >= 3 ? y + offset : y - 1 + offset;
-        return {
-          start: new Date(startYear, 3, 1),
-          end: new Date(startYear + 1, 2, 31),
-        };
+        const sy = m >= 3 ? y + offset : y - 1 + offset;
+        return { start: new Date(sy, 3, 1), end: new Date(sy + 1, 2, 31) };
       }
 
       const presets = [
@@ -758,33 +777,31 @@
         },
         {
           label: "This Month",
-          fn: () => {
-            const s = new Date(today.getFullYear(), today.getMonth(), 1);
-            const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            return { start: s, end: e };
-          },
+          fn: () => ({
+            start: new Date(today.getFullYear(), today.getMonth(), 1),
+            end: new Date(today.getFullYear(), today.getMonth() + 1, 0),
+          }),
         },
         {
           label: "Last Month",
-          fn: () => {
-            const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            const e = new Date(today.getFullYear(), today.getMonth(), 0);
-            return { start: s, end: e };
-          },
+          fn: () => ({
+            start: new Date(today.getFullYear(), today.getMonth() - 1, 1),
+            end: new Date(today.getFullYear(), today.getMonth(), 0),
+          }),
         },
         {
           label: "Last 3 Months",
-          fn: () => {
-            const s = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-            return { start: s, end: new Date(today) };
-          },
+          fn: () => ({
+            start: new Date(today.getFullYear(), today.getMonth() - 3, 1),
+            end: new Date(today),
+          }),
         },
         {
           label: "Last 6 Months",
-          fn: () => {
-            const s = new Date(today.getFullYear(), today.getMonth() - 6, 1);
-            return { start: s, end: new Date(today) };
-          },
+          fn: () => ({
+            start: new Date(today.getFullYear(), today.getMonth() - 6, 1),
+            end: new Date(today),
+          }),
         },
         {
           label: "This Year",
@@ -841,7 +858,6 @@
           )
           .join("");
       }
-
       function selectPreset(i) {
         activePreset = i;
         document
@@ -856,7 +872,6 @@
           renderBothCals();
         }
       }
-
       function syncCalendarsToRange() {
         const ref = drpStart || today;
         cal0Month = ref.getMonth();
@@ -865,7 +880,6 @@
         cal1Month = next.getMonth();
         cal1Year = next.getFullYear();
       }
-
       const FULLMONTHS = [
         "January",
         "February",
@@ -880,37 +894,33 @@
         "November",
         "December",
       ];
-
       function renderCal(elId, month, year, navPrev, navNext) {
         const el = document.getElementById(elId);
         const monthOpts = FULLMONTHS.map(
           (m, i) =>
-            `<option value="${i}" ${i === month ? "selected" : ""}>${m}</option>`,
+            `<option value="${i}"${i === month ? " selected" : ""}>${m}</option>`,
         ).join("");
-        const startYear = 2018,
-          endYear = today.getFullYear() + 2;
-        const yearOpts = Array.from(
-          { length: endYear - startYear + 1 },
-          (_, i) => startYear + i,
-        )
+        const sy = 2018,
+          ey = today.getFullYear() + 2;
+        const yearOpts = Array.from({ length: ey - sy + 1 }, (_, i) => sy + i)
           .map(
             (y) =>
-              `<option value="${y}" ${y === year ? "selected" : ""}>${y}</option>`,
+              `<option value="${y}"${y === year ? " selected" : ""}>${y}</option>`,
           )
           .join("");
         const firstDay = new Date(year, month, 1).getDay();
         const offset = firstDay === 0 ? 6 : firstDay - 1;
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const dim = new Date(year, month + 1, 0).getDate();
         let cells = "",
-          dayNum = 1;
+          dn = 1;
         for (let row = 0; row < 6; row++) {
           cells += "<tr>";
           for (let col = 0; col < 7; col++) {
             const ci = row * 7 + col;
-            if (ci < offset || dayNum > daysInMonth) {
-              cells += `<td><span class="drp-day empty"></span></td>`;
+            if (ci < offset || dn > dim) {
+              cells += `<td></td>`;
             } else {
-              const d = new Date(year, month, dayNum);
+              const d = new Date(year, month, dn);
               let cls = "drp-day";
               if (d.getTime() === today.getTime()) cls += " today";
               if (drpStart && d.getTime() === drpStart.getTime())
@@ -918,28 +928,15 @@
               if (drpEnd && d.getTime() === drpEnd.getTime()) cls += " end";
               if (drpStart && drpEnd && d > drpStart && d < drpEnd)
                 cls += " in-range";
-              cells += `<td><span class="${cls}" onclick="pickDay(${year},${month},${dayNum})">${dayNum}</span></td>`;
-              dayNum++;
+              cells += `<td><span class="${cls}" onclick="pickDay(${year},${month},${dn})">${dn}</span></td>`;
+              dn++;
             }
           }
           cells += "</tr>";
-          if (dayNum > daysInMonth) break;
+          if (dn > dim) break;
         }
-        el.innerHTML = `
-          <div class="drp-month-header">
-            ${navPrev ? `<button class="drp-month-nav" onclick="${navPrev}">&#8249;</button>` : `<span style="width:24px"></span>`}
-            <div class="drp-month-title">
-              <select class="drp-month-select" onchange="changeMonth('${elId}',this.value)">${monthOpts}</select>
-              <select class="drp-year-select" onchange="changeYear('${elId}',this.value)">${yearOpts}</select>
-            </div>
-            ${navNext ? `<button class="drp-month-nav" onclick="${navNext}">&#8250;</button>` : `<span style="width:24px"></span>`}
-          </div>
-          <table class="drp-grid">
-            <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
-            <tbody>${cells}</tbody>
-          </table>`;
+        el.innerHTML = `<div class="drp-month-header">${navPrev ? `<button class="drp-month-nav" onclick="${navPrev}">&#8249;</button>` : `<span style="width:24px"></span>`}<div class="drp-month-title"><select class="drp-month-select" onchange="changeMonth('${elId}',this.value)">${monthOpts}</select><select class="drp-year-select" onchange="changeYear('${elId}',this.value)">${yearOpts}</select></div>${navNext ? `<button class="drp-month-nav" onclick="${navNext}">&#8250;</button>` : `<span style="width:24px"></span>`}</div><table class="drp-grid"><thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead><tbody>${cells}</tbody></table>`;
       }
-
       function renderBothCals() {
         renderCal("cal0", cal0Month, cal0Year, "prevMonth()", null);
         renderCal("cal1", cal1Month, cal1Year, null, "nextMonth()");
@@ -992,6 +989,12 @@
           drpStart = d;
           drpEnd = null;
           drpSelecting = "end";
+          activePreset = presets.length - 1;
+          document
+            .querySelectorAll(".drp-preset")
+            .forEach((el, j) =>
+              el.classList.toggle("active", j === activePreset),
+            );
           renderBothCals();
         } else if (drpSelecting === "end") {
           if (d < drpStart) {
@@ -1036,6 +1039,114 @@
           loadReport();
         }
       }
+      function inRange(dateStr) {
+        if (!dateStr) return false;
+        const ist = new Date(
+          new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
+        );
+        const n = new Date(
+          ist.getUTCFullYear(),
+          ist.getUTCMonth(),
+          ist.getUTCDate(),
+        );
+        return n >= drpStart && n <= drpEnd;
+      }
+
+      let sortCol = "date",
+        sortDir = "desc",
+        allRows = [];
+
+      const sortCols = [
+        "company",
+        "date",
+        "bill_no",
+        "taxable",
+        "gst",
+        "tds",
+        "net",
+        "paid",
+      ];
+
+      function updateSortIcons() {
+        sortCols.forEach((col) => {
+          const el = document.getElementById("si_" + col);
+          if (!el) return;
+          if (col === sortCol) {
+            el.textContent = sortDir === "asc" ? "▲" : "▼";
+            el.style.opacity = "1";
+            el.style.color = "var(--accent)";
+          } else {
+            el.textContent = "⇅";
+            el.style.opacity = "0.4";
+            el.style.color = "";
+          }
+        });
+      }
+
+      function sortBy(col) {
+        if (sortCol === col) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortCol = col;
+          sortDir = "asc";
+        }
+        updateSortIcons();
+        renderRows();
+      }
+
+      function getSortVal(row, col) {
+        switch (col) {
+          case "company":
+            return (row.company || "").toLowerCase();
+          case "date":
+            return row.dateRaw || "";
+          case "bill_no":
+            return (row.bill_no || "").toLowerCase();
+          case "taxable":
+            return row.taxable;
+          case "gst":
+            return row.gst;
+          case "tds":
+            return row.tds;
+          case "net":
+            return row.net;
+          case "paid":
+            return row.paid;
+          default:
+            return "";
+        }
+      }
+
+      function renderRows() {
+        const tbody = document.getElementById("reportTable");
+        const sorted = [...allRows].sort((a, b) => {
+          const va = getSortVal(a, sortCol),
+            vb = getSortVal(b, sortCol);
+          if (va < vb) return sortDir === "asc" ? -1 : 1;
+          if (va > vb) return sortDir === "asc" ? 1 : -1;
+          return 0;
+        });
+        if (!sorted.length) {
+          tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No purchase records found</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = sorted
+          .map(
+            (row, i) => `<tr>
+          <td style="color:var(--ink-3);font-size:11px;text-align:center;">${i + 1}</td>
+          <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.company}</td>
+          <td style="white-space:nowrap;">${row.dateStr}</td>
+          <td class="mono">${row.bill_no || "-"}</td>
+          <td class="num" style="text-align:right;">${inr(row.taxable)}</td>
+          <td class="num" style="text-align:right;">${inr(row.gst)}</td>
+          <td class="num" style="text-align:right;color:var(--danger);">${inr(row.tds)}</td>
+          <td class="num" style="text-align:right;font-weight:600;">${inrZ(row.net)}</td>
+          <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${inr(row.paid)}</td>
+          <td style="text-align:center;"><span class="tag ${row.isPaid ? "tag-paid" : "tag-unpaid"}">${row.isPaid ? "Paid" : "Unpaid"}</span></td>
+        </tr>`,
+          )
+          .join("");
+      }
 
       async function loadCompanies() {
         try {
@@ -1053,192 +1164,151 @@
         } catch (e) {}
       }
 
-      let sortCol = "date",
-        sortDir = "desc",
-        allRows = [];
-      const sortCols = ["bill_no", "company", "date", "billValue", "payment"];
-      function updateSortIcons() {
-        sortCols.forEach((col) => {
-          const el = document.getElementById("si_" + col);
-          if (!el) return;
-          if (col === sortCol) {
-            el.textContent = sortDir === "asc" ? "▲" : "▼";
-            el.style.opacity = "1";
-            el.style.color = "var(--accent)";
-          } else {
-            el.textContent = "⇅";
-            el.style.opacity = "0.4";
-            el.style.color = "";
-          }
-        });
-      }
-      function sortBy(col) {
-        if (sortCol === col) {
-          sortDir = sortDir === "asc" ? "desc" : "asc";
-        } else {
-          sortCol = col;
-          sortDir = "asc";
-        }
-        updateSortIcons();
-        renderRows();
-      }
-      function getSortVal(row, col) {
-        switch (col) {
-          case "bill_no":
-            return (row._billNo || "").toLowerCase();
-          case "company":
-            return (row._companyName || "").toLowerCase();
-          case "date":
-            return row.date || "";
-          case "billValue":
-            return row._billValue || 0;
-          case "payment":
-            return parseFloat(row.total_value || 0);
-          default:
-            return "";
-        }
-      }
-      function renderRows() {
-        const tbody = document.getElementById("reportTable");
-        const sorted = [...allRows].sort((a, b) => {
-          const va = getSortVal(a, sortCol),
-            vb = getSortVal(b, sortCol);
-          if (va < vb) return sortDir === "asc" ? -1 : 1;
-          if (va > vb) return sortDir === "asc" ? 1 : -1;
-          return 0;
-        });
-        tbody.innerHTML = sorted
-          .map((b) => {
-            const billVal = b._billValue || 0;
-            const payAmt = parseFloat(b.total_value || 0);
-            const date = b.date
-              ? (() => {
-                  const d = new Date(
-                    new Date(b.date).getTime() + 5.5 * 60 * 60 * 1000,
-                  );
-                  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
-                })()
-              : "-";
-            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td><td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td><td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid">Paid</span></td></tr>`;
-          })
-          .join("");
-      }
-
       async function loadReport() {
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
+        const payFilter = document.getElementById("payFilter").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Loading...</td></tr>`;
-
+        tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Loading...</td></tr>`;
         try {
-          const [labourRes, voucherRes, profileRes, chittaiRes] =
-            await Promise.all([
-              fetch("/api/labour").then((r) => r.json()),
-              fetch("/api/vouchers/list").then((r) => r.json()),
-              fetch("/api/profile/all").then((r) => r.json()),
-              fetch("/api/chittai/list/all").then((r) => r.json()),
-            ]);
+          const [purchasesRes, profileRes, voucherRes] = await Promise.all([
+            fetch("/api/purchases/list").then((r) => r.json()),
+            fetch("/api/profile/all").then((r) => r.json()),
+            fetch("/api/vouchers/list").then((r) => r.json()),
+          ]);
 
-          const inRange = (dateStr) => {
-            if (!dateStr) return false;
-            const ist = new Date(
-              new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000,
-            );
-            const normalized = new Date(
-              ist.getUTCFullYear(),
-              ist.getUTCMonth(),
-              ist.getUTCDate(),
-            );
-            return normalized >= drpStart && normalized <= drpEnd;
-          };
-
-          let receipts = voucherRes.filter((v) => inRange(v.date));
-
-          if (companyId) {
-            receipts = receipts.filter(
-              (b) => String(b.profile_id) === String(companyId),
-            );
-          }
-
-          receipts.forEach((b) => {
-            const p = profileRes.find(
-              (c) => String(c.id) === String(b.profile_id),
-            );
-            b._companyName = p ? p.company || p.alias : "-";
-            const labour = labourRes.find((l) => l.id === b.linked_labour_id);
-            const chittai = chittaiRes.find(
-              (c) => c.id === b.linked_chittai_id,
-            );
-            b._issueNo = chittai
-              ? chittai.chittai_no
-              : labour
-                ? labour.issue_number
-                : "-";
-            b._billNo = b.bill_no || "-";
-            b._billValue = chittai
-              ? parseFloat(chittai.rtgs_amount || 0)
-              : labour
-                ? parseFloat(
-                    labour.bill_value_after_deduction || labour.total || 0,
-                  )
-                : 0;
+          const paidMap = {};
+          voucherRes.forEach((v) => {
+            if (v.linked_purchase_id) {
+              paidMap[v.linked_purchase_id] =
+                (paidMap[v.linked_purchase_id] || 0) +
+                parseFloat(v.total_value || 0);
+            }
+          });
+          purchasesRes.forEach((p) => {
+            if (!paidMap[p.id]) {
+              const matched = voucherRes.filter(
+                (v) =>
+                  String(v.profile_id) === String(p.profile_id) &&
+                  v.entry_type === "against" &&
+                  (v.voucher_type === "Payment Voucher" ||
+                    v.voucher_type === "Receipt Voucher" ||
+                    v.voucher_type === "Chittai Payment") &&
+                  (v.bill_no === p.bill_no ||
+                    String(v.linked_chittai_id) ===
+                      String(p.linked_chittai_id)),
+              );
+              if (matched.length)
+                paidMap[p.id] = matched.reduce(
+                  (s, v) => s + parseFloat(v.total_value || 0),
+                  0,
+                );
+            }
           });
 
-          document.getElementById("rowCount").textContent = receipts.length;
+          let rows = purchasesRes.filter((p) => inRange(p.date));
+          if (companyId)
+            rows = rows.filter(
+              (p) => String(p.profile_id) === String(companyId),
+            );
 
-          if (!receipts.length) {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No payment transactions found for selected range</td></tr>`;
+          allRows = rows.map((p) => {
+            const prof = profileRes.find(
+              (c) => String(c.id) === String(p.profile_id),
+            );
+            const company = prof ? prof.company || prof.alias : "-";
+            const taxable = parseFloat(p.taxable_value || 0);
+            const cgst = parseFloat(p.cgst || 0);
+            const sgst = parseFloat(p.sgst || 0);
+            const igst = parseFloat(p.igst || 0);
+            const gst = cgst + sgst + igst;
+            const tds = parseFloat(p.tds || 0);
+            const net = parseFloat(p.net_value || p.total_value || 0);
+            const paid = paidMap[p.id] || 0;
+            const isPaid = net > 0 && paid >= net - 0.01;
+            return {
+              profile_id: p.profile_id,
+              company,
+              dateRaw: p.date || "",
+              dateStr: fmtDate(p.date),
+              bill_no: p.bill_no,
+              taxable,
+              gst,
+              tds,
+              net,
+              paid,
+              isPaid,
+            };
+          });
+
+          if (payFilter === "paid") allRows = allRows.filter((r) => r.isPaid);
+          else if (payFilter === "unpaid")
+            allRows = allRows.filter((r) => !r.isPaid);
+
+          document.getElementById("rowCount").textContent = allRows.length;
+
+          if (!allRows.length) {
+            tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No purchase records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
-            updateSummary(0, 0, 0);
+            updateSummary(0, 0, 0, 0, 0);
             return;
           }
 
-          let totalBillValue = 0,
-            totalPayment = 0;
+          const totTaxable = allRows.reduce((s, r) => s + r.taxable, 0);
+          const totGst = allRows.reduce((s, r) => s + r.gst, 0);
+          const totTds = allRows.reduce((s, r) => s + r.tds, 0);
+          const totNet = allRows.reduce((s, r) => s + r.net, 0);
+          const totPaid = allRows.reduce((s, r) => s + r.paid, 0);
 
-          allRows = receipts;
-          receipts.forEach((b) => {
-            totalBillValue += b._billValue || 0;
-            totalPayment += parseFloat(b.total_value || 0);
-          });
+          document.getElementById("footTaxable").textContent = inrZ(totTaxable);
+          document.getElementById("footGst").textContent = inrZ(totGst);
+          document.getElementById("footTds").textContent = inrZ(totTds);
+          document.getElementById("footNet").textContent = inrZ(totNet);
+          document.getElementById("footPaid").textContent = inrZ(totPaid);
+          document.getElementById("reportFoot").style.display = "";
+
           updateSortIcons();
           renderRows();
-
-          document.getElementById("footBillValue").textContent =
-            `₹${Math.round(totalBillValue).toLocaleString("en-IN")}`;
-          document.getElementById("footPayment").textContent =
-            `₹${Math.round(totalPayment).toLocaleString("en-IN")}`;
-          document.getElementById("reportFoot").style.display = "";
-          updateSummary(receipts.length, totalBillValue, totalPayment);
+          updateSummary(
+            allRows.length,
+            totNet,
+            totTds,
+            totPaid,
+            totNet - totPaid,
+          );
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          document.getElementById("reportTable").innerHTML =
+            `<tr><td colspan="10" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
-      function updateSummary(count, billValue, payment) {
+      function updateSummary(count, net, tds, paid, balance) {
         document.getElementById("sumCount").textContent = count;
-        document.getElementById("sumBillValue").textContent =
-          billValue > 0
-            ? `₹${Math.round(billValue).toLocaleString("en-IN")}`
-            : "₹0";
-        document.getElementById("sumPayment").textContent =
-          payment > 0
-            ? `₹${Math.round(payment).toLocaleString("en-IN")}`
-            : "₹0";
-        const balance = billValue - payment;
-        document.getElementById("sumBalance").textContent =
-          `₹${Math.round(Math.abs(balance)).toLocaleString("en-IN")}`;
+        document.getElementById("sumNet").textContent =
+          net > 0 ? inrZ(net) : "₹0";
+        document.getElementById("sumTds").textContent =
+          tds > 0 ? inrZ(tds) : "₹0";
+        document.getElementById("sumPaid").textContent =
+          paid > 0 ? inrZ(paid) : "₹0";
+        const el = document.getElementById("sumBalance");
+        el.textContent = inrZ(Math.abs(balance));
+        el.style.color =
+          balance > 0.01
+            ? "var(--danger)"
+            : balance < -0.01
+              ? "var(--accent)"
+              : "var(--ink)";
       }
 
       buildPresets();
       loadCompanies();
-
       const defaultRange = getFinYear(0);
       drpStart = defaultRange.start;
       drpEnd = defaultRange.end;
       document.getElementById("drpLabel").textContent =
         `${fmt(drpStart)} To ${fmt(drpEnd)}`;
       activePreset = 10;
+      updateSortIcons();
       loadReport();
     </script>
   </body>
