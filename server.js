@@ -711,12 +711,20 @@ app.delete("/api/reminders/:id", async (req, res) => {
   }
 });
 app.patch("/api/reminders/:id/alerted", async (req, res) => {
-  const { type } = req.body;
+  const { type, date, time } = req.body;
   try {
-    const col = type === "day_before" ? "alerted_day_before" : "alerted_on_day";
-    await pool.query(`UPDATE reminders SET ${col}=true WHERE id=$1`, [
-      req.params.id,
-    ]);
+    if (type === "snooze") {
+      await pool.query(
+        `UPDATE reminders SET date=$1, time=$2, alerted_on_day=false, alerted_day_before=false WHERE id=$3`,
+        [date, time, req.params.id],
+      );
+    } else {
+      const col =
+        type === "day_before" ? "alerted_day_before" : "alerted_on_day";
+      await pool.query(`UPDATE reminders SET ${col}=true WHERE id=$1`, [
+        req.params.id,
+      ]);
+    }
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -758,6 +766,7 @@ app.get("/api/purchases/list", async (req, res) => {
          LEFT JOIN vouchers v ON v.bill_no = p.bill_no
            AND v.profile_id = p.profile_id
            AND v.entry_type = 'against'
+           AND v.voucher_type IN ('Payment Voucher','Receipt Voucher','Chittai Payment')
          GROUP BY p.id`,
       );
       billRes.rows.forEach((r) => {
@@ -1185,6 +1194,9 @@ app.get("/reports/iv-rv", (req, res) =>
 );
 app.get("/reports/chittai", (req, res) =>
   res.sendFile(path.join(__dirname, "ctirpt.html")),
+);
+app.get("/reports/purchase", (req, res) =>
+  res.sendFile(path.join(__dirname, "prchsrpt.html")),
 );
 app.get("/reports/tds", (req, res) =>
   res.sendFile(path.join(__dirname, "tds.html")),

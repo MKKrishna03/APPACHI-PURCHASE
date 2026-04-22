@@ -499,6 +499,19 @@
         background: var(--amber-light);
         color: var(--amber);
       }
+      thead th.sortable {
+        cursor: pointer;
+        user-select: none;
+      }
+      thead th.sortable:hover {
+        color: var(--accent);
+        background: rgba(45, 106, 79, 0.06);
+      }
+      thead th .si {
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.4;
+      }
     </style>
   </head>
   <body>
@@ -630,14 +643,62 @@
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th>Issue No</th>
-                <th style="text-align: right">IV Weight (g)</th>
-                <th>Bill No</th>
-                <th style="text-align: right">RV Weight (g)</th>
-                <th style="text-align: right">Bill Value</th>
-                <th style="text-align: right">Payment</th>
+                <th class="sortable" data-col="date" onclick="sortBy('date')">
+                  Date<span class="si" id="si_date">▼</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="company"
+                  onclick="sortBy('company')"
+                >
+                  Company<span class="si" id="si_company">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="issueNo"
+                  onclick="sortBy('issueNo')"
+                >
+                  Issue No<span class="si" id="si_issueNo">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="ivWeight"
+                  onclick="sortBy('ivWeight')"
+                  style="text-align: right"
+                >
+                  IV Weight (g)<span class="si" id="si_ivWeight">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="billNo"
+                  onclick="sortBy('billNo')"
+                >
+                  Bill No<span class="si" id="si_billNo">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="rvWeight"
+                  onclick="sortBy('rvWeight')"
+                  style="text-align: right"
+                >
+                  RV Weight (g)<span class="si" id="si_rvWeight">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="billValue"
+                  onclick="sortBy('billValue')"
+                  style="text-align: right"
+                >
+                  Bill Value<span class="si" id="si_billValue">⇅</span>
+                </th>
+                <th
+                  class="sortable"
+                  data-col="payment"
+                  onclick="sortBy('payment')"
+                  style="text-align: right"
+                >
+                  Payment<span class="si" id="si_payment">⇅</span>
+                </th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -1031,6 +1092,97 @@
         } catch (e) {}
       }
 
+      let sortCol = "date",
+        sortDir = "desc",
+        allRows = [];
+      const sortCols = [
+        "date",
+        "company",
+        "issueNo",
+        "ivWeight",
+        "billNo",
+        "rvWeight",
+        "billValue",
+        "payment",
+      ];
+      function updateSortIcons() {
+        sortCols.forEach((col) => {
+          const el = document.getElementById("si_" + col);
+          if (!el) return;
+          if (col === sortCol) {
+            el.textContent = sortDir === "asc" ? "▲" : "▼";
+            el.style.opacity = "1";
+            el.style.color = "var(--accent)";
+          } else {
+            el.textContent = "⇅";
+            el.style.opacity = "0.4";
+            el.style.color = "";
+          }
+        });
+      }
+      function sortBy(col) {
+        if (sortCol === col) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortCol = col;
+          sortDir = "asc";
+        }
+        updateSortIcons();
+        renderRows();
+      }
+      function getSortVal(row, col) {
+        switch (col) {
+          case "date":
+            return row.date ? row.date.getTime() : 0;
+          case "company":
+            return (row.companyName || "").toLowerCase();
+          case "issueNo":
+            return (row.issueNo || "").toLowerCase();
+          case "ivWeight":
+            return row.ivWeight || 0;
+          case "billNo":
+            return (row.billNo || "").toLowerCase();
+          case "rvWeight":
+            return row.rvWeight || 0;
+          case "billValue":
+            return row.billValue || 0;
+          case "payment":
+            return row.payment || 0;
+          default:
+            return "";
+        }
+      }
+      function renderRows() {
+        const tbody = document.getElementById("reportTable");
+        const sorted = [...allRows].sort((a, b) => {
+          const va = getSortVal(a, sortCol),
+            vb = getSortVal(b, sortCol);
+          if (va < vb) return sortDir === "asc" ? -1 : 1;
+          if (va > vb) return sortDir === "asc" ? 1 : -1;
+          return 0;
+        });
+        if (!sorted.length) {
+          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = sorted
+          .map((row) => {
+            const dateStr = row.date ? fmt(row.date) : "-";
+            return `<tr>
+            <td>${dateStr}</td>
+            <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.companyName}</td>
+            <td class="mono">${row.issueNo || "-"}</td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            <td class="mono">${row.billNo}</td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
+            <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
+            <td><span class="tag ${row.status === "paid" ? "tag-done" : "tag-pending"}">${row.status === "paid" ? "Paid" : "Unpaid"}</span></td>
+          </tr>`;
+          })
+          .join("");
+      }
+
       async function loadReport() {
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
@@ -1259,27 +1411,15 @@
             totalRV = 0,
             totalBillVal = 0,
             totalPayment = 0;
-
-          tbody.innerHTML = filteredRows
-            .map((row) => {
-              totalIV += row.ivWeight;
-              totalRV += row.rvWeight;
-              totalBillVal += row.billValue;
-              totalPayment += row.payment;
-              const dateStr = row.date ? fmt(row.date) : "-";
-              return `<tr>
-              <td>${dateStr}</td>
-              <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.companyName}</td>
-              <td class="mono">${row.issueNo || "-"}</td>
-              <td style="font-family:'DM Mono',monospace;text-align:right;">${row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
-              <td class="mono">${row.billNo}</td>
-              <td style="font-family:'DM Mono',monospace;text-align:right;">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
-              <td style="font-family:'DM Mono',monospace;text-align:right;">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
-              <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
-              <td><span class="tag ${row.status === "paid" ? "tag-done" : "tag-pending"}">${row.status === "paid" ? "Paid" : "Unpaid"}</span></td>
-            </tr>`;
-            })
-            .join("");
+          filteredRows.forEach((row) => {
+            totalIV += row.ivWeight;
+            totalRV += row.rvWeight;
+            totalBillVal += row.billValue;
+            totalPayment += row.payment;
+          });
+          allRows = filteredRows;
+          updateSortIcons();
+          renderRows();
 
           document.getElementById("footIVWeight").textContent =
             totalIV.toLocaleString("en-IN", {

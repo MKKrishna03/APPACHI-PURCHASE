@@ -786,7 +786,115 @@
         background: rgba(0, 0, 0, 0.1);
         border-radius: 2px;
       }
-
+.reminder-urgency-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+      }
+      .urgency-overdue { background: #fce8e6; color: #e53935; }
+      .urgency-today   { background: #fef0d6; color: #b5620a; }
+      .urgency-tomorrow{ background: #d8f3dc; color: #2d6a4f; }
+      .urgency-soon    { background: #dbeeff; color: #1d6fa4; }
+      .urgency-future  { background: var(--surface-2); color: var(--ink-3); }
+      .rp-section-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        padding: 10px 2px 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 8px;
+      }
+      .ri-card {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 11px 13px;
+        margin-bottom: 7px;
+        cursor: pointer;
+        transition: all 0.15s;
+        position: relative;
+        overflow: hidden;
+      }
+      .ri-card:hover { border-color: var(--border-strong); background: var(--surface); }
+      .ri-card::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        border-radius: 3px 0 0 3px;
+      }
+      .ri-card.overdue::before { background: #e53935; }
+      .ri-card.today::before   { background: #f59e0b; }
+      .ri-card.tomorrow::before{ background: #52b788; }
+      .ri-card.soon::before    { background: #1d6fa4; }
+      .ri-card.future::before  { background: var(--border-strong); }
+      .ri-card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 5px;
+      }
+      .ri-card-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        flex: 1;
+        line-height: 1.3;
+      }
+      .ri-card-time {
+        font-size: 11px;
+        color: var(--ink-3);
+        margin-top: 3px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .ri-card-countdown {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 99px;
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+      .ri-card-countdown.urgent { background: #fce8e6; color: #e53935; }
+      .ri-card-countdown.warning { background: #fef0d6; color: #b5620a; }
+      .ri-card-body {
+        display: none;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+      .ri-card-body.show { display: block; }
+      .ri-del-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--ink-3);
+        font-size: 12px;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.15s;
+      }
+      .ri-del-btn:hover { background: #fce8e6; color: #b5301e; }
       .reminder-item {
         background: var(--surface-2);
         border: 1px solid var(--border);
@@ -925,43 +1033,88 @@
         background: #245c43;
       }
 
-      /* Toast alert */
-      .reminder-toast {
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        background: var(--ink);
-        color: #fff;
-        border-radius: 14px;
-        padding: 14px 18px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        z-index: 9999;
-        max-width: 320px;
-        transform: translateY(80px);
-        opacity: 0;
-        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        border-left: 4px solid var(--accent-2);
+      /* Alert Card */
+      .alert-card {
+        background: #1a1a2e;
+        border-radius: 16px;
+        padding: 0;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+        pointer-events: all;
+        animation: alertSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+        overflow: hidden;
+        min-width: 320px;
       }
-      .reminder-toast.show {
-        transform: translateY(0);
-        opacity: 1;
+      @keyframes alertSlideIn {
+        from { transform: translateX(120%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
       }
-      .rt-label {
+      .alert-card-bar {
+        height: 4px;
+        width: 100%;
+      }
+      .alert-card-bar.overdue { background: linear-gradient(90deg,#e53935,#ff7043); }
+      .alert-card-bar.today { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+      .alert-card-bar.tomorrow { background: linear-gradient(90deg,#52b788,#2d6a4f); }
+      .alert-card-body { padding: 14px 16px 12px; }
+      .alert-card-label {
         font-size: 10px;
         font-weight: 700;
-        color: var(--accent-2);
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin-bottom: 4px;
+        margin-bottom: 5px;
       }
-      .rt-title {
-        font-size: 14px;
+      .alert-card-label.overdue { color: #ff7043; }
+      .alert-card-label.today { color: #fbbf24; }
+      .alert-card-label.tomorrow { color: #52b788; }
+      .alert-card-title {
+        font-size: 15px;
         font-weight: 700;
-        margin-bottom: 3px;
+        color: #fff;
+        margin-bottom: 4px;
+        line-height: 1.3;
       }
-      .rt-sub {
+      .alert-card-sub {
+        font-size: 12px;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 12px;
+      }
+      .alert-card-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .snooze-btn {
+        padding: 5px 10px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 99px;
+        color: rgba(255,255,255,0.7);
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.6);
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.15s;
+      }
+      .snooze-btn:hover {
+        background: rgba(255,255,255,0.14);
+        color: #fff;
+        border-color: rgba(255,255,255,0.25);
+      }
+      .dismiss-btn {
+        padding: 5px 12px;
+        background: rgba(229,57,53,0.15);
+        border: 1px solid rgba(229,57,53,0.3);
+        border-radius: 99px;
+        color: #ff7043;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.15s;
+        margin-left: auto;
+      }
+      .dismiss-btn:hover {
+        background: rgba(229,57,53,0.28);
       }
 
       @media (max-width: 900px) {
@@ -1101,6 +1254,12 @@
             >
               Chittai Report
             </div>
+            <div
+              class="sidebar-option"
+              onclick="window.location.href = '/reports/purchase'"
+            >
+              Purchase Report
+            </div>
           </div>
         </div>
       <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.08);margin-top:auto;">
@@ -1135,8 +1294,15 @@
         </button>
       </div>
 
-      <!-- Top 3 Cards Row -->
-      <div class="cards-row">
+      <!-- Top Cards Row -->
+      <div class="cards-row" style="grid-template-columns: 1fr;">
+        <!-- LABOUR GROUP -->
+        <div style="background:linear-gradient(135deg,#f0faf4 0%,#e8f5ee 100%);border:1.5px solid #b7dfc8;border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <span style="font-size:16px;">🧵</span>
+            <span style="font-size:12px;font-weight:800;color:#2d6a4f;text-transform:uppercase;letter-spacing:0.1em;">Labour</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
         <!-- Card 1: Pending Issue Vouchers -->
         <div class="dash-card">
           <div class="dash-card-header">
@@ -1158,7 +1324,7 @@
         <!-- Card 2: Pending Payments -->
         <div class="dash-card">
           <div class="dash-card-header">
-            <span class="dash-card-title">Pending Payments</span>
+            <span class="dash-card-title">Pending Payments for Receipt Vouchers</span>
             <span class="dash-card-badge" id="pendingPayCount">0</span>
           </div>
           <input
@@ -1173,28 +1339,43 @@
           </div>
         </div>
 
-        <!-- Card 3: Today's Activity -->
+        
+      </div>
+        </div>
+
+        <!-- PURCHASE GROUP -->
+        <div style="background:linear-gradient(135deg,#eef6fd 0%,#e0eefa 100%);border:1.5px solid #a8ccec;border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <span style="font-size:16px;">🧾</span>
+            <span style="font-size:12px;font-weight:800;color:#1d6fa4;text-transform:uppercase;letter-spacing:0.1em;">Purchase</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+
+        <!-- Card 3: Pending Purchase Bills for Payments -->
         <div class="dash-card">
           <div class="dash-card-header">
-            <span class="dash-card-title">Today's Activity</span>
-            <input
-              type="date"
-              id="activityDate"
-              style="
-                font-size: 11px;
-                padding: 4px 8px;
-                border: 1px solid var(--border-strong);
-                border-radius: 6px;
-                background: var(--surface-2);
-                color: var(--ink);
-                font-family: inherit;
-              "
-              onchange="loadActivity(this.value)"
-            />
+            <span class="dash-card-title">Pending Purchase Bills for Payments</span>
+            <span class="dash-card-badge" id="pendingPurchasePayCount">0</span>
           </div>
-          <div class="pending-list" id="activityList">
+          <input type="text" class="pending-search" id="pendingPurchasePaySearch" placeholder="Search..." oninput="filterPendingPurchasePay(this.value)" />
+          <div class="pending-list" id="pendingPurchasePayList">
             <div class="empty-msg">Loading...</div>
           </div>
+        </div>
+
+        <!-- Card 4: Pending Payment for Purchase Bill -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-title">Pending Payment for Purchase Bill</span>
+            <span class="dash-card-badge" id="pendingPurchasePaidCount">0</span>
+          </div>
+          <input type="text" class="pending-search" id="pendingPurchasePaidSearch" placeholder="Search..." oninput="filterPendingPurchasePaid(this.value)" />
+          <div class="pending-list" id="pendingPurchasePaidList">
+            <div class="empty-msg">Loading...</div>
+          </div>
+        </div>
+
+      </div>
         </div>
       </div>
     </div>
@@ -1382,6 +1563,22 @@
 
     <iframe id="chittaiFrame" src="/chittai" style="display: none"></iframe>
 
+    <!-- Today's Activity Floating Button -->
+    <div id="activityToggleBtn" onclick="toggleActivityPanel()" style="position:fixed;bottom:20px;right:20px;z-index:100;background:var(--accent);color:#fff;padding:8px 16px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(45,106,79,0.3);display:flex;align-items:center;gap:8px;transition:all 0.2s;">
+      📋 Today's Activity
+    </div>
+
+    <!-- Today's Activity Floating Panel -->
+    <div id="activityPanel" style="display:none;position:fixed;bottom:60px;right:20px;z-index:99;width:340px;max-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;flex-direction:column;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">Today's Activity</span>
+        <input type="date" id="activityDate" style="font-size:11px;padding:4px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-2);color:var(--ink);font-family:inherit;" onchange="loadActivity(this.value)" />
+      </div>
+      <div class="pending-list" id="activityList" style="overflow-y:auto;padding:10px;max-height:400px;">
+        <div class="empty-msg">Loading...</div>
+      </div>
+    </div>
+
     <!-- Clock Widget -->
     <div
       id="dashClock"
@@ -1405,136 +1602,53 @@
     ></div>
 
     <!-- Reminder Panel -->
-    <div class="reminder-panel" id="reminderPanel">
-      <div class="rp-header">
-        <div class="rp-title">🔔 Reminders</div>
-        <button class="rp-close" onclick="toggleReminderPanel()">✕</button>
+<div class="reminder-panel" id="reminderPanel">
+  <div class="rp-header">
+    <div class="rp-title">🔔 Reminders</div>
+    <button class="rp-close" onclick="toggleReminderPanel()">✕</button>
+  </div>
+  <button class="rp-add-btn" onclick="toggleRpForm()">＋ Add Reminder</button>
+  <div class="rp-form" id="rpForm">
+    <div class="rp-field">
+      <label>Title</label>
+      <input type="text" id="ri-title" placeholder="Appointment title" />
+    </div>
+    <div class="rp-form-row">
+      <div class="rp-field">
+        <label>Date</label>
+        <input type="date" id="ri-date" />
       </div>
-      <button class="rp-add-btn" onclick="toggleRpForm()">
-        ＋ Add Reminder
-      </button>
-      <div class="rp-form" id="rpForm">
-        <div class="rp-field">
-          <label>Title</label>
-          <input type="text" id="ri-title" placeholder="Appointment title" />
+      <div class="rp-field">
+        <label>Time</label>
+        <div style="display:flex;gap:6px">
+          <select id="ri-hour" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+            <option value="01">01</option><option value="02">02</option><option value="03">03</option>
+            <option value="04">04</option><option value="05">05</option><option value="06">06</option>
+            <option value="07">07</option><option value="08">08</option><option value="09">09</option>
+            <option value="10">10</option><option value="11">11</option><option value="12" selected>12</option>
+          </select>
+          <input id="ri-min" type="number" min="0" max="59" value="00" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);" />
+          <select id="ri-ampm" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+            <option value="AM" selected>AM</option><option value="PM">PM</option>
+          </select>
         </div>
-        <div class="rp-form-row">
-          <div class="rp-field">
-            <label>Date</label>
-            <input type="date" id="ri-date" />
-          </div>
-          <div class="rp-field">
-            <label>Time</label>
-            <div style="display: flex; gap: 6px">
-              <select
-                id="ri-hour"
-                style="
-                  flex: 1;
-                  padding: 8px 10px;
-                  border: 1px solid var(--border-strong);
-                  border-radius: 8px;
-                  font-size: 12px;
-                  font-family: inherit;
-                  background: var(--surface);
-                  color: var(--ink);
-                "
-              >
-                <option value="01">01</option>
-                <option value="02">02</option>
-                <option value="03">03</option>
-                <option value="04">04</option>
-                <option value="05">05</option>
-                <option value="06">06</option>
-                <option value="07">07</option>
-                <option value="08">08</option>
-                <option value="09">09</option>
-                <option value="10">10</option>
-                <option value="11">11</option>
-                <option value="12" selected>12</option>
-              </select>
-              <select
-                id="ri-min"
-                style="
-                  flex: 1;
-                  padding: 8px 10px;
-                  border: 1px solid var(--border-strong);
-                  border-radius: 8px;
-                  font-size: 12px;
-                  font-family: inherit;
-                  background: var(--surface);
-                  color: var(--ink);
-                "
-              >
-                <option value="00" selected>00</option>
-                <option value="05">05</option>
-                <option value="10">10</option>
-                <option value="15">15</option>
-                <option value="20">20</option>
-                <option value="25">25</option>
-                <option value="30">30</option>
-                <option value="35">35</option>
-                <option value="40">40</option>
-                <option value="45">45</option>
-                <option value="50">50</option>
-                <option value="55">55</option>
-              </select>
-              <select
-                id="ri-ampm"
-                style="
-                  flex: 1;
-                  padding: 8px 10px;
-                  border: 1px solid var(--border-strong);
-                  border-radius: 8px;
-                  font-size: 12px;
-                  font-family: inherit;
-                  background: var(--surface);
-                  color: var(--ink);
-                "
-              >
-                <option value="AM" selected>AM</option>
-                <option value="PM">PM</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <
-        <div class="rp-field" style="position: relative">
-          <label>Notes &amp; Company (type @ to tag company)</label>
-          <textarea
-            id="ri-notes"
-            placeholder="Add notes... type @ to tag a company"
-            style="height: 70px"
-          ></textarea>
-          <div
-            id="companyDropdown"
-            style="
-              display: none;
-              position: absolute;
-              left: 0;
-              right: 0;
-              background: var(--surface);
-              border: 1px solid var(--border-strong);
-              border-radius: 8px;
-              box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-              z-index: 100;
-              max-height: 160px;
-              overflow-y: auto;
-            "
-          ></div>
-        </div>
-        <button class="rp-save" onclick="saveReminder()">Save Reminder</button>
-      </div>
-      <div class="rp-list" id="rpList">
-        <div class="ri-empty">No reminders yet</div>
       </div>
     </div>
+    <div class="rp-field" style="position:relative">
+      <label>Notes &amp; Company (type @ to tag company)</label>
+      <textarea id="ri-notes" placeholder="Add notes... type @ to tag a company" style="height:70px"></textarea>
+      <div id="companyDropdown" style="display:none;position:absolute;left:0;right:0;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:100;max-height:160px;overflow-y:auto;"></div>
+    </div>
+    <button class="rp-save" onclick="saveReminder()">Save Reminder</button>
+  </div>
+  <div class="rp-list" id="rpList"><div class="ri-empty">No reminders yet</div></div>
+</div>
 
-    <!-- Toast -->
-    <div class="reminder-toast" id="reminderToast">
-      <div class="rt-label" id="toastLabel">Reminder</div>
-      <div class="rt-title" id="toastTitle"></div>
-      <div class="rt-sub" id="toastSub"></div>
-    </div>
+<!-- Active Alert Overlay -->
+<div id="alertOverlay" style="display:none;position:fixed;inset:0;z-index:9998;pointer-events:none;"></div>
+
+<!-- Alert Cards Container -->
+<div id="alertCardsContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:12px;max-width:360px;pointer-events:none;"></div>
 
     <!-- Alert Sound -->
     <audio
@@ -2107,9 +2221,21 @@
               .filter((v) => v.linked_labour_id)
               .map((v) => v.linked_labour_id),
           );
-          const receipts = labourRes.filter(
-            (b) => b.voucher_type === "Receipt Voucher" && !linkedIds.has(b.id),
+          const paidBillNos = new Set(
+            voucherRes
+              .filter((v) => v.bill_no)
+              .map((v) => v.bill_no),
           );
+          const receipts = labourRes.filter(
+            (b) => b.voucher_type === "Receipt Voucher" 
+              && !linkedIds.has(b.id) 
+              && !paidBillNos.has(b.receipt_bill_no)
+              && !paidBillNos.has(b.issue_number),
+          );
+          console.log("VOUCHERS:", voucherRes.map(v=>({bill_no:v.bill_no,entry_type:v.entry_type,linked_labour_id:v.linked_labour_id})));
+          console.log("RECEIPTS SHOWING:", receipts.map(r=>({id:r.id,receipt_bill_no:r.receipt_bill_no,issue_number:r.issue_number})));
+          console.log("PAID BILL NOS:", [...paidBillNos]);
+          console.log("LINKED IDS:", [...linkedIds]);
           receipts.forEach((b) => {
             const p = profileRes.find(
               (c) => String(c.id) === String(b.profile_id),
@@ -2207,6 +2333,14 @@
         document.getElementById("reminderPanel").classList.toggle("open");
       };
 
+      document.addEventListener("click", function(e) {
+        const panel = document.getElementById("reminderPanel");
+        const bellBtn = document.getElementById("bellBtn");
+        if (panel.classList.contains("open") && !panel.contains(e.target) && !bellBtn.contains(e.target)) {
+          panel.classList.remove("open");
+        }
+      });
+
       // @ mention autocomplete
       document
         .getElementById("ri-notes")
@@ -2294,13 +2428,16 @@
       };
 
       window.saveReminder = async function () {
+        const btn = document.querySelector('.rp-save');
+        if (btn.disabled) return;
+        btn.disabled = true;
         const title = document.getElementById("ri-title").value.trim();
         const notesVal = document.getElementById("ri-notes").value;
         const companyMatch = notesVal.match(/@([\w\s]+?)(?=\s|$)/);
         const company = companyMatch ? companyMatch[1].trim() : "";
         const date = document.getElementById("ri-date").value;
         let h = parseInt(document.getElementById("ri-hour").value);
-        const m = document.getElementById("ri-min").value;
+        const m = String(parseInt(document.getElementById("ri-min").value) || 0).padStart(2, "0");
         const ampm = document.getElementById("ri-ampm").value;
         if (ampm === "PM" && h !== 12) h += 12;
         if (ampm === "AM" && h === 12) h = 0;
@@ -2325,6 +2462,8 @@
           document.getElementById("ri-notes").value = "";
           document.getElementById("rpForm").classList.remove("show");
           loadReminders();
+        } else {
+          btn.disabled = false;
         }
       };
 
@@ -2347,78 +2486,108 @@
         return `${String(h12).padStart(2, "0")}:${String(mm).padStart(2, "0")} ${ap}`;
       }
 
+      function getUrgencyClass(dateStr) {
+        const _n = new Date();
+        const pad = (n) => String(n).padStart(2,'0');
+        const today = `${_n.getFullYear()}-${pad(_n.getMonth()+1)}-${pad(_n.getDate())}`;
+        const tom = new Date(_n); tom.setDate(tom.getDate()+1);
+        const tomorrow = `${tom.getFullYear()}-${pad(tom.getMonth()+1)}-${pad(tom.getDate())}`;
+        const d = dateStr.slice(0,10);
+        if (d < today) return 'overdue';
+        if (d === today) return 'today';
+        if (d === tomorrow) return 'tomorrow';
+        const diff = (new Date(d) - new Date(today)) / 86400000;
+        if (diff <= 7) return 'soon';
+        return 'future';
+      }
+
+      function getCountdown(dateStr, timeStr) {
+        const now = new Date();
+        const [y,mo,day] = dateStr.slice(0,10).split('-').map(Number);
+        const [h,m] = timeStr.slice(0,5).split(':').map(Number);
+        const target = new Date(y, mo-1, day, h, m);
+        const diff = target - now;
+        if (diff < 0) {
+          const mins = Math.round(-diff/60000);
+          if (mins < 60) return { text: `${mins}m overdue`, cls: 'urgent' };
+          if (mins < 1440) return { text: `${Math.round(mins/60)}h overdue`, cls: 'urgent' };
+          return { text: `${Math.round(mins/1440)}d overdue`, cls: 'urgent' };
+        }
+        const mins = Math.round(diff/60000);
+        if (mins < 60) return { text: `in ${mins}m`, cls: 'urgent' };
+        if (mins < 120) return { text: `in ${Math.round(mins/60)}h ${mins%60}m`, cls: 'warning' };
+        if (mins < 1440) return { text: `in ${Math.round(mins/60)}h`, cls: 'warning' };
+        if (mins < 2880) return { text: 'tomorrow', cls: '' };
+        return { text: `in ${Math.round(mins/1440)}d`, cls: '' };
+      }
+
       function renderReminders() {
         const el = document.getElementById("rpList");
         if (!reminders.length) {
-          el.innerHTML =
-            '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No reminders yet<br><span style="font-size:11px;opacity:0.6;">Click + Add Reminder to create one</span></div>';
+          el.innerHTML = '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No reminders yet<br><span style="font-size:11px;opacity:0.6;">Click + Add Reminder to create one</span></div>';
           return;
         }
-        const _n = new Date();
-        const _p = (n) => String(n).padStart(2, "0");
-        const today = `${_n.getFullYear()}-${_p(_n.getMonth() + 1)}-${_p(_n.getDate())}`;
-        const _t = new Date(_n);
-        _t.setDate(_t.getDate() + 1);
-        const tomorrow = `${_t.getFullYear()}-${_p(_t.getMonth() + 1)}-${_p(_t.getDate())}`;
 
-        // Group by date
-        const groups = {};
-        reminders.forEach((r) => {
-          const d = r.date.slice(0, 10);
-          if (!groups[d]) groups[d] = [];
-          groups[d].push(r);
+        const groups = { overdue:[], today:[], tomorrow:[], soon:[], future:[] };
+        reminders.forEach(r => {
+          const cls = getUrgencyClass(r.date);
+          groups[cls].push(r);
         });
 
-        el.innerHTML = Object.entries(groups)
-          .map(([date, items]) => {
-            const isToday = date === today;
-            const isTomorrow = date === tomorrow;
-            const labelColor = isToday
-              ? "#e53935"
-              : isTomorrow
-                ? "var(--amber)"
-                : "var(--ink-3)";
-            const label = isToday
-              ? "TODAY"
-              : isTomorrow
-                ? "TOMORROW"
-                : toIST(date + "T00:00:00Z").toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  });
-            return `
-            <div style="margin-bottom:16px;">
-              <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:${labelColor};text-transform:uppercase;margin-bottom:8px;padding-left:2px;">${label}</div>
-              ${items
-                .map((r) => {
-                  const notes = r.notes || "";
-                  const companyTag = notes.match(/@([\w\s]+?)(?=\s|$)/);
-                  const company =
-                    r.company || (companyTag ? companyTag[1].trim() : "");
-                  const cleanNotes = notes
-                    .replace(/@[\w\s]+?(?=\s|$)/g, "")
-                    .trim();
-                  return `
-                <div id="ri_${r.id}" onclick="toggleReminderExpand(${r.id})" style="cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;border-left:3px solid ${isToday ? "#e53935" : isTomorrow ? "var(--amber)" : "var(--accent)"};transition:background 0.15s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface-2)'">
-                  <div style="display:flex;gap:10px;align-items:flex-start;">
-                    <div style="flex:1;min-width:0;">
-                      <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px;">${r.title || cleanNotes.slice(0, 40)}</div>
-                      <div style="font-size:11px;color:var(--ink-3);">⏰ ${fmt12(r.time)} ${company ? `· <span style="color:var(--accent);font-weight:600;">@${company}</span>` : ""}</div>
+        const groupLabels = {
+          overdue: '⚠ Overdue',
+          today: '🔴 Today',
+          tomorrow: '🟡 Tomorrow',
+          soon: '🔵 This Week',
+          future: '📅 Upcoming'
+        };
+
+        let html = '';
+        for (const [key, items] of Object.entries(groups)) {
+          if (!items.length) continue;
+          html += `<div class="rp-section-label">${groupLabels[key]} <span style="font-weight:400;opacity:0.6;">(${items.length})</span></div>`;
+          items.sort((a,b) => {
+            const da = a.date.slice(0,10)+' '+a.time.slice(0,5);
+            const db = b.date.slice(0,10)+' '+b.time.slice(0,5);
+            return da.localeCompare(db);
+          });
+          items.forEach(r => {
+            const cd = getCountdown(r.date, r.time);
+            const notes = r.notes || '';
+            const companyMatch = notes.match(/@([\w\s]+?)(?=\s|$)/);
+            const company = r.company || (companyMatch ? companyMatch[1].trim() : '');
+            const cleanNotes = notes.replace(/@[\w\s]+?(?=\s|$)/g,'').trim();
+            const urgBadgeMap = { overdue:'urgency-overdue', today:'urgency-today', tomorrow:'urgency-tomorrow', soon:'urgency-soon', future:'urgency-future' };
+            const urgLabelMap = { overdue:'Overdue', today:'Today', tomorrow:'Tomorrow', soon:'This Week', future:'Upcoming' };
+            html += `
+              <div class="ri-card ${key}" onclick="toggleRiCard(${r.id})">
+                <div class="ri-card-top">
+                  <div style="flex:1">
+                    <div class="ri-card-title">${r.title || cleanNotes.slice(0,40) || '(no title)'}</div>
+                    <div class="ri-card-time">
+                      <span>⏰ ${fmt12(r.time)} · ${toIST(r.date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}</span>
+                      ${cd.text ? `<span class="ri-card-countdown ${cd.cls}">${cd.text}</span>` : ''}
                     </div>
-                    <button onclick="event.stopPropagation();deleteReminder(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--ink-3);font-size:13px;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;" onmouseover="this.style.background='#fce8e6';this.style.color='#b5301e'" onmouseout="this.style.background='';this.style.color='var(--ink-3)'">✕</button>
                   </div>
-                  <div id="ri_body_${r.id}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-                    ${company ? `<div style="margin-bottom:4px;"><span style="display:inline-block;padding:1px 8px;background:var(--accent-light);color:var(--accent);border-radius:99px;font-size:10px;font-weight:600;">@${company}</span></div>` : ""}
-                    ${cleanNotes ? `<div style="font-size:12px;color:var(--ink-2);line-height:1.5;">${cleanNotes}</div>` : "<div style='font-size:11px;color:var(--ink-3);font-style:italic;'>No notes</div>"}
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span class="reminder-urgency-badge ${urgBadgeMap[key]}">${urgLabelMap[key]}</span>
+                    <button class="ri-del-btn" onclick="event.stopPropagation();deleteReminder(${r.id})">✕</button>
                   </div>
-                </div>`;
-                })
-                .join("")}
-            </div>`;
-          })
-          .join("");
+                </div>
+                <div class="ri-card-body" id="ri_body_${r.id}">
+                  ${company ? `<div style="margin-bottom:5px;"><span style="display:inline-block;padding:1px 8px;background:var(--accent-light);color:var(--accent);border-radius:99px;font-size:10px;font-weight:600;">@${company}</span></div>` : ''}
+                  ${cleanNotes ? `<div style="line-height:1.5;">${cleanNotes}</div>` : '<div style="font-size:11px;color:var(--ink-3);font-style:italic;">No notes</div>'}
+                </div>
+              </div>`;
+          });
+        }
+        el.innerHTML = html;
       }
+
+      window.toggleRiCard = function(id) {
+        const body = document.getElementById(`ri_body_${id}`);
+        if (body) body.classList.toggle('show');
+      };
 
       function updateBellBadge() {
         const _n2 = new Date();
@@ -2439,91 +2608,104 @@
         else document.getElementById("bellBtn").classList.remove("ringing");
       }
 
-      function showToast(label, title, sub) {
-        document.getElementById("toastLabel").textContent = label;
-        document.getElementById("toastTitle").textContent = title;
-        document.getElementById("toastSub").textContent = sub;
-        const t = document.getElementById("reminderToast");
-        t.classList.add("show");
-        try {
-          document.getElementById("alertSound").play();
-        } catch (e) {}
-        setTimeout(() => t.classList.remove("show"), 6000);
+      function showToast() {} // replaced by showAlertCard
+
+      let activeAlerts = {};
+
+      function showAlertCard(r, urgencyClass) {
+        if (activeAlerts[r.id]) return;
+        activeAlerts[r.id] = true;
+
+        const container = document.getElementById('alertCardsContainer');
+        const card = document.createElement('div');
+        card.className = 'alert-card';
+        card.id = `alert_${r.id}`;
+
+        const labelMap = { overdue:'⚠ Overdue', today:'🔴 Right Now', tomorrow:'🟡 Tomorrow' };
+        const label = labelMap[urgencyClass] || '🔔 Reminder';
+
+        card.innerHTML = `
+          <div class="alert-card-bar ${urgencyClass}"></div>
+          <div class="alert-card-body">
+            <div class="alert-card-label ${urgencyClass}">${label}</div>
+            <div class="alert-card-title">${r.title || '(no title)'}</div>
+            <div class="alert-card-sub">⏰ ${fmt12(r.time)} ${r.company ? '· @'+r.company : ''} · ${toIST(r.date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
+            <div class="alert-card-actions">
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},30)">+30m</button>
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},60)">+1h</button>
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},120)">+2h</button>
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},180)">+3h</button>
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},360)">+6h</button>
+              <button class="snooze-btn" onclick="snoozeReminder(${r.id},720)">+12h</button>
+              <button class="dismiss-btn" onclick="dismissAlertCard(${r.id})">Dismiss</button>
+            </div>
+          </div>`;
+
+        container.appendChild(card);
+        try { document.getElementById('alertSound').play(); } catch(e) {}
+        document.getElementById('bellBtn').classList.add('ringing');
+        setTimeout(() => document.getElementById('bellBtn').classList.remove('ringing'), 1000);
+        if (Notification.permission === 'granted') {
+          new Notification('🔔 ' + (r.title||'Reminder'), { body: (r.company||'') + ' at ' + r.time.slice(0,5) });
+        }
       }
+
+      window.dismissAlertCard = function(id) {
+        const card = document.getElementById(`alert_${id}`);
+        if (card) {
+          card.style.animation = 'alertSlideIn 0.3s reverse forwards';
+          setTimeout(() => card.remove(), 280);
+        }
+        delete activeAlerts[id];
+      };
+
+      window.snoozeReminder = async function(id, minutes) {
+        const r = reminders.find(x => x.id === id);
+        if (!r) return;
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + minutes);
+        const pad = (n) => String(n).padStart(2,'0');
+        const newDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+        const newTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        await fetch(`/api/reminders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'snooze', date: newDate, time: newTime })
+        });
+        dismissAlertCard(id);
+        delete activeAlerts[id];
+        r.alerted_on_day = false;
+        r.alerted_day_before = false;
+        r.date = newDate;
+        r.time = newTime + ':00';
+        loadReminders();
+      };
 
       function checkReminders() {
         const now = new Date();
-        const pad = (n) => String(n).padStart(2, "0");
-        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const tom = new Date(now);
-        tom.setDate(tom.getDate() + 1);
-        const tomorrowStr = `${tom.getFullYear()}-${pad(tom.getMonth() + 1)}-${pad(tom.getDate())}`;
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-
+        const pad = (n) => String(n).padStart(2,'0');
+        const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+        const tom = new Date(now); tom.setDate(tom.getDate()+1);
+        const tomorrowStr = `${tom.getFullYear()}-${pad(tom.getMonth()+1)}-${pad(tom.getDate())}`;
+        const nowMins = now.getHours()*60 + now.getMinutes();
         reminders.forEach(async (r) => {
-          const rDate = r.date.slice(0, 10); // already stored as text date, no conversion needed
-          const [rH, rM] = r.time.slice(0, 5).split(":").map(Number);
-          const rMins = rH * 60 + rM;
-          const rTime = r.time.slice(0, 5);
-
-          // Day before: alert if today is the day before AND current time >= reminder time AND not yet alerted
-          if (
-            rDate === tomorrowStr &&
-            nowMins >= rMins &&
-            !r.alerted_day_before
-          ) {
-            showToast("⏰ Tomorrow", r.title, `${r.company || ""} — ${rTime}`);
-            if (Notification.permission === "granted")
-              new Notification("Reminder Tomorrow: " + r.title, {
-                body: (r.company || "") + " at " + rTime,
-              });
-            await fetch(`/api/reminders/${r.id}/alerted`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "day_before" }),
-            });
-            r.alerted_day_before = true;
-          }
-
-          // Past overdue: alert if date already passed and never alerted
-          const rDateObj = new Date(rDate);
-          const todayDateObj = new Date(todayStr);
-          if (rDateObj < todayDateObj && !r.alerted_on_day) {
-            showToast(
-              "⚠ Overdue",
-              r.title,
-              `${r.company || ""} — was ${rDate} ${rTime}`,
-            );
-            if (Notification.permission === "granted")
-              new Notification("⚠ Overdue: " + r.title, {
-                body: `Was scheduled ${rDate} at ${rTime}`,
-              });
-            await fetch(`/api/reminders/${r.id}/alerted`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "on_day" }),
-            });
+          const rDate = r.date.slice(0,10);
+          const [rH,rM] = r.time.slice(0,5).split(':').map(Number);
+          const rMins = rH*60 + rM;
+          if (rDate < todayStr && !r.alerted_on_day) {
+            showAlertCard(r, 'overdue');
+            await fetch(`/api/reminders/${r.id}/alerted`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'on_day'}) });
             r.alerted_on_day = true;
           }
-          // Same day: alert if today is the day AND current time >= reminder time AND not yet alerted
           if (rDate === todayStr && nowMins >= rMins && !r.alerted_on_day) {
-            showToast("🔴 NOW", r.title, `${r.company || ""} — ${rTime}`);
-            if (Notification.permission === "granted")
-              new Notification("🔴 Reminder: " + r.title, {
-                body: (r.company || "") + " at " + rTime,
-              });
-            await fetch(`/api/reminders/${r.id}/alerted`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "on_day" }),
-            });
+            showAlertCard(r, 'today');
+            await fetch(`/api/reminders/${r.id}/alerted`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'on_day'}) });
             r.alerted_on_day = true;
-            document.getElementById("bellBtn").classList.add("ringing");
-            setTimeout(
-              () =>
-                document.getElementById("bellBtn").classList.remove("ringing"),
-              1000,
-            );
+          }
+          if (rDate === tomorrowStr && nowMins >= rMins && !r.alerted_day_before) {
+            showAlertCard(r, 'tomorrow');
+            await fetch(`/api/reminders/${r.id}/alerted`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'day_before'}) });
+            r.alerted_day_before = true;
           }
         });
       }
@@ -2562,9 +2744,163 @@
       loadReminders();
       loadPendingVouchers();
       loadPendingPayments();
+      loadPendingPurchasePayments();
+      loadPendingPurchasePaid();
       const _actDate = document.getElementById("activityDate");
       _actDate.value = new Date().toISOString().split("T")[0];
       loadActivity(_actDate.value);
+// ── Pending Purchase Bills for Payments (purchases with no linked payment voucher) ──
+      async function loadPendingPurchasePayments() {
+        try {
+          const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
+            fetch("/api/purchases/list").then(r => r.json()),
+            fetch("/api/vouchers/list").then(r => r.json()),
+            fetch("/api/profile/all").then(r => r.json()),
+          ]);
+          const paidBillNos = new Set(
+            vouchersRes.filter(v => v.entry_type === "against" && v.bill_no && (v.voucher_type === "Payment Voucher" || v.voucher_type === "Chittai Payment")).map(v => v.bill_no)
+          );
+          const unpaid = purchasesRes.filter(p => !paidBillNos.has(p.bill_no));
+          unpaid.forEach(p => {
+            const prof = profileRes.find(c => String(c.id) === String(p.profile_id));
+            if (prof) p.company_name = prof.company || prof.alias;
+          });
+          window._pendingPurchasePayVouchers = unpaid;
+          document.getElementById("pendingPurchasePayCount").textContent = unpaid.length;
+          renderPendingPurchasePay(unpaid);
+        } catch(e) {
+          document.getElementById("pendingPurchasePayList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderPendingPurchasePay(list) {
+        const el = document.getElementById("pendingPurchasePayList");
+        if (!list.length) { el.innerHTML = '<div class="empty-msg">No pending purchase bills</div>'; return; }
+        const grouped = {};
+        list.forEach(p => { const k = p.company_name || "-"; if (!grouped[k]) grouped[k] = []; grouped[k].push(p); });
+        el.innerHTML = Object.entries(grouped).map(([company, bills], i) => `
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="togglePurchasePayGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} bill${bills.length > 1 ? "s" : ""}</div>
+              </div>
+              <span id="pparrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="ppgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+              ${bills.map(b => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                  <div>
+                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">${b.bill_no || "-"}</div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="padding:2px 8px;border-radius:99px;background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:700;">Unpaid</span>
+                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.net_value||b.total_value||0).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>`).join("")}
+            </div>
+          </div>`).join("");
+      }
+
+      function togglePurchasePayGroup(event, i) {
+        event.stopPropagation();
+        const body = document.getElementById(`ppgroup_${i}`);
+        const arrow = document.getElementById(`pparrow_${i}`);
+        const isOpen = body.style.display === "block";
+        document.querySelectorAll('[id^="ppgroup_"]').forEach(g => g.style.display = "none");
+        document.querySelectorAll('[id^="pparrow_"]').forEach(a => a.style.transform = "");
+        if (!isOpen) { body.style.display = "block"; arrow.style.transform = "rotate(180deg)"; }
+      }
+
+      function filterPendingPurchasePay(q) {
+        const all = window._pendingPurchasePayVouchers || [];
+        const f = q.toLowerCase();
+        renderPendingPurchasePay(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
+      }
+
+      // ── Pending Payment for Purchase Bill (purchases with payment voucher but no purchase entry) ──
+      async function loadPendingPurchasePaid() {
+        try {
+          const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
+            fetch("/api/purchases/list").then(r => r.json()),
+            fetch("/api/vouchers/list").then(r => r.json()),
+            fetch("/api/profile/all").then(r => r.json()),
+          ]);
+          const purchaseBillNos = new Set(purchasesRes.map(p => p.bill_no).filter(Boolean));
+          const paymentVouchers = vouchersRes.filter(v =>
+            (v.voucher_type === "Payment Voucher" || v.voucher_type === "Chittai Payment") &&
+            v.entry_type === "against" && v.bill_no && !purchaseBillNos.has(v.bill_no)
+          );
+          paymentVouchers.forEach(v => {
+            const prof = profileRes.find(c => String(c.id) === String(v.profile_id));
+            if (prof) v.company_name = prof.company || prof.alias;
+          });
+          window._pendingPurchasePaidVouchers = paymentVouchers;
+          document.getElementById("pendingPurchasePaidCount").textContent = paymentVouchers.length;
+          renderPendingPurchasePaid(paymentVouchers);
+        } catch(e) {
+          document.getElementById("pendingPurchasePaidList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderPendingPurchasePaid(list) {
+        const el = document.getElementById("pendingPurchasePaidList");
+        if (!list.length) { el.innerHTML = '<div class="empty-msg">No pending entries</div>'; return; }
+        const grouped = {};
+        list.forEach(v => { const k = v.company_name || "-"; if (!grouped[k]) grouped[k] = []; grouped[k].push(v); });
+        el.innerHTML = Object.entries(grouped).map(([company, bills], i) => `
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="togglePurchasePaidGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--blue);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} payment${bills.length > 1 ? "s" : ""} without purchase entry</div>
+              </div>
+              <span id="pparrow2_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="ppgroup2_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+              ${bills.map(b => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                  <div>
+                    <div style="font-weight:600;color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;">${b.bill_no || "-"}</div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="padding:2px 8px;border-radius:99px;background:var(--blue-light);color:var(--blue);font-size:10px;font-weight:700;">No Bill</span>
+                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.total_value||0).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>`).join("")}
+            </div>
+          </div>`).join("");
+      }
+
+      function togglePurchasePaidGroup(event, i) {
+        event.stopPropagation();
+        const body = document.getElementById(`ppgroup2_${i}`);
+        const arrow = document.getElementById(`pparrow2_${i}`);
+        const isOpen = body.style.display === "block";
+        document.querySelectorAll('[id^="ppgroup2_"]').forEach(g => g.style.display = "none");
+        document.querySelectorAll('[id^="pparrow2_"]').forEach(a => a.style.transform = "");
+        if (!isOpen) { body.style.display = "block"; arrow.style.transform = "rotate(180deg)"; }
+      }
+
+      function filterPendingPurchasePaid(q) {
+        const all = window._pendingPurchasePaidVouchers || [];
+        const f = q.toLowerCase();
+        renderPendingPurchasePaid(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
+      }
+      function toggleActivityPanel() {
+        const panel = document.getElementById("activityPanel");
+        panel.style.display = panel.style.display === "flex" ? "none" : "flex";
+        panel.style.flexDirection = "column";
+      }
+      document.addEventListener("click", function(e) {
+        const panel = document.getElementById("activityPanel");
+        const btn = document.getElementById("activityToggleBtn");
+        if (!panel.contains(e.target) && !btn.contains(e.target)) {
+          panel.style.display = "none";
+        }
+      });
     </script>
   </body>
 </html>
