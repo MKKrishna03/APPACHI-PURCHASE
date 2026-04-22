@@ -547,6 +547,14 @@
     <div id="toast"></div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       const STATE_CODES = {
         "Andhra Pradesh": "37",
         "Arunachal Pradesh": "12",
@@ -586,6 +594,7 @@
       };
       const STATES = Object.keys(STATE_CODES);
       const SKIP_FIELDS = ["PAN NUMBER", "SHEET NAME", "LINK"];
+      const LEDGER_TYPES = ["PURCHASES", "LABOUR", "EXPENSES", "HALLMARK"];
       const MANDATORY_FIELDS = [
         "COMPANY NAME",
         "ALIAS",
@@ -718,6 +727,31 @@
             container.appendChild(preview);
           }
         });
+
+        // Ledger Type checkboxes
+        const ledgerHeading = makeSectionHeading("LEDGER TYPE");
+        container.appendChild(ledgerHeading);
+        const ledgerWrap = document.createElement("div");
+        ledgerWrap.id = "ledgerTypeWrap";
+        ledgerWrap.style.cssText =
+          "display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;";
+        LEDGER_TYPES.forEach((type) => {
+          const lbl = document.createElement("label");
+          lbl.style.cssText =
+            "display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);text-transform:none;letter-spacing:0;";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.name = "LEDGER_TYPE";
+          cb.value = type;
+          cb.dataset.ledger = type;
+          cb.style.cssText =
+            "width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0;";
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(type));
+          ledgerWrap.appendChild(lbl);
+        });
+        container.appendChild(ledgerWrap);
+
         const btn = document.createElement("button");
         btn.id = "submitBtn";
         btn.textContent = "SUBMIT PROFILE";
@@ -740,8 +774,13 @@
       function collectData() {
         const data = {};
         document.querySelectorAll("input[name], select[name]").forEach((el) => {
+          if (el.type === "checkbox") return;
           data[el.name.trim().toUpperCase()] = el.value.trim();
         });
+        const selectedLedgers = [
+          ...document.querySelectorAll("input[data-ledger]:checked"),
+        ].map((cb) => cb.value);
+        data["LEDGER_TYPES"] = selectedLedgers;
         return data;
       }
 
@@ -779,6 +818,8 @@
         submitBtn.disabled = true;
         let data = collectData();
         for (const key of Object.keys(data)) {
+          if (key === "LEDGER_TYPES") continue;
+          if (typeof data[key] !== "string") continue;
           if (key === "E-MAIL ID") data[key] = data[key].toLowerCase();
           else if (key !== "ADDRESS") data[key] = data[key].toUpperCase();
         }
@@ -832,6 +873,10 @@
 
       function resetForm() {
         document.querySelectorAll("input[name]").forEach((i) => {
+          if (i.type === "checkbox") {
+            i.checked = false;
+            return;
+          }
           i.value = "";
           delete i.dataset.manuallyEdited;
         });
@@ -873,13 +918,23 @@
           const el = document.querySelector(`[data-key="${key}"]`);
           if (!el) return;
           if (el.tagName === "SELECT") {
-            el.value = value || "";
             if (key === "STATE") {
-              setTimeout(() => {
-                el.value = value || "";
-              }, 50);
+              // Match case-insensitively against STATES list
+              const matched =
+                STATES.find(
+                  (s) => s.toUpperCase() === (value || "").toUpperCase(),
+                ) ||
+                value ||
+                "";
               const sc = document.querySelector('[data-key="STATE CODE"]');
-              if (sc) sc.value = STATE_CODES[value] || "";
+              el.value = matched;
+              if (sc) sc.value = STATE_CODES[matched] || "";
+              setTimeout(() => {
+                el.value = matched;
+                if (sc) sc.value = STATE_CODES[matched] || "";
+              }, 100);
+            } else {
+              el.value = value || "";
             }
           } else {
             el.value = value || "";
@@ -887,6 +942,12 @@
           }
         });
         updateAliasPreview(profileData["ALIAS"] || "");
+        // Restore ledger checkboxes
+        document.querySelectorAll("input[data-ledger]").forEach((cb) => {
+          cb.checked =
+            profileData["LEDGER_TYPES"] &&
+            profileData["LEDGER_TYPES"].includes(cb.value);
+        });
         const submitBtn = document.getElementById("submitBtn");
         submitBtn.textContent = "UPDATE PROFILE";
         submitBtn.dataset.isUpdate = "true";
@@ -1121,6 +1182,16 @@
         loadEditForm(alias);
       }
       window.onload = initPage;
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
+        }
+      }
     </script>
   </body>
 </html>

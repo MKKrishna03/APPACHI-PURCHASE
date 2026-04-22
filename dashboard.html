@@ -1131,6 +1131,67 @@
           width: 64px;
         }
       }
+      .user-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2d6a4f, #52b788);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: "DM Sans", sans-serif;
+        position: relative;
+        flex-shrink: 0;
+        border: 2px solid rgba(45,106,79,0.3);
+        transition: box-shadow 0.2s;
+      }
+      .user-avatar:hover { box-shadow: 0 0 0 3px rgba(45,106,79,0.2); }
+      .user-dropdown {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        padding: 8px;
+        min-width: 200px;
+        display: none;
+        z-index: 999;
+      }
+      .user-dropdown.show { display: block; }
+      .user-dropdown-name {
+        padding: 10px 12px 6px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #1a1a2e;
+      }
+      .user-dropdown-id {
+        padding: 0 12px 10px;
+        font-size: 11px;
+        color: #8888aa;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        margin-bottom: 6px;
+      }
+      .user-dropdown-btn {
+        width: 100%;
+        padding: 9px 12px;
+        background: none;
+        border: none;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #b5301e;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .user-dropdown-btn:hover { background: #fce8e6; }
     </style>
   </head>
   <body>
@@ -1682,7 +1743,15 @@
     </style>
 
     <script>
-      function doLogout() {
+      (function() {
+  const exp = localStorage.getItem("auth_exp");
+  const user = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
+  if (!user || (exp && Date.now() >= parseInt(exp))) {
+    window.location.replace("/login");
+  }
+})();
+
+function doLogout() {
         if (!confirm("Are you sure you want to log out?")) return;
         localStorage.removeItem("auth_user");
         localStorage.removeItem("auth_exp");
@@ -2844,6 +2913,7 @@
         }
       }
 
+
       function renderPendingPurchasePaid(list) {
         const el = document.getElementById("pendingPurchasePaidList");
         if (!list.length) { el.innerHTML = '<div class="empty-msg">No pending entries</div>'; return; }
@@ -2901,6 +2971,12 @@
           panel.style.display = "none";
         }
       });
+      function getCurrentUser() {
+  try {
+    const u = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
+    return u ? JSON.parse(u) : null;
+  } catch { return null; }
+}
     </script>
   </body>
 </html>

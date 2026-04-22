@@ -915,6 +915,24 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
+        }
+      }
       let companies = [];
       let taxFormats = [];
       let rowCount = 0;
@@ -1503,6 +1521,7 @@
           linked_voucher_id: selectedVoucherId,
           linked_chittai_id: selectedChittaiId || null,
           items,
+          created_by: getCurrentUser()?.id || null,
         };
 
         try {
@@ -1556,6 +1575,16 @@
           .toISOString()
           .split("T")[0];
       };
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
+        }
+      }
     </script>
   </body>
 </html>

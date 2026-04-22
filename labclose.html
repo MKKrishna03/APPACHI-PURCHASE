@@ -730,7 +730,20 @@
               type="text"
               id="receiptBillNo"
               placeholder="Enter receipt bill no."
+              oninput="checkDuplicateBillNo(this.value)"
             />
+            <div
+              id="billNoDuplicateMsg"
+              style="
+                display: none;
+                margin-top: 6px;
+                font-size: 12px;
+                color: #b5301e;
+                font-weight: 600;
+              "
+            >
+              ⚠ This bill number already exists.
+            </div>
           </div>
           <div class="form-group" style="margin-bottom: 0">
             <label class="field-label">Closing Date *</label>
@@ -930,6 +943,14 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       let companies = [];
       let closedBills = new Set();
       let selectedLabourId = null;
@@ -966,7 +987,12 @@
       async function loadCompanies() {
         try {
           const res = await fetch("/api/profile/all");
-          companies = await res.json();
+          const all = await res.json();
+          companies = all.filter(
+            (c) =>
+              Array.isArray(c.ledger_types) &&
+              c.ledger_types.includes("LABOUR"),
+          );
           const select = document.getElementById("companySelect");
           select.innerHTML = '<option value="">— Choose a company —</option>';
           companies.forEach((c) => {
@@ -1002,14 +1028,14 @@
           list.innerHTML = payments
             .map(
               (p) => `
-            <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
-              <div class="receipt-card-head">
-                <div>
-                  <div class="receipt-title">${p.bill_no || "—"}</div>
-                  <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
-                </div>
-              </div>
-            </div>`,
+                  <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
+                    <div class="receipt-card-head">
+                      <div>
+                        <div class="receipt-title">${p.bill_no || "—"}</div>
+                        <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>`,
             )
             .join("");
         } catch {
@@ -1133,20 +1159,20 @@
               (qtyMap[bill.id] || 0) - (receivedQty[bill.issue_number] || 0)
             ).toFixed(2);
             return `<div class="bill-card" id="card_${bill.id}">
-            <div class="bill-card-id">${bill.issue_number}</div>
-            <div class="bill-card-row"><span>Date</span><span>${new Date(bill.date).toLocaleDateString()}</span></div>
-            <div class="bill-card-row"><span>Issued</span><span>${issued} g</span></div>
-            <div class="bill-card-row"><span>Received</span><span>${received} g</span></div>
-            <div class="bill-card-row"><span>Pending</span><span class="tag tag-pending">${pending} g</span></div>
-            <div class="radio-row">
-              <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
-              <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
-            </div>
-            <div class="partial-qty" id="partial_${bill.id}">
-              <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Qty to close (max ${pending})">
-            </div>
-            <button class="btn-select" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select this bill →</button>
-          </div>`;
+                  <div class="bill-card-id">${bill.issue_number}</div>
+                  <div class="bill-card-row"><span>Date</span><span>${new Date(bill.date).toLocaleDateString()}</span></div>
+                  <div class="bill-card-row"><span>Issued</span><span>${issued} g</span></div>
+                  <div class="bill-card-row"><span>Received</span><span>${received} g</span></div>
+                  <div class="bill-card-row"><span>Pending</span><span class="tag tag-pending">${pending} g</span></div>
+                  <div class="radio-row">
+                    <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
+                    <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
+                  </div>
+                  <div class="partial-qty" id="partial_${bill.id}">
+                    <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Qty to close (max ${pending})">
+                  </div>
+                  <button class="btn-select" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select this bill →</button>
+                </div>`;
           })
           .join("");
       }
@@ -1433,6 +1459,7 @@
                 parseFloat(
                   document.getElementById("billValueAfterDeduction").value,
                 ) || 0,
+              created_by: getCurrentUser()?.id || null,
             }),
           });
           const result = await res.json();
@@ -1450,6 +1477,22 @@
         }
       }
 
+      let existingBillNos = [];
+      async function loadExistingBillNos() {
+        const res = await fetch("/api/labour");
+        const all = await res.json();
+        existingBillNos = all
+          .filter((b) => b.receipt_bill_no)
+          .map((b) => b.receipt_bill_no.trim().toLowerCase());
+      }
+      function checkDuplicateBillNo(val) {
+        const msg = document.getElementById("billNoDuplicateMsg");
+        if (val && existingBillNos.includes(val.trim().toLowerCase())) {
+          msg.style.display = "block";
+        } else {
+          msg.style.display = "none";
+        }
+      }
       function showMessage(msg, type) {
         const el = document.getElementById("message");
         el.textContent = msg;
@@ -1462,6 +1505,7 @@
         loadDescriptions();
         await loadTaxFormats();
         await loadRecentReceipts();
+        await loadExistingBillNos();
         loadRecentPayments();
         const editId = new URLSearchParams(location.search).get("edit");
         if (editId) loadEditReceipt(editId);
@@ -1610,6 +1654,16 @@
           }
         } catch (e) {
           showMessage("Error: " + e.message, "error");
+        }
+      }
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
         }
       }
     </script>

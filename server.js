@@ -38,6 +38,12 @@ async function initDB() {
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_chittai_id INTEGER REFERENCES chittai(id)`,
   );
   await pool.query(
+    `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS linked_purchase_id INTEGER REFERENCES purchases(id)`,
+  );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS linked_purchase_id INTEGER REFERENCES purchases(id)`,
+  );
+  await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false`,
   );
   await pool.query(
@@ -53,6 +59,18 @@ async function initDB() {
   await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS tds NUMERIC`);
   await pool.query(
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS bill_value_after_deduction NUMERIC`,
+  );
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS created_by TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS created_by TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS created_by TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
@@ -174,7 +192,7 @@ app.get("/api/profile/headers", (req, res) => {
 app.get("/api/profile/all", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, alias, company_name AS company, state_code FROM profiles ORDER BY company_name",
+      "SELECT id, alias, company_name AS company, state_code, ledger_types FROM profiles ORDER BY company_name",
     );
     res.json(result.rows);
   } catch (err) {
@@ -185,7 +203,7 @@ app.get("/api/profile/all", async (req, res) => {
 app.get("/api/profiles/list", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, alias, company_name AS name, state_code FROM profiles ORDER BY company_name",
+      "SELECT id, alias, company_name AS name, state_code, ledger_types FROM profiles ORDER BY company_name",
     );
     res.json(result.rows);
   } catch (err) {
@@ -202,6 +220,7 @@ app.get("/api/profile/:alias", async (req, res) => {
     const r = result.rows[0];
     res.json({
       "COMPANY NAME": r.company_name,
+      LEDGER_TYPES: r.ledger_types || [],
       ALIAS: r.alias,
       ADDRESS: r.address,
       CITY: r.city,
@@ -230,8 +249,8 @@ app.post("/api/profile", async (req, res) => {
     await pool.query(
       `INSERT INTO profiles
         (alias,company_name,address,city,pincode,state,state_code,gst_number,pan_number,
-         contact1,contact2,email,ac_holder,bank_name,account_number,ifsc_code,branch)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+         contact1,contact2,email,ac_holder,bank_name,account_number,ifsc_code,branch,ledger_types)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         d["ALIAS"],
         d["COMPANY NAME"],
@@ -250,6 +269,7 @@ app.post("/api/profile", async (req, res) => {
         d["ACCOUNT NUMBER"],
         d["IFSC CODE"],
         d["BRANCH"],
+        d["LEDGER_TYPES"] || [],
       ],
     );
     res.json({ status: "SUCCESS" });
@@ -268,8 +288,8 @@ app.put("/api/profile/:alias", async (req, res) => {
         alias=$1, company_name=$2, address=$3, city=$4, pincode=$5, state=$6,
         state_code=$7, gst_number=$8, pan_number=$9, contact1=$10,
         contact2=$11, email=$12, ac_holder=$13, bank_name=$14,
-        account_number=$15, ifsc_code=$16, branch=$17, updated_at=NOW()
-      WHERE alias=$18`,
+        account_number=$15, ifsc_code=$16, branch=$17, ledger_types=$18, updated_at=NOW()
+      WHERE alias=$19`,
       [
         d["ALIAS"],
         d["COMPANY NAME"],
@@ -288,6 +308,7 @@ app.put("/api/profile/:alias", async (req, res) => {
         d["ACCOUNT NUMBER"],
         d["IFSC CODE"],
         d["BRANCH"],
+        d["LEDGER_TYPES"] || [],
         alias,
       ],
     );
@@ -387,7 +408,6 @@ app.get("/api/labour/list", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 app.get("/api/labour/:id", async (req, res) => {
   if (req.params.id === "list")
     return res.status(404).json({ error: "Not found" });
@@ -458,8 +478,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     );
 
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       [
         labour.profile_id,
         labour.company_name,
@@ -475,6 +495,7 @@ app.post("/api/close-issue-voucher", async (req, res) => {
         total || null,
         tds || null,
         bill_value_after_deduction || null,
+        req.body.created_by || null,
       ],
     );
 
@@ -584,11 +605,24 @@ app.post("/api/vouchers", async (req, res) => {
         ]);
       }
     }
+    let voucher_no = null;
+    if (voucher_type === "Payment Voucher") {
+      const seq = await pool.query(
+        `SELECT nextval('payment_voucher_seq') AS val`,
+      );
+      voucher_no = "P-" + String(seq.rows[0].val).padStart(2, "0");
+    } else if (voucher_type === "Receipt Voucher") {
+      const seq = await pool.query(
+        `SELECT nextval('receipt_voucher_seq') AS val`,
+      );
+      voucher_no = "R-" + String(seq.rows[0].val).padStart(2, "0");
+    }
+
     const result = await pool.query(
       `INSERT INTO vouchers
         (profile_id,voucher_type,date,bill_no,entry_type,description,
-         qty,rate,va,taxable_value,tax_percent,igst,cgst,sgst,tax_amount,total_value,linked_labour_id,linked_chittai_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+         qty,rate,va,taxable_value,tax_percent,igst,cgst,sgst,tax_amount,total_value,linked_labour_id,linked_chittai_id,created_by,voucher_no)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [
         profile_id,
         voucher_type,
@@ -608,6 +642,8 @@ app.post("/api/vouchers", async (req, res) => {
         num(total_value),
         linked_labour_id,
         linked_chittai_id,
+        req.body.created_by || null,
+        voucher_no,
       ],
     );
     res.json(result.rows[0]);
@@ -617,12 +653,20 @@ app.post("/api/vouchers", async (req, res) => {
   }
 });
 app.patch("/api/vouchers/:id", async (req, res) => {
-  const { date, total_value, description } = req.body;
+  const { date, total_value, description, linked_chittai_id } = req.body;
   try {
-    const result = await pool.query(
-      `UPDATE vouchers SET date=$1, total_value=$2, description=$3 WHERE id=$4 RETURNING *`,
-      [date, total_value, description, req.params.id],
-    );
+    let result;
+    if (linked_chittai_id !== undefined) {
+      result = await pool.query(
+        `UPDATE vouchers SET linked_chittai_id=$1 WHERE id=$2 RETURNING *`,
+        [linked_chittai_id, req.params.id],
+      );
+    } else {
+      result = await pool.query(
+        `UPDATE vouchers SET date=$1, total_value=$2, description=$3 WHERE id=$4 RETURNING *`,
+        [date, total_value, description, req.params.id],
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -809,8 +853,8 @@ app.post("/api/purchases", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
-        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [
         profile_id,
         date,
@@ -830,6 +874,7 @@ app.post("/api/purchases", async (req, res) => {
         linked_chittai_ids && linked_chittai_ids.length
           ? linked_chittai_ids[0]
           : null,
+        req.body.created_by || null,
       ],
     );
     const purchaseId = result.rows[0].id;
@@ -859,7 +904,6 @@ app.post("/api/purchases", async (req, res) => {
 app.get("/purchase", (req, res) =>
   res.sendFile(path.join(__dirname, "purchase.html")),
 );
-app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
 app.post("/api/labour", async (req, res) => {
   const {
     profile_id,
@@ -871,9 +915,16 @@ app.post("/api/labour", async (req, res) => {
   } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type)
-       VALUES ($1, $2, $3, $4, $5, 'ISSUE VOUCHER') RETURNING *`,
-      [profile_id, company_name, date, issue_number, labour_item_type],
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type, created_by)
+       VALUES ($1, $2, $3, $4, $5, 'ISSUE VOUCHER', $6) RETURNING *`,
+      [
+        profile_id,
+        company_name,
+        date,
+        issue_number,
+        labour_item_type,
+        req.body.created_by || null,
+      ],
     );
     const labourId = result.rows[0].id;
     for (const item of items) {
@@ -973,7 +1024,8 @@ app.get("/api/chittai/next-no", async (req, res) => {
     );
     if (!result.rows.length) return res.json({ chittai_no: `${prefix}001` });
     const last = result.rows[0].chittai_no;
-    const num = parseInt(last.split("-")[2]) + 1;
+    const parts = last.split("-");
+    const num = parseInt(parts[parts.length - 1]) + 1;
     res.json({ chittai_no: `${prefix}${String(num).padStart(3, "0")}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -995,8 +1047,8 @@ app.post("/api/chittai", async (req, res) => {
   } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [
         profile_id,
         chittai_no,
@@ -1008,6 +1060,7 @@ app.post("/api/chittai", async (req, res) => {
         total,
         tds || 0,
         rtgs_amount,
+        req.body.created_by || null,
       ],
     );
     const chittai_id = result.rows[0].id;
@@ -1137,6 +1190,20 @@ app.put("/api/labour/:id", async (req, res) => {
   }
 });
 
+app.get("/api/auth/can-delete", async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) return res.json({ can_delete: false });
+  try {
+    const result = await pool.query(
+      "SELECT can_delete FROM auth_users WHERE user_id=$1",
+      [user_id],
+    );
+    res.json({ can_delete: result.rows[0]?.can_delete || false });
+  } catch (err) {
+    res.json({ can_delete: false });
+  }
+});
+
 app.post("/api/auth/signup", async (req, res) => {
   const { user_id, name, email, password } = req.body;
   try {
@@ -1204,3 +1271,115 @@ app.get("/reports/tds", (req, res) =>
 app.get("/company", (req, res) =>
   res.sendFile(path.join(__dirname, "company.html")),
 );
+
+app.get("/api/auth/can-delete", async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) return res.json({ can_delete: false });
+  try {
+    const result = await pool.query(
+      "SELECT can_delete FROM auth_users WHERE user_id=$1",
+      [user_id],
+    );
+    res.json({ can_delete: result.rows[0]?.can_delete || false });
+  } catch (err) {
+    res.json({ can_delete: false });
+  }
+});
+
+app.get("/api/linked-data/:type/:id", async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    const linked = [];
+    if (type === "issue") {
+      const rvs = await pool.query(
+        `SELECT id, receipt_bill_no, date FROM labour WHERE issue_number=(SELECT issue_number FROM labour WHERE id=$1) AND voucher_type='Receipt Voucher'`,
+        [id],
+      );
+      rvs.rows.forEach((r) =>
+        linked.push({
+          type: "receipt",
+          id: r.id,
+          label: `Receipt Voucher: ${r.receipt_bill_no || "ID-" + r.id} (${r.date?.toString().slice(0, 10)})`,
+        }),
+      );
+    }
+    if (type === "receipt") {
+      const vs = await pool.query(
+        `SELECT id, bill_no, total_value FROM vouchers WHERE linked_labour_id=$1`,
+        [id],
+      );
+      vs.rows.forEach((v) =>
+        linked.push({
+          type: "voucher",
+          id: v.id,
+          label: `Payment Voucher: ${v.bill_no || "ID-" + v.id} ₹${v.total_value}`,
+        }),
+      );
+    }
+    if (type === "txn") {
+      // no deep links for vouchers
+    }
+    if (type === "chittai") {
+      const vs = await pool.query(
+        `SELECT id, bill_no, total_value FROM vouchers WHERE linked_chittai_id=$1`,
+        [id],
+      );
+      vs.rows.forEach((v) =>
+        linked.push({
+          type: "voucher",
+          id: v.id,
+          label: `Payment Voucher: ${v.bill_no || "ID-" + v.id} ₹${v.total_value}`,
+        }),
+      );
+      const ps = await pool.query(
+        `SELECT id, bill_no FROM purchases WHERE linked_chittai_id=$1`,
+        [id],
+      );
+      ps.rows.forEach((p) =>
+        linked.push({
+          type: "purchase",
+          id: p.id,
+          label: `Purchase: ${p.bill_no || "ID-" + p.id}`,
+        }),
+      );
+    }
+    res.json(linked);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/delete-entry", async (req, res) => {
+  const { type, id, linked } = req.body;
+  try {
+    // Delete linked items first
+    if (linked && linked.length) {
+      for (const l of linked) {
+        if (l.type === "voucher")
+          await pool.query(`DELETE FROM vouchers WHERE id=$1`, [l.id]);
+        if (l.type === "receipt") {
+          await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [
+            l.id,
+          ]);
+          await pool.query(`DELETE FROM labour WHERE id=$1`, [l.id]);
+        }
+        if (l.type === "purchase") {
+          await pool.query(`DELETE FROM purchases WHERE id=$1`, [l.id]);
+        }
+      }
+    }
+    // Delete main entry
+    if (type === "issue" || type === "receipt") {
+      await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
+      await pool.query(`DELETE FROM labour WHERE id=$1`, [id]);
+    }
+    if (type === "txn")
+      await pool.query(`DELETE FROM vouchers WHERE id=$1`, [id]);
+    if (type === "chittai")
+      await pool.query(`DELETE FROM chittai WHERE id=$1`, [id]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

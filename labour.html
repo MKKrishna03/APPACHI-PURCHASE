@@ -539,6 +539,14 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       let companies = [];
       let rowCount = 0;
 
@@ -563,7 +571,12 @@
       async function loadCompanies() {
         try {
           const res = await fetch("/api/profile/all");
-          companies = await res.json();
+          const all = await res.json();
+          companies = all.filter(
+            (c) =>
+              Array.isArray(c.ledger_types) &&
+              c.ledger_types.includes("LABOUR"),
+          );
           const select = document.getElementById("companySelect");
           select.innerHTML = '<option value="">Select Company</option>';
           companies.forEach((c) => {
@@ -717,6 +730,7 @@
               issue_number: issueNumber,
               labour_item_type: labourItemType,
               items,
+              created_by: getCurrentUser()?.id || null,
             }),
           });
           const result = await res.json();
@@ -856,12 +870,23 @@
               issue_number: issueNumber,
               labour_item_type: labourItemType,
               items,
+              created_by: getCurrentUser()?.id || null,
             }),
           });
           alert("Updated successfully!");
           window.history.back();
         } catch (e) {
           alert(e.message);
+        }
+      }
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
         }
       }
     </script>

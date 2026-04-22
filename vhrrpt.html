@@ -596,6 +596,9 @@
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
+        <select id="labourItemTypeFilter" onchange="loadReport()">
+          <option value="">— All Labour Item Types —</option>
+        </select>
         <select id="rvFilter" onchange="loadReport()">
           <option value="">— All RV Status —</option>
           <option value="received">RV Received</option>
@@ -726,6 +729,14 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       let drpStart = null,
         drpEnd = null,
         drpSelecting = null;
@@ -1379,11 +1390,19 @@
           const payFilter = document.getElementById("payFilter").value;
           const metalFilter = document.getElementById("metalFilter").value;
 
+          const labourItemTypeFilter = document.getElementById(
+            "labourItemTypeFilter",
+          ).value;
           const filteredRows = rows.filter((row) => {
             if (rvFilter === "received" && row.billNo === "-") return false;
             if (rvFilter === "not_received" && row.billNo !== "-") return false;
             if (payFilter === "paid" && row.status !== "paid") return false;
             if (payFilter === "unpaid" && row.status !== "unpaid") return false;
+            if (labourItemTypeFilter) {
+              const iv = issues.find((iv) => iv.issue_number === row.issueNo);
+              if (!iv || (iv.labour_item_type || "") !== labourItemTypeFilter)
+                return false;
+            }
             if (metalFilter) {
               const items =
                 itemsMap[
@@ -1459,6 +1478,21 @@
 
       buildPresets();
       loadCompanies();
+      loadLabourItemTypes();
+
+      async function loadLabourItemTypes() {
+        try {
+          const res = await fetch("/api/labour-item-types");
+          const types = await res.json();
+          const sel = document.getElementById("labourItemTypeFilter");
+          types.forEach((t) => {
+            const o = document.createElement("option");
+            o.value = t.name;
+            o.textContent = t.name;
+            sel.appendChild(o);
+          });
+        } catch (e) {}
+      }
 
       const defaultRange = getFinYear(0);
       drpStart = defaultRange.start;
