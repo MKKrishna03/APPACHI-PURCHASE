@@ -386,6 +386,14 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       const companySelect = document.getElementById("companySelect");
       const transactionKind = document.getElementById("transactionKind");
       const entryType = document.getElementById("entryType");
@@ -679,6 +687,7 @@
             total_value: amount,
           };
         }
+        payload.created_by = getCurrentUser()?.id || null;
         try {
           saveButton.disabled = true;
           const res = await fetch("/api/vouchers", {
@@ -785,6 +794,16 @@
         .catch((err) =>
           setMessage("Unable to load companies: " + err.message, "error"),
         );
+      function getCurrentUser() {
+        try {
+          const u =
+            localStorage.getItem("auth_user") ||
+            sessionStorage.getItem("auth_user");
+          return u ? JSON.parse(u) : null;
+        } catch {
+          return null;
+        }
+      }
     </script>
   </body>
 </html>

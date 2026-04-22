@@ -654,13 +654,15 @@
       <div style="background:#fff;border-radius:16px;padding:28px;min-width:400px;max-width:600px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.15);position:relative;">
         <button onclick="closeBillPopup()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:#8888aa;">✕</button>
         <div id="billPopupContent"></div>
-        <div style="margin-top:20px;display:flex;justify-content:flex-end;">
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+          <button id="billDeleteBtn" onclick="startDelete()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:1px solid #f09898;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Delete</button>
           <button id="billEditBtn" onclick="goEditBill()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
         </div>
       </div>
     </div>
 
     <script>
+      (function(){const exp=localStorage.getItem("auth_exp");const user=localStorage.getItem("auth_user")||sessionStorage.getItem("auth_user");if(!user||(exp&&Date.now()>=parseInt(exp)))window.location.replace("/login");})();
       // ── URL PARAMS ──
       const params = new URLSearchParams(location.search);
       const profileId = params.get("id");
@@ -1198,6 +1200,18 @@
       loadAll();
 
       let _popupType = null, _popupId = null;
+      let _canDelete = false;
+
+      async function checkDeleteAccess() {
+        try {
+          const user = getCurrentUser();
+          if (!user) return;
+          const res = await fetch(`/api/auth/can-delete?user_id=${encodeURIComponent(user.id)}`);
+          const data = await res.json();
+          _canDelete = data.can_delete;
+        } catch(e) { _canDelete = false; }
+      }
+      checkDeleteAccess();
 
       async function showBillPopup(type, id, label) {
         _popupType = type;
@@ -1255,6 +1269,8 @@
                 <div><span style="color:#8888aa;">Status</span><br><strong>${c.is_paid?'Paid':'Unpaid'}</strong></div>
               </div>`;
           }
+        // Show delete button if user has access
+        document.getElementById('billDeleteBtn').style.display = _canDelete ? 'block' : 'none';
         } catch(e) {
           el.innerHTML = '<div style="color:#b5301e;">Error loading details</div>';
         }
@@ -1283,6 +1299,71 @@ else if (_popupType === 'txn') {
       document.getElementById('billPopup').addEventListener('click', function(e) {
         if (e.target === this) closeBillPopup();
       });
+
+      async function startDelete() {
+        let linked = [];
+        try {
+          const res = await fetch(`/api/linked-data/${_popupType}/${_popupId}`);
+          linked = await res.json();
+        } catch(e) {}
+
+        let linkedHTML = '';
+        if (linked.length) {
+          linkedHTML = `
+            <div style="margin:14px 0 6px;font-size:12px;font-weight:700;color:#b5620a;">Linked records found — tick to also delete:</div>
+            <div style="background:#fef0d6;border:1px solid rgba(181,98,10,0.2);border-radius:8px;padding:10px 14px;max-height:180px;overflow-y:auto;">
+              ${linked.map((l,i) => `<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#444466;margin-bottom:6px;cursor:pointer;">
+                <input type="checkbox" id="lnk_${i}" data-type="${l.type}" data-id="${l.id}" style="accent-color:#b5301e;width:14px;height:14px;">
+                ${l.label}
+              </label>`).join('')}
+            </div>`;
+        }
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.id = 'deleteConfirmOverlay';
+        confirmDiv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;';
+        confirmDiv.innerHTML = `
+          <div style="background:#fff;border-radius:14px;padding:28px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+            <div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:8px;">Confirm Delete</div>
+            <div style="font-size:13px;color:#444466;margin-bottom:4px;">Are you sure you want to delete this entry? This cannot be undone.</div>
+            ${linkedHTML}
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+              <button onclick="document.getElementById('deleteConfirmOverlay').remove()" style="padding:9px 20px;background:#f0efe9;color:#444466;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+              <button onclick="confirmDelete()" style="padding:9px 20px;background:#b5301e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Yes, Delete</button>
+            </div>
+          </div>`;
+        document.body.appendChild(confirmDiv);
+      }
+
+      async function confirmDelete() {
+        const checkedLinked = [];
+        document.querySelectorAll('#deleteConfirmOverlay input[type=checkbox]:checked').forEach(cb => {
+          checkedLinked.push({ type: cb.dataset.type, id: parseInt(cb.dataset.id) });
+        });
+        document.getElementById('deleteConfirmOverlay')?.remove();
+        try {
+          const res = await fetch('/api/delete-entry', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: _popupType, id: _popupId, linked: checkedLinked })
+          });
+          const result = await res.json();
+          if (result.status === 'SUCCESS') {
+            closeBillPopup();
+            loadAll();
+          } else {
+            alert('Delete failed: ' + (result.error || 'Unknown error'));
+          }
+        } catch(e) {
+          alert('Delete failed: ' + e.message);
+        }
+      }
+      function getCurrentUser() {
+  try {
+    const u = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
+    return u ? JSON.parse(u) : null;
+  } catch { return null; }
+}
     </script>
   </body>
 </html>

@@ -644,7 +644,7 @@
                   data-col="bill_no"
                   onclick="sortBy('bill_no')"
                 >
-                  Bill No<span class="si" id="si_bill_no">⇅</span>
+                  Voucher No<span class="si" id="si_bill_no">⇅</span>
                 </th>
                 <th
                   class="sortable"
@@ -662,7 +662,9 @@
                   onclick="sortBy('billValue')"
                   style="text-align: right"
                 >
-                  Bill Value<span class="si" id="si_billValue">⇅</span>
+                  Chittai / Labour Value<span class="si" id="si_billValue"
+                    >⇅</span
+                  >
                 </th>
                 <th
                   class="sortable"
@@ -672,7 +674,7 @@
                 >
                   Payment Amount<span class="si" id="si_payment">⇅</span>
                 </th>
-                <th>Status</th>
+                <th>Voucher Type</th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -696,6 +698,14 @@
     </div>
 
     <script>
+      (function () {
+        const exp = localStorage.getItem("auth_exp");
+        const user =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        if (!user || (exp && Date.now() >= parseInt(exp)))
+          window.location.replace("/login");
+      })();
       let drpStart = null,
         drpEnd = null,
         drpSelecting = null;
@@ -1119,7 +1129,7 @@
                   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
                 })()
               : "-";
-            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td><td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td><td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid">Paid</span></td></tr>`;
+            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td><td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td><td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td></tr>`;
           })
           .join("");
       }
