@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <title>Close Issue Voucher</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -950,6 +955,7 @@
           sessionStorage.getItem("auth_user");
         if (!user || (exp && Date.now() >= parseInt(exp)))
           window.location.replace("/login");
+        else document.body.style.visibility = "visible";
       })();
       let companies = [];
       let closedBills = new Set();
@@ -1028,14 +1034,14 @@
           list.innerHTML = payments
             .map(
               (p) => `
-                  <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
-                    <div class="receipt-card-head">
-                      <div>
-                        <div class="receipt-title">${p.bill_no || "—"}</div>
-                        <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
-                      </div>
-                    </div>
-                  </div>`,
+                              <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
+                                <div class="receipt-card-head">
+                                  <div>
+                                    <div class="receipt-title">${p.bill_no || "—"}</div>
+                                    <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
+                                  </div>
+                                </div>
+                              </div>`,
             )
             .join("");
         } catch {
@@ -1159,20 +1165,20 @@
               (qtyMap[bill.id] || 0) - (receivedQty[bill.issue_number] || 0)
             ).toFixed(2);
             return `<div class="bill-card" id="card_${bill.id}">
-                  <div class="bill-card-id">${bill.issue_number}</div>
-                  <div class="bill-card-row"><span>Date</span><span>${new Date(bill.date).toLocaleDateString()}</span></div>
-                  <div class="bill-card-row"><span>Issued</span><span>${issued} g</span></div>
-                  <div class="bill-card-row"><span>Received</span><span>${received} g</span></div>
-                  <div class="bill-card-row"><span>Pending</span><span class="tag tag-pending">${pending} g</span></div>
-                  <div class="radio-row">
-                    <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
-                    <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
-                  </div>
-                  <div class="partial-qty" id="partial_${bill.id}">
-                    <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Qty to close (max ${pending})">
-                  </div>
-                  <button class="btn-select" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select this bill →</button>
-                </div>`;
+                              <div class="bill-card-id">${bill.issue_number}</div>
+                              <div class="bill-card-row"><span>Date</span><span>${new Date(bill.date).toLocaleDateString()}</span></div>
+                              <div class="bill-card-row"><span>Issued</span><span>${issued} g</span></div>
+                              <div class="bill-card-row"><span>Received</span><span>${received} g</span></div>
+                              <div class="bill-card-row"><span>Pending</span><span class="tag tag-pending">${pending} g</span></div>
+                              <div class="radio-row">
+                                <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="full" onchange="selectClosingOption(${bill.id},'full')"> Full</label>
+                                <label class="radio-label"><input type="radio" name="ct_${bill.id}" value="partial" onchange="selectClosingOption(${bill.id},'partial')"> Partial</label>
+                              </div>
+                              <div class="partial-qty" id="partial_${bill.id}">
+                                <input type="number" class="partial-qty-input" data-bill-id="${bill.id}" data-pending="${pending}" step="0.01" placeholder="Qty to close (max ${pending})">
+                              </div>
+                              <button class="btn-select" onclick="selectLabourBill(${bill.id},'${bill.issue_number}','${bill.company_name}','${bill.date}')">Select this bill →</button>
+                            </div>`;
           })
           .join("");
       }
@@ -1383,44 +1389,63 @@
           return;
         }
         const closingDate = document.getElementById("closingDate").value;
-        const closingType = selectedClosingType[selectedLabourId] || "full";
         const receiptBillNo = document.getElementById("receiptBillNo").value;
         if (!closingDate) {
           showMessage("Please enter closing date", "error");
-          return;
-        }
-        if (!closingType) {
-          showMessage("Please select closing type from the card", "error");
           return;
         }
         if (!receiptBillNo) {
           showMessage("Please enter receipt bill number", "error");
           return;
         }
-        let partialQty = null;
-        if (closingType === "partial") {
-          const partialInput = document.querySelector(
-            `input.partial-qty-input[data-bill-id="${selectedLabourId}"]`,
-          );
-          const pendingQty = parseFloat(
-            partialInput ? partialInput.dataset.pending : 0,
-          );
-          partialQty = parseFloat(partialInput ? partialInput.value : 0);
-          if (!partialQty || partialQty <= 0) {
+
+        // Validate all selected bills have closing type chosen
+        for (const id of selectedLabourIds) {
+          if (!selectedClosingType[id]) {
+            const cardEl = document.getElementById("card_" + id);
+            const billLabel = cardEl
+              ? cardEl.querySelector(".bill-card-id").textContent
+              : id;
             showMessage(
-              "Please enter valid quantity for partial closing",
+              "Please select Full or Partial for bill: " + billLabel,
               "error",
             );
             return;
           }
-          if (partialQty > pendingQty) {
-            showMessage(
-              `Quantity ${partialQty} exceeds pending ${pendingQty}`,
-              "error",
+          if (selectedClosingType[id] === "partial") {
+            const partialInput = document.querySelector(
+              `input.partial-qty-input[data-bill-id="${id}"]`,
             );
-            return;
+            const qty = parseFloat(partialInput ? partialInput.value : 0);
+            const max = parseFloat(
+              partialInput ? partialInput.dataset.pending : 0,
+            );
+            if (!qty || qty <= 0) {
+              const cardEl2 = document.getElementById("card_" + id);
+              const billLabel2 = cardEl2
+                ? cardEl2.querySelector(".bill-card-id").textContent
+                : id;
+              showMessage(
+                "Enter valid partial quantity for bill: " + billLabel2,
+                "error",
+              );
+              return;
+              return;
+            }
+            if (qty > max) {
+              const cardEl3 = document.getElementById("card_" + id);
+              const billLabel3 = cardEl3
+                ? cardEl3.querySelector(".bill-card-id").textContent
+                : id;
+              showMessage(
+                "Quantity exceeds pending for bill: " + billLabel3,
+                "error",
+              );
+              return;
+            }
           }
         }
+
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, index) => {
           items.push({
@@ -1433,17 +1458,17 @@
             amount: parseFloat(row.querySelector(".taxable").value) || 0,
           });
         });
+
         try {
           const res = await fetch("/api/close-issue-voucher", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              labour_id: selectedLabourId,
+              labour_ids: selectedLabourIds,
+              closing_type_map: selectedClosingType,
               closing_date: closingDate,
-              closing_type: closingType,
-              partial_qty: partialQty,
               bill_no: receiptBillNo,
-              items,
+              items: items,
               payment_voucher_id: selectedPaymentVoucherId,
               taxable_total:
                 parseFloat(document.getElementById("billTaxable").value) || 0,
@@ -1459,14 +1484,16 @@
                 parseFloat(
                   document.getElementById("billValueAfterDeduction").value,
                 ) || 0,
-              created_by: getCurrentUser()?.id || null,
+              created_by: getCurrentUser() ? getCurrentUser().id : null,
             }),
           });
           const result = await res.json();
           if (result.status === "SUCCESS") {
-            if (closingType === "full") closedBills.add(selectedLabourId);
-            showMessage("Close Issue Voucher created successfully!", "success");
-            setTimeout(() => {
+            showMessage(
+              selectedLabourIds.length + " voucher(s) closed successfully!",
+              "success",
+            );
+            setTimeout(function () {
               location.href = "/";
             }, 1500);
           } else {

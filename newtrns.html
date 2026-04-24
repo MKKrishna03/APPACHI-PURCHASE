@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>New Transaction</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -391,8 +396,11 @@
         const user =
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
-        if (!user || (exp && Date.now() >= parseInt(exp)))
+        if (!user || (exp && Date.now() >= parseInt(exp))) {
           window.location.replace("/login");
+        } else {
+          document.body.style.visibility = "visible";
+        }
       })();
       const companySelect = document.getElementById("companySelect");
       const transactionKind = document.getElementById("transactionKind");

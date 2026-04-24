@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>body{visibility:hidden}</style>
     <title>Company Profile</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -662,7 +663,7 @@
     </div>
 
     <script>
-      (function(){const exp=localStorage.getItem("auth_exp");const user=localStorage.getItem("auth_user")||sessionStorage.getItem("auth_user");if(!user||(exp&&Date.now()>=parseInt(exp)))window.location.replace("/login");})();
+      (function(){const exp=localStorage.getItem("auth_exp");const user=localStorage.getItem("auth_user")||sessionStorage.getItem("auth_user");if(!user||(exp&&Date.now()>=parseInt(exp)))window.location.replace("/login");else document.body.style.visibility="visible";})();
       // ── URL PARAMS ──
       const params = new URLSearchParams(location.search);
       const profileId = params.get("id");
@@ -1086,15 +1087,14 @@
             b.voucher_type === "Receipt Voucher" &&
             inRange(b.date),
         );
-        const closedSet = new Set(
-          labour
-            .filter(
-              (b) =>
-                b.profile_id == profileId &&
-                b.voucher_type === "Receipt Voucher",
-            )
-            .map((b) => b.issue_number),
-        );
+        const closedSet = new Set();
+labour
+  .filter(b => b.profile_id == profileId && b.voucher_type === "Receipt Voucher")
+  .forEach(b => {
+    if (b.issue_number) {
+      b.issue_number.split(",").forEach(n => closedSet.add(n.trim()));
+    }
+  });
 
         document.getElementById("issueCount").textContent = issues.length;
         document.getElementById("receiptCount").textContent = receipts.length;

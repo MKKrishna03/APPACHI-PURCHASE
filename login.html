@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <title>Login — Labour Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -743,9 +748,10 @@
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
         if (user && (!exp || Date.now() < parseInt(exp))) {
-          window.location.href = "/";
+          window.location.href = "/dashboard";
         }
       })();
+      document.body.style.visibility = "visible";
     </script>
   </body>
 </html>
