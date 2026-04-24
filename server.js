@@ -444,6 +444,8 @@ app.get("/api/labour", async (req, res) => {
 app.post("/api/close-issue-voucher", async (req, res) => {
   const {
     labour_id,
+    labour_ids,
+    closing_type_map,
     closing_date,
     closing_type,
     partial_qty,
@@ -458,6 +460,79 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     tds,
     bill_value_after_deduction,
   } = req.body;
+
+  // Multi-bill: create ONE receipt linked to all selected issue vouchers
+  if (labour_ids && labour_ids.length) {
+    try {
+      const firstRes = await pool.query("SELECT * FROM labour WHERE id = $1", [
+        labour_ids[0],
+      ]);
+      if (!firstRes.rows[0])
+        return res.status(404).json({ error: "Labour bill not found" });
+      const labour = firstRes.rows[0];
+      await pool.query(
+        "INSERT INTO voucher_types (name) VALUES ($1) ON CONFLICT DO NOTHING",
+        ["Receipt Voucher"],
+      );
+      const result = await pool.query(
+        `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        [
+          labour.profile_id,
+          labour.company_name,
+          closing_date,
+          (
+            await Promise.all(
+              labour_ids.map(async (id) => {
+                const r = await pool.query(
+                  "SELECT issue_number FROM labour WHERE id = $1",
+                  [id],
+                );
+                return r.rows[0] ? r.rows[0].issue_number : id;
+              }),
+            )
+          ).join(","),
+          "Receipt Voucher",
+          req.body.bill_no || null,
+          taxable_total || null,
+          cgst || null,
+          sgst || null,
+          igst || null,
+          round_off || null,
+          total || null,
+          tds || null,
+          bill_value_after_deduction || null,
+          req.body.created_by || null,
+        ],
+      );
+      const close_labour_id = result.rows[0].id;
+      if (items && items.length) {
+        for (const item of items) {
+          await pool.query(
+            `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              close_labour_id,
+              item.sl_no,
+              item.description,
+              item.quantity,
+              item.rate,
+              item.amount,
+            ],
+          );
+        }
+      }
+      if (payment_voucher_id) {
+        await pool.query(
+          `UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`,
+          [close_labour_id, payment_voucher_id],
+        );
+      }
+      return res.json({ status: "SUCCESS", id: close_labour_id });
+    } catch (err) {
+      console.error("CLOSE ISSUE VOUCHER MULTI ERROR:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   try {
     const labourResult = await pool.query(
@@ -1269,6 +1344,9 @@ app.get("/reports/tds", (req, res) =>
 app.get("/company", (req, res) =>
   res.sendFile(path.join(__dirname, "company.html")),
 );
+app.get("/dashboard", (req, res) =>
+  res.sendFile(path.join(__dirname, "dashboard.html")),
+);
 
 app.get("/api/auth/can-delete", async (req, res) => {
   const { user_id } = req.query;
@@ -1290,7 +1368,7 @@ app.get("/api/linked-data/:type/:id", async (req, res) => {
     const linked = [];
     if (type === "issue") {
       const rvs = await pool.query(
-        `SELECT id, receipt_bill_no, date FROM labour WHERE issue_number=(SELECT issue_number FROM labour WHERE id=$1) AND voucher_type='Receipt Voucher'`,
+        `SELECT id, receipt_bill_no, date FROM labour WHERE voucher_type='Receipt Voucher' AND (issue_number=(SELECT issue_number FROM labour WHERE id=$1) OR issue_number LIKE '%' || (SELECT issue_number FROM labour WHERE id=$1) || '%')`,
         [id],
       );
       rvs.rows.forEach((r) =>

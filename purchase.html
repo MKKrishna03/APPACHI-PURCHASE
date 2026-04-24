@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <title>Purchase Voucher</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -920,8 +925,11 @@
         const user =
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
-        if (!user || (exp && Date.now() >= parseInt(exp)))
+        if (!user || (exp && Date.now() >= parseInt(exp))) {
           window.location.replace("/login");
+        } else {
+          document.body.style.visibility = "visible";
+        }
       })();
       function getCurrentUser() {
         try {

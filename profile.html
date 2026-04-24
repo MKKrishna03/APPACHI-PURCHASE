@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <title>Profile Creation</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -552,8 +557,11 @@
         const user =
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
-        if (!user || (exp && Date.now() >= parseInt(exp)))
+        if (!user || (exp && Date.now() >= parseInt(exp))) {
           window.location.replace("/login");
+        } else {
+          document.body.style.visibility = "visible";
+        }
       })();
       const STATE_CODES = {
         "Andhra Pradesh": "37",

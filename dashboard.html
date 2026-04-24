@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <style>body{opacity:0;transition:opacity 0.1s;}</style>
     <title>Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -1748,6 +1749,8 @@
   const user = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
   if (!user || (exp && Date.now() >= parseInt(exp))) {
     window.location.replace("/login");
+  } else {
+    document.body.style.opacity = "1";
   }
 })();
 

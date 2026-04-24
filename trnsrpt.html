@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
     <title>Transaction Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -43,8 +48,11 @@
         font-family: "DM Sans", system-ui, sans-serif;
         background: var(--bg);
         color: var(--ink);
-        min-height: 100vh;
+        height: 100vh;
+        overflow: hidden;
         font-size: 14px;
+        display: flex;
+        flex-direction: column;
       }
 
       .topbar {
@@ -316,6 +324,11 @@
 
       .main {
         padding: 28px;
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
       }
 
       .filters {
@@ -400,6 +413,10 @@
         box-shadow:
           0 4px 16px rgba(0, 0, 0, 0.07),
           0 1px 4px rgba(0, 0, 0, 0.04);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
       }
       .card-header {
         display: flex;
@@ -425,8 +442,11 @@
 
       .table-wrap {
         overflow-x: auto;
+        overflow-y: auto;
         border-radius: var(--radius);
         border: 1px solid var(--border);
+        flex: 1;
+        min-height: 0;
       }
       table {
         width: 100%;
@@ -443,6 +463,9 @@
         color: var(--ink-3);
         white-space: nowrap;
         border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 2;
       }
       tbody tr:not(:last-child) td {
         border-bottom: 1px solid var(--border);
@@ -467,6 +490,9 @@
         background: var(--surface-2);
         border-top: 2px solid var(--border-strong);
         text-align: right;
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
       }
       tfoot td:first-child {
         text-align: left;
@@ -635,6 +661,18 @@
           <span class="card-title">Payment Transactions</span>
           <span class="card-badge" id="rowCount">0</span>
         </div>
+        <div
+          id="paginationBar"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 0 14px;
+            flex-wrap: wrap;
+            font-size: 13px;
+          "
+        ></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -703,8 +741,11 @@
         const user =
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
-        if (!user || (exp && Date.now() >= parseInt(exp)))
+        if (!user || (exp && Date.now() >= parseInt(exp))) {
           window.location.replace("/login");
+        } else {
+          document.body.style.visibility = "visible";
+        }
       })();
       let drpStart = null,
         drpEnd = null,
@@ -1065,7 +1106,9 @@
 
       let sortCol = "date",
         sortDir = "desc",
-        allRows = [];
+        allRows = [],
+        currentPage = 1,
+        pageSize = 50;
       const sortCols = ["bill_no", "company", "date", "billValue", "payment"];
       function updateSortIcons() {
         sortCols.forEach((col) => {
@@ -1117,7 +1160,18 @@
           if (va > vb) return sortDir === "asc" ? 1 : -1;
           return 0;
         });
-        tbody.innerHTML = sorted
+        if (!sorted.length) {
+          tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No records found</td></tr>`;
+          renderPagination(0);
+          return;
+        }
+        const total = sorted.length;
+        const totalPages = pageSize === 0 ? 1 : Math.ceil(total / pageSize);
+        if (currentPage > totalPages) currentPage = totalPages;
+        const start = pageSize === 0 ? 0 : (currentPage - 1) * pageSize;
+        const end = pageSize === 0 ? total : Math.min(start + pageSize, total);
+        const page = sorted.slice(start, end);
+        tbody.innerHTML = page
           .map((b) => {
             const billVal = b._billValue || 0;
             const payAmt = parseFloat(b.total_value || 0);
@@ -1132,6 +1186,53 @@
             return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td><td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td><td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td></tr>`;
           })
           .join("");
+        renderPagination(total);
+      }
+
+      function renderPagination(total) {
+        const bar = document.getElementById("paginationBar");
+        if (!bar) return;
+        const totalPages = pageSize === 0 ? 1 : Math.ceil(total / pageSize);
+        const ps = () =>
+          `padding:4px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);cursor:pointer;font-family:inherit;font-size:12px;`;
+        const activePsStyle = `padding:4px 8px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;`;
+        let pages = "";
+        let startP = Math.max(1, currentPage - 1);
+        let endP = Math.min(totalPages, startP + 3);
+        if (endP - startP < 3) startP = Math.max(1, endP - 3);
+        for (let i = startP; i <= endP; i++) {
+          pages += `<button style="${i === currentPage ? activePsStyle : ps()}" onclick="goPage(${i})">${i}</button>`;
+        }
+        const startRow = pageSize === 0 ? 1 : (currentPage - 1) * pageSize + 1;
+        const endRow =
+          pageSize === 0 ? total : Math.min(currentPage * pageSize, total);
+        bar.innerHTML = `
+          <button style="${ps()}" onclick="goPage(1)" ${currentPage === 1 ? "disabled" : ""}>«</button>
+          <button style="${ps()}" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? "disabled" : ""}>‹</button>
+          ${pages}
+          <button style="${ps()}" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? "disabled" : ""}>›</button>
+          <button style="${ps()}" onclick="goPage(${totalPages})" ${currentPage === totalPages ? "disabled" : ""}>»</button>
+          <span style="padding:4px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-size:12px;color:var(--ink-2);">${startRow}-${endRow} of ${total}</span>
+          <select onchange="changePageSize(this.value)" style="padding:4px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-family:inherit;font-size:12px;cursor:pointer;">
+            <option value="50" ${pageSize === 50 ? "selected" : ""}>50</option>
+            <option value="100" ${pageSize === 100 ? "selected" : ""}>100</option>
+            <option value="200" ${pageSize === 200 ? "selected" : ""}>200</option>
+            <option value="500" ${pageSize === 500 ? "selected" : ""}>500</option>
+            <option value="0" ${pageSize === 0 ? "selected" : ""}>All</option>
+          </select>`;
+      }
+
+      function goPage(p) {
+        const totalPages =
+          pageSize === 0 ? 1 : Math.ceil(allRows.length / pageSize);
+        if (p < 1 || p > totalPages) return;
+        currentPage = p;
+        renderRows();
+      }
+      function changePageSize(val) {
+        pageSize = parseInt(val);
+        currentPage = 1;
+        renderRows();
       }
 
       async function loadReport() {
