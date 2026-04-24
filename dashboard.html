@@ -1344,7 +1344,7 @@
       >
         <div>
           <h1>Dashboard</h1>
-          <p>Purchases</p>
+          <p id="welcomeUser">Purchases</p>
         </div>
         <button
           class="bell-btn"
@@ -1747,6 +1747,18 @@
       (function() {
   const exp = localStorage.getItem("auth_exp");
   const user = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
+  const lsDevice = localStorage.getItem("auth_device");
+  const ssDevice = sessionStorage.getItem("auth_device");
+
+  // Chrome Sync brought login from another device — kill it
+  if (localStorage.getItem("auth_user") && lsDevice && lsDevice !== ssDevice) {
+    localStorage.removeItem("auth_user");
+    localStorage.removeItem("auth_exp");
+    localStorage.removeItem("auth_device");
+    window.location.replace("/login");
+    return;
+  }
+
   if (!user || (exp && Date.now() >= parseInt(exp))) {
     window.location.replace("/login");
   } else {
@@ -2980,6 +2992,15 @@ function doLogout() {
     return u ? JSON.parse(u) : null;
   } catch { return null; }
 }
+
+(function showLoggedUser() {
+  const user = getCurrentUser();
+  const el = document.getElementById("welcomeUser");
+  if (user && el) {
+    const name = user.name || user.user_id || "User";
+    el.textContent = "Welcome, " + name;
+  }
+})();
     </script>
   </body>
 </html>

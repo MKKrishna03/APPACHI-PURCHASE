@@ -657,12 +657,16 @@
       // ── AUTH HELPERS ──
       function setSession(user, stay) {
         const data = JSON.stringify(user);
+        const deviceId = Math.random().toString(36).slice(2) + Date.now();
         if (stay) {
           const exp = Date.now() + 3 * 24 * 60 * 60 * 1000;
           localStorage.setItem("auth_user", data);
           localStorage.setItem("auth_exp", exp);
+          localStorage.setItem("auth_device", deviceId);
+          sessionStorage.setItem("auth_device", deviceId);
         } else {
           sessionStorage.setItem("auth_user", data);
+          sessionStorage.setItem("auth_device", deviceId);
         }
       }
 
@@ -747,6 +751,22 @@
         const user =
           localStorage.getItem("auth_user") ||
           sessionStorage.getItem("auth_user");
+        const lsDevice = localStorage.getItem("auth_device");
+        const ssDevice = sessionStorage.getItem("auth_device");
+
+        // If localStorage has a user but this tab/browser session has no matching device tag,
+        // it means Chrome Sync pulled the login from another device. Clear it.
+        if (
+          localStorage.getItem("auth_user") &&
+          lsDevice &&
+          lsDevice !== ssDevice
+        ) {
+          localStorage.removeItem("auth_user");
+          localStorage.removeItem("auth_exp");
+          localStorage.removeItem("auth_device");
+          return;
+        }
+
         if (user && (!exp || Date.now() < parseInt(exp))) {
           window.location.href = "/dashboard";
         }
