@@ -703,9 +703,7 @@ app.get("/api/vouchers/list", async (req, res) => {
 });
 
 // ── PAGES ──
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "dashboard.html")),
-);
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
 app.get("/profile", (req, res) =>
   res.sendFile(path.join(__dirname, "profile.html")),
 );
