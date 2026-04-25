@@ -16,14 +16,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const pool = new Pool({
-  user: "neondb_owner",
-  password: "npg_3XISZ5xTstNo",
-  host: "35.173.20.131",
-  port: 5432,
-  database: "neondb",
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  family: 4,
-  options: "endpoint=ep-little-sound-anrilgsw",
 });
 
 app.use(express.json());
