@@ -1721,7 +1721,13 @@
     <div class="reminder-panel" id="todoPanel">
       <div class="rp-header">
         <div class="rp-title">📋 To-Do List</div>
-        <button class="rp-close" onclick="toggleTodoPanel()">✕</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="toggleCompletedPanel()" title="Completed Tasks" style="position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;transition:all 0.15s;">
+            ✅
+            <span id="completedBadge" style="position:absolute;top:-4px;right:-4px;background:#2d6a4f;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:none;align-items:center;justify-content:center;padding:0 4px;">0</span>
+          </button>
+          <button class="rp-close" onclick="toggleTodoPanel()">✕</button>
+        </div>
       </div>
       <button class="rp-add-btn" onclick="toggleTodoForm()">＋ Add To-Do</button>
       <div class="rp-form" id="todoForm">
@@ -1735,7 +1741,18 @@
             <option value="all">To All</option>
           </select>
         </div>
-        <div class="rp-form-row">
+        <div class="rp-field">
+          <label>Due In</label>
+          <select id="td-due-period" onchange="handleDuePeriodChange(this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+            <option value="1">1 hour</option>
+            <option value="3">3 hours</option>
+            <option value="6" selected>6 hours</option>
+            <option value="12">12 hours</option>
+            <option value="24">24 hours</option>
+            <option value="custom">Custom date/time</option>
+          </select>
+        </div>
+        <div class="rp-form-row" id="td-custom-datetime" style="display:none;">
           <div class="rp-field">
             <label>Deadline Date</label>
             <input type="date" id="td-date" />
@@ -1763,6 +1780,16 @@
         <button class="rp-save" onclick="saveTodo()">Save To-Do</button>
       </div>
       <div class="rp-list" id="todoList"><div class="ri-empty">No to-dos yet</div></div>
+    </div>
+
+    <!-- Completed Tasks Panel -->
+    <div class="reminder-panel" id="completedPanel">
+      <div class="rp-header">
+        <div class="rp-title">✅ Completed Tasks</div>
+        <button class="rp-close" onclick="toggleCompletedPanel()">✕</button>
+      </div>
+      <div style="padding:8px 16px 0;font-size:11px;color:var(--ink-3);">Tasks completed more than 6 hours ago</div>
+      <div class="rp-list" id="completedList"><div class="ri-empty">No completed tasks</div></div>
     </div>
 
     <!-- Active Alert Overlay -->
@@ -2893,18 +2920,27 @@ function doLogout() {
         document.getElementById("todoPanel").classList.toggle("open");
       };
 
+
       window.toggleTodoForm = function () {
         const f = document.getElementById("todoForm");
         f.classList.toggle("show");
         if (f.classList.contains("show")) {
           document.getElementById("td-date").value = new Date().toISOString().split("T")[0];
+          document.getElementById("td-due-period").value = "6";
+          document.getElementById("td-custom-datetime").style.display = "none";
         }
+      };
+
+
+      window.handleDuePeriodChange = function(val) {
+        document.getElementById("td-custom-datetime").style.display = val === "custom" ? "grid" : "none";
       };
 
       document.addEventListener("click", function(e) {
         const panel = document.getElementById("todoPanel");
         const btn = document.getElementById("todoBtn");
-        if (panel.classList.contains("open") && !panel.contains(e.target) && !btn.contains(e.target)) {
+        const completedPanel = document.getElementById("completedPanel");
+        if (panel.classList.contains("open") && !panel.contains(e.target) && !btn.contains(e.target) && !completedPanel.contains(e.target)) {
           panel.classList.remove("open");
         }
       });
@@ -2913,13 +2949,23 @@ function doLogout() {
         const title = document.getElementById("td-title").value.trim();
         const giver = (getCurrentUser()?.name || getCurrentUser()?.user_id || "User");
         const receiver = document.getElementById("td-receiver").value.trim();
-        const date = document.getElementById("td-date").value;
-        let h = parseInt(document.getElementById("td-hour").value);
-        const m = String(parseInt(document.getElementById("td-min").value) || 0).padStart(2, "0");
-        const ampm = document.getElementById("td-ampm").value;
-        if (ampm === "PM" && h !== 12) h += 12;
-        if (ampm === "AM" && h === 12) h = 0;
-        const time = `${String(h).padStart(2, "0")}:${m}`;
+        const duePeriod = document.getElementById("td-due-period").value;
+        let date, time;
+        if (duePeriod === "custom") {
+          date = document.getElementById("td-date").value;
+          let h = parseInt(document.getElementById("td-hour").value);
+          const m = String(parseInt(document.getElementById("td-min").value) || 0).padStart(2, "0");
+          const ampm = document.getElementById("td-ampm").value;
+          if (ampm === "PM" && h !== 12) h += 12;
+          if (ampm === "AM" && h === 12) h = 0;
+          time = `${String(h).padStart(2, "0")}:${m}`;
+        } else {
+          const target = new Date();
+          target.setHours(target.getHours() + parseInt(duePeriod));
+          const pad = (n) => String(n).padStart(2, "0");
+          date = `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}`;
+          time = `${pad(target.getHours())}:${pad(target.getMinutes())}`;
+        }
         const notes = document.getElementById("td-notes").value.trim();
 
         if (!title) { alert("Title is required"); return; }
@@ -2987,7 +3033,12 @@ function doLogout() {
 
       function renderTodos() {
         const el = document.getElementById("todoList");
-        const visibleTodos = todos;
+        const sixHrsAgo = Date.now() - 6 * 60 * 60 * 1000;
+        const visibleTodos = todos.filter(t => {
+          if (t.status !== 'done') return true;
+          if (!t.done_at) return true;
+          return new Date(t.done_at).getTime() >= sixHrsAgo;
+        });
         if (!visibleTodos.length) {
           el.innerHTML = '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No to-dos yet<br><span style="font-size:11px;opacity:0.6;">Click + Add To-Do to create one</span></div>';
           updateTodoBadge();
@@ -3091,11 +3142,77 @@ function doLogout() {
         if (body) body.classList.toggle('show');
       };
 
+      window.toggleCompletedPanel = function() {
+        document.getElementById("completedPanel").classList.toggle("open");
+        renderCompleted();
+      };
+
+      document.addEventListener("click", function(e) {
+        const panel = document.getElementById("completedPanel");
+        const todoPanel = document.getElementById("todoPanel");
+        if (panel.classList.contains("open") && !panel.contains(e.target) && !todoPanel.contains(e.target)) {
+          panel.classList.remove("open");
+        }
+      });
+
+      function renderCompleted() {
+        const el = document.getElementById("completedList");
+        const sixHrsAgo = Date.now() - 6 * 60 * 60 * 1000;
+        const completed = todos.filter(t => t.status === 'done' && t.done_at && new Date(t.done_at).getTime() < sixHrsAgo);
+        if (!completed.length) {
+          el.innerHTML = '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No archived tasks<br><span style="font-size:11px;opacity:0.6;">Completed tasks older than 6 hours appear here</span></div>';
+          updateCompletedBadge();
+          return;
+        }
+        completed.sort((a,b) => new Date(b.done_at) - new Date(a.done_at));
+        const me = getCurrentUser();
+        const myId = me?.id || me?.user_id;
+        const myName = me?.name;
+        let html = '';
+        completed.forEach(t => {
+          const isAssigner = t.giver === myId || t.giver === myName;
+          const doneDate = new Date(t.done_at);
+          const mins = Math.round((Date.now() - doneDate.getTime()) / 60000);
+          const ago = mins < 60 ? `${mins}m ago` : `${Math.round(mins/60)}h ago`;
+          html += `
+            <div class="ri-card done" style="opacity:0.85;">
+              <div class="ri-card-top">
+                <div style="flex:1">
+                  <div class="ri-card-title" style="text-decoration:line-through;">${t.title}</div>
+                  <div class="ri-card-time">
+                    <span>✓ ${ago}</span>
+                  </div>
+                  <div style="margin-top:6px;font-size:11px;color:var(--ink-2);">
+                    ${isAssigner
+                      ? `<span style="color:var(--ink-3);">To:</span> <b>${t.receiver === 'all' ? 'Everyone' : (t.receiver_name || t.receiver)}</b>`
+                      : `<span style="color:var(--ink-3);">From:</span> <b>${t.giver}</b>`}
+                  </div>
+                </div>
+                <span class="reminder-urgency-badge urgency-tomorrow">Done</span>
+              </div>
+            </div>`;
+        });
+        el.innerHTML = html;
+        updateCompletedBadge();
+      }
+
+
+      function updateCompletedBadge() {
+        const sixHrsAgo = Date.now() - 6 * 60 * 60 * 1000;
+        const count = todos.filter(t => t.status === 'done' && t.done_at && new Date(t.done_at).getTime() < sixHrsAgo).length;
+        const badge = document.getElementById("completedBadge");
+        if (badge) {
+          badge.textContent = count;
+          badge.style.display = count > 0 ? "flex" : "none";
+        }
+      }
+
       function updateTodoBadge() {
         const pending = todos.filter(t => t.status !== 'done').length;
         const badge = document.getElementById("todoBadge");
         badge.textContent = pending;
         badge.style.display = pending > 0 ? "flex" : "none";
+        updateCompletedBadge();
       }
 
       
