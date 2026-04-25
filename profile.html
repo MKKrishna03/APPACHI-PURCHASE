@@ -760,6 +760,86 @@
         });
         container.appendChild(ledgerWrap);
 
+        // Duplicate toggle + duplicate ledger section
+        const dupWrap = document.createElement("div");
+        dupWrap.id = "duplicateWrap";
+        dupWrap.style.cssText = "display:none;margin-bottom:18px;";
+
+        const dupToggleLabel = document.createElement("label");
+        dupToggleLabel.id = "duplicateToggleLabel";
+        dupToggleLabel.style.cssText =
+          "display:none;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);text-transform:none;letter-spacing:0;margin-bottom:12px;";
+        const dupToggle = document.createElement("input");
+        dupToggle.type = "checkbox";
+        dupToggle.id = "createDuplicateCb";
+        dupToggle.style.cssText =
+          "width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0;";
+        dupToggleLabel.appendChild(dupToggle);
+        dupToggleLabel.appendChild(document.createTextNode("Create Duplicate"));
+        container.appendChild(dupToggleLabel);
+
+        const dupHeading = makeSectionHeading("DUPLICATE LEDGER TYPE");
+        dupHeading.id = "duplicateHeading";
+        dupHeading.style.display = "none";
+        container.appendChild(dupHeading);
+
+        const dupLedgerWrap = document.createElement("div");
+        dupLedgerWrap.id = "duplicateLedgerWrap";
+        dupLedgerWrap.style.cssText =
+          "display:none;gap:16px;flex-wrap:wrap;margin-bottom:18px;";
+        LEDGER_TYPES.forEach((type) => {
+          const lbl = document.createElement("label");
+          lbl.style.cssText =
+            "display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);text-transform:none;letter-spacing:0;";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.name = "DUP_LEDGER_TYPE";
+          cb.value = type;
+          cb.dataset.dupLedger = type;
+          cb.style.cssText =
+            "width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0;";
+          cb.addEventListener("change", function () {
+            const orig = document.querySelector(`input[data-ledger="${type}"]`);
+            if (this.checked && orig && orig.checked) {
+              this.checked = false;
+              showToast(`"${type}" is already selected in original.`, "error");
+            }
+          });
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(type));
+          dupLedgerWrap.appendChild(lbl);
+        });
+        container.appendChild(dupLedgerWrap);
+
+        // Sync original ledger -> auto-uncheck duplicate if same
+        document.querySelectorAll("input[data-ledger]").forEach((origCb) => {
+          origCb.addEventListener("change", function () {
+            if (this.checked) {
+              const dup = document.querySelector(
+                `input[data-dup-ledger="${this.value}"]`,
+              );
+              if (dup && dup.checked) {
+                dup.checked = false;
+                showToast(
+                  `"${this.value}" removed from duplicate (conflict).`,
+                  "error",
+                );
+              }
+            }
+          });
+        });
+
+        dupToggle.addEventListener("change", function () {
+          const show = this.checked;
+          dupHeading.style.display = show ? "block" : "none";
+          dupLedgerWrap.style.display = show ? "flex" : "none";
+          if (!show) {
+            document
+              .querySelectorAll("input[data-dup-ledger]")
+              .forEach((cb) => (cb.checked = false));
+          }
+        });
+
         const btn = document.createElement("button");
         btn.id = "submitBtn";
         btn.textContent = "SUBMIT PROFILE";
@@ -789,6 +869,15 @@
           ...document.querySelectorAll("input[data-ledger]:checked"),
         ].map((cb) => cb.value);
         data["LEDGER_TYPES"] = selectedLedgers;
+        const dupCb = document.getElementById("createDuplicateCb");
+        if (dupCb && dupCb.checked) {
+          data["CREATE_DUPLICATE"] = true;
+          data["DUPLICATE_LEDGER_TYPES"] = [
+            ...document.querySelectorAll("input[data-dup-ledger]:checked"),
+          ].map((cb) => cb.value);
+          const baseAlias = sanitiseAlias(data["ALIAS"] || "");
+          data["DUPLICATE_ALIAS"] = sanitiseAlias(baseAlias + " II");
+        }
         return data;
       }
 
@@ -865,7 +954,11 @@
           submitBtn.disabled = false;
           if (result.status === "SUCCESS") {
             showToast(
-              isUpdate ? "Profile updated! ✅" : "Profile created! 🎉",
+              isUpdate
+                ? result.duplicate_created
+                  ? "Profile updated + duplicate created! ✅"
+                  : "Profile updated! ✅"
+                : "Profile created! 🎉",
               "success",
             );
             if (isUpdate) cancelEdit();
@@ -922,6 +1015,7 @@
         currentEditingAlias = alias;
         document.getElementById("editBanner").style.display = "flex";
         document.getElementById("editingAlias").textContent = alias;
+        document.getElementById("duplicateToggleLabel").style.display = "flex";
         Object.entries(profileData).forEach(([key, value]) => {
           const el = document.querySelector(`[data-key="${key}"]`);
           if (!el) return;
@@ -968,6 +1062,13 @@
         currentEditingAlias = null;
         document.getElementById("editBanner").style.display = "none";
         document.getElementById("companyDropdown").value = "";
+        document.getElementById("duplicateToggleLabel").style.display = "none";
+        document.getElementById("createDuplicateCb").checked = false;
+        document.getElementById("duplicateHeading").style.display = "none";
+        document.getElementById("duplicateLedgerWrap").style.display = "none";
+        document
+          .querySelectorAll("input[data-dup-ledger]")
+          .forEach((cb) => (cb.checked = false));
         resetForm();
         const submitBtn = document.getElementById("submitBtn");
         submitBtn.textContent = "SUBMIT PROFILE";

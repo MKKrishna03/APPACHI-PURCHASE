@@ -534,19 +534,19 @@
         try {
           const [vRes, cRes] = await Promise.all([
             fetch(
-              `/api/vouchers/list?profile_id=${encodeURIComponent(profileId)}&voucher_type=Payment Voucher`,
+              `/api/vouchers/list?profile_id=${encodeURIComponent(profileId)}&voucher_type=Payment Voucher&_t=${Date.now()}`,
             ),
-            fetch(`/api/chittai/list/all`),
+            fetch(`/api/chittai/list/all?_t=${Date.now()}`),
           ]);
           const vouchers = await vRes.json();
           const chittais = await cRes.json();
           const mappedVoucherIds = new Set(
             chittais
               .filter((c) => c.linked_voucher_id)
-              .map((c) => c.linked_voucher_id),
+              .map((c) => String(c.linked_voucher_id)),
           );
           unmappedPaymentVouchers = vouchers.filter(
-            (v) => !mappedVoucherIds.has(v.id),
+            (v) => !mappedVoucherIds.has(String(v.id)),
           );
           if (!unmappedPaymentVouchers.length) {
             sel.innerHTML =
@@ -719,6 +719,14 @@
               );
               const vid = selVoucher.value;
               if (vid) {
+                await fetch(`/api/chittai/${data.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    linked_voucher_id: vid,
+                    is_paid: true,
+                  }),
+                });
                 await fetch(`/api/vouchers/${vid}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
