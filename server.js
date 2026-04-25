@@ -18,9 +18,44 @@ const PORT = process.env.PORT || 3000;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  max: 5,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 30000,
+  keepAlive: true,
+  allowExitOnIdle: false,
 });
 
-app.use(express.json());
+pool.on("error", (err) => {
+  console.error("PG POOL ERROR:", err.message);
+});
+
+const _origQuery = pool.query.bind(pool);
+pool.query = async function (...args) {
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await _origQuery(...args);
+    } catch (err) {
+      lastErr = err;
+      if (
+        err.code === "ETIMEDOUT" ||
+        err.message?.includes("ETIMEDOUT") ||
+        err.message?.includes("Connection terminated")
+      ) {
+        await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+};
+
+setInterval(() => {
+  pool.query("SELECT 1").catch(() => {});
+}, 240000);
+
+app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 
@@ -39,6 +74,9 @@ async function initDB() {
   );
   await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS linked_voucher_id INTEGER REFERENCES vouchers(id)`,
   );
   await pool.query(
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS taxable_total NUMERIC`,
@@ -325,7 +363,51 @@ app.put("/api/profile/:alias", async (req, res) => {
       `UPDATE labour l SET company_name = p.company_name FROM profiles p WHERE l.profile_id = p.id AND p.alias = $1`,
       [d["ALIAS"]],
     );
-    res.json({ status: "SUCCESS" });
+
+    let duplicate_created = false;
+    if (d["CREATE_DUPLICATE"] && d["DUPLICATE_ALIAS"]) {
+      const dupAlias = d["DUPLICATE_ALIAS"];
+      const exists = await pool.query(
+        "SELECT id FROM profiles WHERE alias=$1",
+        [dupAlias],
+      );
+      if (exists.rows[0]) {
+        await pool.query(
+          `UPDATE profiles SET ledger_types=$1, updated_at=NOW() WHERE alias=$2`,
+          [d["DUPLICATE_LEDGER_TYPES"] || [], dupAlias],
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO profiles
+            (alias,company_name,address,city,pincode,state,state_code,gst_number,pan_number,
+             contact1,contact2,email,ac_holder,bank_name,account_number,ifsc_code,branch,ledger_types)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+          [
+            dupAlias,
+            d["COMPANY NAME"] + " II",
+            d["ADDRESS"],
+            d["CITY"],
+            d["PINCODE"],
+            d["STATE"],
+            d["STATE CODE"],
+            d["GST NUMBER"],
+            d["PAN NUMBER"],
+            d["CONTACT NUMBER 01"],
+            d["CONTACT NUMBER 02"],
+            d["E-MAIL ID"],
+            d["A/C HOLDER'S NAME"],
+            d["BANK NAME"],
+            d["ACCOUNT NUMBER"],
+            d["IFSC CODE"],
+            d["BRANCH"],
+            d["DUPLICATE_LEDGER_TYPES"] || [],
+          ],
+        );
+      }
+      duplicate_created = true;
+    }
+
+    res.json({ status: "SUCCESS", duplicate_created });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -770,10 +852,10 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} voucher_type ILIKE $${params.length}`;
     }
     if (unlinked_only === "true") {
-      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
+      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND linked_purchase_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, description, linked_labour_id, linked_chittai_id, created_at
+      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, description, linked_labour_id, linked_chittai_id, linked_purchase_id, created_at
        FROM vouchers
        ${where}
        ORDER BY created_at DESC`,
@@ -781,7 +863,13 @@ app.get("/api/vouchers/list", async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("VOUCHER LIST ERROR:", err.message);
+    console.error(
+      "VOUCHER LIST ERROR:",
+      err.message,
+      err.stack,
+      err.code,
+      err.detail,
+    );
     res.status(500).json({ error: err.message });
   }
 });
@@ -1065,6 +1153,7 @@ app.patch("/api/chittai/:id", async (req, res) => {
     total,
     tds,
     rtgs_amount,
+    linked_voucher_id,
   } = req.body;
   try {
     let result;
@@ -1084,6 +1173,11 @@ app.patch("/api/chittai/:id", async (req, res) => {
           rtgs_amount,
           req.params.id,
         ],
+      );
+    } else if (linked_voucher_id !== undefined) {
+      result = await pool.query(
+        `UPDATE chittai SET linked_voucher_id=$1, is_paid=COALESCE($2, is_paid) WHERE id=$3 RETURNING *`,
+        [linked_voucher_id, is_paid, req.params.id],
       );
     } else {
       result = await pool.query(
@@ -1460,8 +1554,17 @@ app.delete("/api/delete-entry", async (req, res) => {
     }
     if (type === "txn")
       await pool.query(`DELETE FROM vouchers WHERE id=$1`, [id]);
-    if (type === "chittai")
+    if (type === "chittai") {
+      await pool.query(
+        `UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`,
+        [id],
+      );
+      await pool.query(
+        `UPDATE purchases SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`,
+        [id],
+      );
       await pool.query(`DELETE FROM chittai WHERE id=$1`, [id]);
+    }
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });

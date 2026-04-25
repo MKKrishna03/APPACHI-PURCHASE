@@ -151,6 +151,14 @@
       }
       .section-body.show {
         max-height: 600px;
+        overflow-y: auto;
+      }
+      .section-body::-webkit-scrollbar {
+        width: 4px;
+      }
+      .section-body::-webkit-scrollbar-thumb {
+        background: var(--surface-3);
+        border-radius: 2px;
       }
 
       .bill-card {
@@ -1139,11 +1147,16 @@
           }
           const receivedQty = {};
           receiptBills.forEach((b) => {
-            receivedQty[b.issue_number] =
-              (receivedQty[b.issue_number] || 0) + (qtyMap[b.id] || 0);
+            if (!b.issue_number) return;
+            const issueNums = b.issue_number.split(",").map((s) => s.trim());
+            const qtyPerIssue = (qtyMap[b.id] || 0) / issueNums.length;
+            issueNums.forEach((n) => {
+              receivedQty[n] = (receivedQty[n] || 0) + qtyPerIssue;
+            });
           });
           const pendingBills = issueBills.filter(
-            (b) => (qtyMap[b.id] || 0) > (receivedQty[b.issue_number] || 0),
+            (b) =>
+              (qtyMap[b.id] || 0) > (receivedQty[b.issue_number] || 0) + 0.001,
           );
           displayLabourBillCards(pendingBills, qtyMap, receivedQty);
         } catch (err) {
