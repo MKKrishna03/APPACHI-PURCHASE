@@ -1070,8 +1070,9 @@
 
         const inRange = (dateStr) => {
           if (!drpStart || !drpEnd || !dateStr) return true;
-          const d = new Date(dateStr.toString().slice(0, 10));
-          return d >= drpStart && d <= drpEnd;
+          const s = dateStr.toString();
+const d = s.length > 10 ? new Date(new Date(s).toLocaleDateString('en-CA') + 'T00:00:00') : new Date(s + 'T00:00:00');
+return d >= drpStart && d <= drpEnd;
         };
 
         // Labour
@@ -1088,13 +1089,15 @@
             inRange(b.date),
         );
         const closedSet = new Set();
-labour
-  .filter(b => b.profile_id == profileId && b.voucher_type === "Receipt Voucher")
-  .forEach(b => {
-    if (b.issue_number) {
-      b.issue_number.split(",").forEach(n => closedSet.add(n.trim()));
-    }
-  });
+        labour
+          .filter(b => b.profile_id == profileId && b.voucher_type === "Receipt Voucher")
+          .forEach(b => {
+            if (b.issue_number) {
+              b.issue_number.split(",").forEach(n => closedSet.add(n.trim()));
+            }
+          });
+        console.log("PROFILE_ID:", profileId, "TOTAL LABOUR:", labour.length, "ISSUES MATCHED:", issues.length, "RECEIPTS MATCHED:", receipts.length, "RANGE:", drpStart, drpEnd);
+        console.log("ALL ISSUES FOR THIS PROFILE:", labour.filter(b => b.profile_id == profileId && b.voucher_type === "ISSUE VOUCHER").map(b => ({issue_number:b.issue_number, date:b.date})));
 
         document.getElementById("issueCount").textContent = issues.length;
         document.getElementById("receiptCount").textContent = receipts.length;
@@ -1191,8 +1194,8 @@ labour
 
       // Default: This Fin Year
       const defaultRange = getFinYear(0);
-      drpStart = defaultRange.start;
-      drpEnd = defaultRange.end;
+drpStart = defaultRange.start;
+drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), defaultRange.end.getDate(), 23, 59, 59);
       document.getElementById("drpLabel").textContent =
         `${fmt(drpStart)} To ${fmt(drpEnd)}`;
       activePreset = 10;

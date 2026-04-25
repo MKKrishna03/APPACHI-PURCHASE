@@ -204,6 +204,13 @@ alias TEXT UNIQUE NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(
+    `ALTER TABLE todos ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'medium'`,
+  );
+  await pool.query(`ALTER TABLE todos ADD COLUMN IF NOT EXISTS photo TEXT`);
+  await pool.query(
+    `ALTER TABLE todos ADD COLUMN IF NOT EXISTS replies JSONB DEFAULT '[]'`,
+  );
   console.log("DB ready");
 }
 
@@ -1577,7 +1584,7 @@ app.get("/api/todos", async (req, res) => {
     const result = await pool.query(
       `SELECT t.id, t.title, t.giver, t.receiver,
               COALESCE(u.name, t.receiver) AS receiver_name,
-              to_char(t.date,'YYYY-MM-DD') as date, t.time, t.notes, t.status, t.seen_at, t.done_at, t.created_at
+              to_char(t.date,'YYYY-MM-DD') as date, t.time, t.notes, t.status, t.priority, t.photo, t.replies, t.seen_at, t.done_at, t.created_at
        FROM todos t
        LEFT JOIN auth_users u ON u.user_id = t.receiver
        WHERE t.receiver='all' OR t.receiver=$1 OR t.giver=$1 OR t.giver=(SELECT name FROM auth_users WHERE user_id=$1)
@@ -1591,13 +1598,71 @@ app.get("/api/todos", async (req, res) => {
 });
 
 app.post("/api/todos", async (req, res) => {
-  const { title, giver, receiver, date, time, notes } = req.body;
+  const { title, giver, receiver, date, time, notes, priority, photo } =
+    req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO todos (title, giver, receiver, date, time, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [title, giver, receiver, date, time, notes || null],
+      `INSERT INTO todos (title, giver, receiver, date, time, notes, priority, photo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [
+        title,
+        giver,
+        receiver,
+        date,
+        time,
+        notes || null,
+        priority || "medium",
+        photo || null,
+      ],
     );
     res.json({ status: "SUCCESS", todo: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/todos/:id/reply", async (req, res) => {
+  const { sender, text, photo } = req.body;
+  try {
+    const result = await pool.query(`SELECT replies FROM todos WHERE id=$1`, [
+      req.params.id,
+    ]);
+    if (!result.rows[0]) return res.status(404).json({ error: "Not found" });
+    const replies = result.rows[0].replies || [];
+    replies.push({
+      id: Date.now(),
+      sender,
+      text: text || "",
+      photo: photo || null,
+      created_at: new Date().toISOString(),
+      seen_by: [sender],
+    });
+    await pool.query(`UPDATE todos SET replies=$1 WHERE id=$2`, [
+      JSON.stringify(replies),
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/todos/:id/replies-seen", async (req, res) => {
+  const { user } = req.body;
+  try {
+    const result = await pool.query(`SELECT replies FROM todos WHERE id=$1`, [
+      req.params.id,
+    ]);
+    if (!result.rows[0]) return res.status(404).json({ error: "Not found" });
+    const replies = (result.rows[0].replies || []).map((r) => {
+      if (!r.seen_by) r.seen_by = [];
+      if (!r.seen_by.includes(user)) r.seen_by.push(user);
+      return r;
+    });
+    await pool.query(`UPDATE todos SET replies=$1 WHERE id=$2`, [
+      JSON.stringify(replies),
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
