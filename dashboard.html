@@ -1346,14 +1346,25 @@
           <h1>Dashboard</h1>
           <p id="welcomeUser">Purchases</p>
         </div>
-        <button
-          class="bell-btn"
-          id="bellBtn"
-          onclick="window.toggleReminderPanel()"
-        >
-          🔔
-          <span class="bell-badge" id="bellBadge">0</span>
-        </button>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button
+            class="bell-btn"
+            id="todoBtn"
+            onclick="window.toggleTodoPanel()"
+            title="To-Do List"
+          >
+            📋
+            <span class="bell-badge" id="todoBadge">0</span>
+          </button>
+          <button
+            class="bell-btn"
+            id="bellBtn"
+            onclick="window.toggleReminderPanel()"
+          >
+            🔔
+            <span class="bell-badge" id="bellBadge">0</span>
+          </button>
+        </div>
       </div>
 
       <!-- Top Cards Row -->
@@ -1706,8 +1717,56 @@
   <div class="rp-list" id="rpList"><div class="ri-empty">No reminders yet</div></div>
 </div>
 
-<!-- Active Alert Overlay -->
-<div id="alertOverlay" style="display:none;position:fixed;inset:0;z-index:9998;pointer-events:none;"></div>
+<!-- To-Do Panel -->
+    <div class="reminder-panel" id="todoPanel">
+      <div class="rp-header">
+        <div class="rp-title">📋 To-Do List</div>
+        <button class="rp-close" onclick="toggleTodoPanel()">✕</button>
+      </div>
+      <button class="rp-add-btn" onclick="toggleTodoForm()">＋ Add To-Do</button>
+      <div class="rp-form" id="todoForm">
+        <div class="rp-field">
+          <label>Task Title</label>
+          <input type="text" id="td-title" placeholder="What needs to be done?" />
+        </div>
+        <div class="rp-field">
+          <label>Assigned To</label>
+          <select id="td-receiver" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+            <option value="all">To All</option>
+          </select>
+        </div>
+        <div class="rp-form-row">
+          <div class="rp-field">
+            <label>Deadline Date</label>
+            <input type="date" id="td-date" />
+          </div>
+          <div class="rp-field">
+            <label>Deadline Time</label>
+            <div style="display:flex;gap:6px">
+              <select id="td-hour" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+                <option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                <option value="04">04</option><option value="05">05</option><option value="06">06</option>
+                <option value="07">07</option><option value="08">08</option><option value="09">09</option>
+                <option value="10">10</option><option value="11">11</option><option value="12" selected>12</option>
+              </select>
+              <input id="td-min" type="number" min="0" max="59" value="00" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);" />
+              <select id="td-ampm" style="flex:1;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+                <option value="AM">AM</option><option value="PM" selected>PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="rp-field">
+          <label>Description / Notes</label>
+          <textarea id="td-notes" placeholder="Details about the task..." style="height:60px"></textarea>
+        </div>
+        <button class="rp-save" onclick="saveTodo()">Save To-Do</button>
+      </div>
+      <div class="rp-list" id="todoList"><div class="ri-empty">No to-dos yet</div></div>
+    </div>
+
+    <!-- Active Alert Overlay -->
+    <div id="alertOverlay" style="display:none;position:fixed;inset:0;z-index:9998;pointer-events:none;"></div>
 
 <!-- Alert Cards Container -->
 <div id="alertCardsContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:12px;max-width:360px;pointer-events:none;"></div>
@@ -2801,6 +2860,245 @@ function doLogout() {
       // Check every minute + immediately on load
       setInterval(checkReminders, 60000);
       setTimeout(checkReminders, 2000);
+
+      // ── TO-DO LIST ──
+      let todos = [];
+
+      async function loadTodoUsers() {
+        try {
+          const res = await fetch('/api/auth/users-list');
+          const users = await res.json();
+          const sel = document.getElementById('td-receiver');
+          sel.innerHTML = '<option value="all">To All</option>' +
+            users.map(u => `<option value="${u.user_id}">${u.name || u.user_id}</option>`).join('');
+        } catch(e) { console.error('Failed to load users', e); }
+      }
+
+      async function loadTodos() {
+        const me = getCurrentUser();
+        const myId = me?.id || me?.user_id;
+        if (!myId) return;
+        try {
+          const res = await fetch('/api/todos?user_id=' + encodeURIComponent(myId));
+          todos = await res.json();
+          renderTodos();
+        } catch(e) { console.error('Failed to load todos', e); }
+      }
+
+      loadTodoUsers();
+      loadTodos();
+      setInterval(loadTodos, 30000);
+
+      window.toggleTodoPanel = function () {
+        document.getElementById("todoPanel").classList.toggle("open");
+      };
+
+      window.toggleTodoForm = function () {
+        const f = document.getElementById("todoForm");
+        f.classList.toggle("show");
+        if (f.classList.contains("show")) {
+          document.getElementById("td-date").value = new Date().toISOString().split("T")[0];
+        }
+      };
+
+      document.addEventListener("click", function(e) {
+        const panel = document.getElementById("todoPanel");
+        const btn = document.getElementById("todoBtn");
+        if (panel.classList.contains("open") && !panel.contains(e.target) && !btn.contains(e.target)) {
+          panel.classList.remove("open");
+        }
+      });
+
+      window.saveTodo = async function () {
+        const title = document.getElementById("td-title").value.trim();
+        const giver = (getCurrentUser()?.name || getCurrentUser()?.user_id || "User");
+        const receiver = document.getElementById("td-receiver").value.trim();
+        const date = document.getElementById("td-date").value;
+        let h = parseInt(document.getElementById("td-hour").value);
+        const m = String(parseInt(document.getElementById("td-min").value) || 0).padStart(2, "0");
+        const ampm = document.getElementById("td-ampm").value;
+        if (ampm === "PM" && h !== 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        const time = `${String(h).padStart(2, "0")}:${m}`;
+        const notes = document.getElementById("td-notes").value.trim();
+
+        if (!title) { alert("Title is required"); return; }
+        if (!receiver) { alert("Assigned To is required"); return; }
+        if (!date) { alert("Deadline date is required"); return; }
+
+        const res = await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, giver, receiver, date, time, notes })
+        });
+        const data = await res.json();
+        if (data.status !== 'SUCCESS') { alert('Failed to save'); return; }
+
+        document.getElementById("td-title").value = "";
+        document.getElementById("td-receiver").value = "all";
+        document.getElementById("td-notes").value = "";
+        document.getElementById("todoForm").classList.remove("show");
+        loadTodos();
+      };
+
+      window.markTodoSeen = async function(id) {
+        await fetch('/api/todos/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'seen' })
+        });
+        loadTodos();
+      };
+
+      window.markTodoDone = async function(id) {
+        await fetch('/api/todos/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'done' })
+        });
+        loadTodos();
+      };
+
+      window.deleteTodo = async function(id) {
+        if (!confirm("Delete this to-do?")) return;
+        await fetch('/api/todos/' + id, { method: 'DELETE' });
+        loadTodos();
+      };
+
+      function fmt12Todo(timeStr) {
+        const [hh, mm] = timeStr.slice(0, 5).split(":").map(Number);
+        const ap = hh >= 12 ? "PM" : "AM";
+        const h12 = hh % 12 || 12;
+        return `${String(h12).padStart(2, "0")}:${String(mm).padStart(2, "0")} ${ap}`;
+      }
+
+      function getTodoUrgency(dateStr, timeStr, status) {
+        if (status === 'done') return 'done';
+        const now = new Date();
+        const [y, mo, day] = dateStr.slice(0, 10).split('-').map(Number);
+        const [h, m] = timeStr.slice(0, 5).split(':').map(Number);
+        const target = new Date(y, mo - 1, day, h, m);
+        const diff = target - now;
+        if (diff < 0) return 'overdue';
+        if (diff < 3600000) return 'today';
+        if (diff < 86400000) return 'tomorrow';
+        return 'future';
+      }
+
+      function renderTodos() {
+        const el = document.getElementById("todoList");
+        const visibleTodos = todos;
+        if (!visibleTodos.length) {
+          el.innerHTML = '<div class="ri-empty" style="padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px;">No to-dos yet<br><span style="font-size:11px;opacity:0.6;">Click + Add To-Do to create one</span></div>';
+          updateTodoBadge();
+          return;
+        }
+
+        // Group: pending, seen, done
+        const groups = { pending: [], seen: [], done: [] };
+        visibleTodos.forEach(t => groups[t.status].push(t));
+
+        const statusLabels = {
+          pending: { label: '🔴 Pending', color: '#e53935' },
+          seen: { label: '🟡 In Progress (Seen)', color: '#b5620a' },
+          done: { label: '✅ Completed', color: '#2d6a4f' }
+        };
+
+        let html = '';
+        for (const [key, items] of Object.entries(groups)) {
+          if (!items.length) continue;
+          html += `<div class="rp-section-label" style="color:${statusLabels[key].color};">${statusLabels[key].label} <span style="font-weight:400;opacity:0.6;">(${items.length})</span></div>`;
+
+          items.forEach(t => {
+            const urg = getTodoUrgency(t.date, t.time, t.status);
+            const urgBadgeMap = {
+              overdue: 'urgency-overdue', today: 'urgency-today',
+              tomorrow: 'urgency-tomorrow', future: 'urgency-future',
+              done: 'urgency-tomorrow'
+            };
+            const urgLabelMap = {
+              overdue: 'Overdue', today: 'Due Today',
+              tomorrow: 'Due Tomorrow', future: 'Upcoming',
+              done: 'Completed'
+            };
+
+            const deadlineDate = new Date(t.date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+            const me = getCurrentUser();
+            const myId = me?.id || me?.user_id;
+            const myName = me?.name;
+            const isAssignee = t.receiver === 'all' || t.receiver === myId;
+            const isAssigner = t.giver === myId || t.giver === myName;
+            const roleTag = isAssigner && !isAssignee
+              ? `<span style="padding:2px 7px;border-radius:99px;background:#dbeeff;color:#1d6fa4;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Assigned by you</span>`
+              : isAssigner && isAssignee
+              ? `<span style="padding:2px 7px;border-radius:99px;background:#fef0d6;color:#b5620a;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Self</span>`
+              : `<span style="padding:2px 7px;border-radius:99px;background:#d8f3dc;color:#2d6a4f;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">For you</span>`;
+
+            let actionBtns = '';
+            if (isAssignee && !isAssigner) {
+              if (t.status === 'pending') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoSeen(${t.id})" style="padding:4px 10px;background:#fef0d6;color:#b5620a;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 Mark Seen</button>`;
+              } else if (t.status === 'seen') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoDone(${t.id})" style="padding:4px 10px;background:#d8f3dc;color:#2d6a4f;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Mark Done</button>`;
+              }
+            } else if (isAssignee && isAssigner) {
+              if (t.status === 'pending') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoSeen(${t.id})" style="padding:4px 10px;background:#fef0d6;color:#b5620a;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 Mark Seen</button>`;
+              } else if (t.status === 'seen') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoDone(${t.id})" style="padding:4px 10px;background:#d8f3dc;color:#2d6a4f;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Mark Done</button>`;
+              }
+            }
+
+            html += `
+              <div class="ri-card ${urg}" onclick="toggleTodoCard(${t.id})" style="${t.status === 'done' ? 'opacity:0.65;' : ''}">
+                <div class="ri-card-top">
+                  <div style="flex:1">
+                    <div class="ri-card-title" style="${t.status === 'done' ? 'text-decoration:line-through;' : ''}">${t.title}</div>
+                    <div class="ri-card-time">
+                      <span>⏰ ${fmt12Todo(t.time)} · ${deadlineDate}</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:11px;color:var(--ink-2);">
+                      ${isAssigner
+                        ? `<span style="color:var(--ink-3);">To:</span> <b>${t.receiver === 'all' ? 'Everyone' : (t.receiver_name || t.receiver)}</b>`
+                        : `<span style="color:var(--ink-3);">From:</span> <b>${t.giver}</b>`}
+                      <span style="margin-left:6px;">${roleTag}</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                    <span class="reminder-urgency-badge ${urgBadgeMap[urg]}">${urgLabelMap[urg]}</span>
+                    ${isAssigner ? `<button class="ri-del-btn" onclick="event.stopPropagation();deleteTodo(${t.id})">✕</button>` : ''}
+                  </div>
+                </div>
+                <div class="ri-card-body" id="td_body_${t.id}">
+                  ${t.notes ? `<div style="line-height:1.5;margin-bottom:8px;">${t.notes}</div>` : '<div style="font-size:11px;color:var(--ink-3);font-style:italic;margin-bottom:8px;">No description</div>'}
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${actionBtns}
+                  </div>
+                  ${t.seen_at ? `<div style="font-size:10px;color:var(--ink-3);margin-top:6px;">Seen: ${new Date(t.seen_at).toLocaleString('en-GB')}</div>` : ''}
+                  ${t.done_at ? `<div style="font-size:10px;color:var(--accent);margin-top:2px;">Done: ${new Date(t.done_at).toLocaleString('en-GB')}</div>` : ''}
+                </div>
+              </div>`;
+          });
+        }
+        el.innerHTML = html;
+        updateTodoBadge();
+      }
+
+
+      window.toggleTodoCard = function(id) {
+        const body = document.getElementById(`td_body_${id}`);
+        if (body) body.classList.toggle('show');
+      };
+
+      function updateTodoBadge() {
+        const pending = todos.filter(t => t.status !== 'done').length;
+        const badge = document.getElementById("todoBadge");
+        badge.textContent = pending;
+        badge.style.display = pending > 0 ? "flex" : "none";
+      }
+
+      
 
       // ── CLOCK ──
       function updateDashClock() {

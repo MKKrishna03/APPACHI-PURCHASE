@@ -147,6 +147,21 @@ alias TEXT UNIQUE NOT NULL,
     );
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS todos (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      giver TEXT,
+      receiver TEXT,
+      date DATE,
+      time TEXT,
+      notes TEXT,
+      status TEXT DEFAULT 'pending',
+      seen_at TIMESTAMP,
+      done_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_users (
       id SERIAL PRIMARY KEY,
       user_id TEXT UNIQUE NOT NULL,
@@ -1458,4 +1473,79 @@ app.delete("/api/delete-entry", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/api/todos", async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) return res.json([]);
+  try {
+    const result = await pool.query(
+      `SELECT t.id, t.title, t.giver, t.receiver,
+              COALESCE(u.name, t.receiver) AS receiver_name,
+              to_char(t.date,'YYYY-MM-DD') as date, t.time, t.notes, t.status, t.seen_at, t.done_at, t.created_at
+       FROM todos t
+       LEFT JOIN auth_users u ON u.user_id = t.receiver
+       WHERE t.receiver='all' OR t.receiver=$1 OR t.giver=$1 OR t.giver=(SELECT name FROM auth_users WHERE user_id=$1)
+       ORDER BY t.created_at DESC`,
+      [user_id],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/todos", async (req, res) => {
+  const { title, giver, receiver, date, time, notes } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO todos (title, giver, receiver, date, time, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [title, giver, receiver, date, time, notes || null],
+    );
+    res.json({ status: "SUCCESS", todo: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/todos/:id", async (req, res) => {
+  const { status } = req.body;
+  try {
+    const col =
+      status === "seen" ? "seen_at" : status === "done" ? "done_at" : null;
+    if (col) {
+      await pool.query(`UPDATE todos SET status=$1, ${col}=NOW() WHERE id=$2`, [
+        status,
+        req.params.id,
+      ]);
+    } else {
+      await pool.query(`UPDATE todos SET status=$1 WHERE id=$2`, [
+        status,
+        req.params.id,
+      ]);
+    }
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/todos/:id", async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM todos WHERE id=$1`, [req.params.id]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/auth/users-list", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT user_id, name FROM auth_users WHERE is_active=true AND password IS NOT NULL ORDER BY name",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
