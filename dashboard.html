@@ -1829,11 +1829,12 @@
 <div id="alertCardsContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:12px;max-width:360px;pointer-events:none;"></div>
 
     <!-- Alert Sound -->
-    <audio
-      id="alertSound"
-      src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
-      preload="auto"
-    ></audio>
+    <audio id="alertSound" preload="auto">
+      <source src="https://assets.mixkit.co/active_storage/sfx/2220/2220-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="msgTone" preload="auto">
+      <source src="https://assets.mixkit.co/active_storage/sfx/1865/1865-preview.mp3" type="audio/mpeg">
+    </audio>
 
     <style>
       .logoutButton {
@@ -2951,6 +2952,101 @@ function doLogout() {
       loadTodos();
       setInterval(loadTodos, 30000);
 
+      // ── REAL-TIME POLLING FOR NEW MESSAGES ──
+      let _lastTodoSnapshot = null;
+
+      async function pollTodos() {
+        const me = getCurrentUser();
+        const myId = me?.id || me?.user_id;
+        const myName = me?.name;
+        if (!myId) return;
+        try {
+          const res = await fetch('/api/todos?user_id=' + encodeURIComponent(myId));
+          const fresh = await res.json();
+
+          if (_lastTodoSnapshot !== null) {
+            fresh.forEach(freshTodo => {
+              const old = _lastTodoSnapshot.find(t => t.id === freshTodo.id);
+              const freshReplies = Array.isArray(freshTodo.replies) ? freshTodo.replies : [];
+              const oldReplies = old ? (Array.isArray(old.replies) ? old.replies : []) : [];
+
+              // New todo assigned to me
+              if (!old && (freshTodo.receiver === 'all' || freshTodo.receiver === myId) && freshTodo.giver !== myName && freshTodo.giver !== myId) {
+                playMsgTone();
+                showBubbleNotification(`📋 New task from ${freshTodo.giver}`, freshTodo.title);
+              }
+
+              // New reply I haven't seen
+              if (freshReplies.length > oldReplies.length) {
+                const newReplies = freshReplies.slice(oldReplies.length);
+                newReplies.forEach(r => {
+                  if (r.sender !== myName && r.sender !== myId) {
+                    playMsgTone();
+                    showBubbleNotification(`💬 ${r.sender}`, r.text || '📎 Photo');
+                  }
+                });
+              }
+            });
+          }
+
+          _lastTodoSnapshot = fresh;
+          todos = fresh;
+          renderTodos();
+        } catch(e) {}
+      }
+
+      function playMsgTone() {
+        try {
+          const audio = document.getElementById('msgTone');
+          audio.currentTime = 0;
+          audio.volume = 0.4;
+          audio.play().catch(() => {});
+        } catch(e) {}
+      }
+
+      function showBubbleNotification(sender, text) {
+        const container = document.getElementById('alertCardsContainer');
+        const bubble = document.createElement('div');
+        bubble.style.cssText = `
+          background:#fff;
+          border-radius:18px;
+          padding:12px 16px;
+          box-shadow:0 4px 24px rgba(0,0,0,0.18);
+          pointer-events:all;
+          animation:alertSlideIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+          max-width:320px;
+          display:flex;
+          align-items:flex-start;
+          gap:10px;
+          border:1px solid rgba(0,0,0,0.08);
+          cursor:pointer;
+        `;
+        bubble.innerHTML = `
+          <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2d6a4f,#52b788);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            ${sender.charAt(sender.indexOf(' ')+1)||sender.charAt(0)||'?'}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">${sender}</div>
+            <div style="font-size:12px;color:#444466;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${text}</div>
+          </div>
+          <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#8888aa;font-size:16px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;">✕</button>
+        `;
+        bubble.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          document.getElementById('todoPanel').classList.add('open');
+          bubble.remove();
+        });
+        container.appendChild(bubble);
+        setTimeout(() => {
+          if (bubble.parentElement) {
+            bubble.style.animation = 'alertSlideIn 0.3s reverse forwards';
+            setTimeout(() => bubble.remove(), 280);
+          }
+        }, 5000);
+      }
+
+      setInterval(pollTodos, 5000);
+
       window.toggleTodoPanel = function () {
         document.getElementById("todoPanel").classList.toggle("open");
       };
@@ -3312,10 +3408,13 @@ function doLogout() {
                       ${replies.map(r => {
   const isMine = r.sender === myName;
   const seenBy = Array.isArray(r.seen_by) ? r.seen_by.filter(s => s !== r.sender) : [];
+  const isRead = seenBy.length > 0;
   const seenTick = isMine
-    ? (seenBy.length > 0
-        ? `<span title="Seen by: ${seenBy.join(', ')}" style="color:#52b788;font-size:10px;margin-left:4px;">✓✓</span>`
-        : `<span style="color:#aaa;font-size:10px;margin-left:4px;">✓</span>`)
+    ? (isRead
+        ? `<span title="Seen by: ${seenBy.join(', ')}" style="color:#1d6fa4;font-size:11px;margin-left:4px;font-weight:700;">✓✓</span>`
+        : (r.text || r.photo)
+          ? `<span style="color:#aaa;font-size:11px;margin-left:4px;">✓</span>`
+          : '')
     : '';
   return `<div style="display:flex;flex-direction:column;align-items:${isMine ? 'flex-end' : 'flex-start'};margin-bottom:8px;">
     <div style="max-width:85%;background:${isMine ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid ${isMine ? '#b7dfc8' : 'var(--border)'};border-radius:${isMine ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px 12px;">
