@@ -3170,6 +3170,10 @@ function doLogout() {
         const visibleTodos = todos.filter(t => {
           if (t.status !== 'done') return true;
           if (!t.done_at) return true;
+          const replies = Array.isArray(t.replies) ? t.replies : [];
+          const myName = (getCurrentUser()?.name || getCurrentUser()?.user_id || "");
+          const hasUnseenReplies = replies.some(r => r.sender !== myName && (!r.seen_by || !r.seen_by.includes(myName)));
+          if (hasUnseenReplies) return true;
           return new Date(t.done_at).getTime() >= sixHrsAgo;
         });
         if (!visibleTodos.length) {
@@ -3284,8 +3288,19 @@ function doLogout() {
                   </div>
                 </div>
                 <div class="ri-card-body" id="td_body_${t.id}" onclick="if(${unseenForMe}>0)markRepliesSeen(${t.id})">
-                  ${t.notes ? `<div style="line-height:1.5;margin-bottom:8px;">${t.notes}</div>` : '<div style="font-size:11px;color:var(--ink-3);font-style:italic;margin-bottom:8px;">No description</div>'}
-                  ${t.photo ? `<div style="margin-bottom:8px;"><img src="${t.photo}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="event.stopPropagation();window.open('${t.photo}','_blank')" /></div>` : ''}
+                  
+                  ${t.photo ? `<div style="margin-bottom:8px;display:flex;flex-direction:column;align-items:${(t.giver === myName || t.giver === myId) ? 'flex-end' : 'flex-start'};">
+  <div style="max-width:85%;background:${(t.giver === myName || t.giver === myId) ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid var(--border);border-radius:${(t.giver === myName || t.giver === myId) ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px;">
+    ${!(t.giver === myName || t.giver === myId) ? `<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;">${t.giver}</div>` : ''}
+    <img src="${t.photo}" style="max-width:100%;max-height:200px;border-radius:8px;cursor:pointer;display:block;" onclick="event.stopPropagation();window.open('${t.photo}','_blank')" />
+    ${t.notes ? `<div style="font-size:12px;color:var(--ink);line-height:1.5;margin-top:6px;word-break:break-word;">${t.notes}</div>` : ''}
+  </div>
+</div>` : (t.notes ? `<div style="display:flex;flex-direction:column;align-items:${(t.giver === myName || t.giver === myId) ? 'flex-end' : 'flex-start'};margin-bottom:8px;">
+  <div style="max-width:85%;background:${(t.giver === myName || t.giver === myId) ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid var(--border);border-radius:${(t.giver === myName || t.giver === myId) ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px 12px;">
+    ${!(t.giver === myName || t.giver === myId) ? `<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px;">${t.giver}</div>` : ''}
+    <div style="font-size:12px;color:var(--ink);line-height:1.5;word-break:break-word;">${t.notes}</div>
+  </div>
+</div>` : '')}
                   <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     ${actionBtns}
                   </div>
@@ -3295,16 +3310,25 @@ function doLogout() {
                     <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
                       <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">💬 Replies (${replies.length})</div>
                       ${replies.map(r => {
-                        const isMine = r.sender === myName;
-                        return `<div style="margin-bottom:6px;padding:7px 10px;border-radius:8px;background:${isMine ? 'var(--accent-light)' : 'var(--surface-2)'};border:1px solid var(--border);">
-                          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-                            <span style="font-size:10px;font-weight:700;color:${isMine ? 'var(--accent)' : 'var(--ink-2)'};">${r.sender}</span>
-                            <span style="font-size:9px;color:var(--ink-3);">${new Date(r.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-                          </div>
-                          ${r.text ? `<div style="font-size:12px;color:var(--ink);line-height:1.4;">${r.text}</div>` : ''}
-                          ${r.photo ? `<img src="${r.photo}" style="max-width:100%;max-height:140px;border-radius:6px;margin-top:4px;cursor:pointer;" onclick="event.stopPropagation();window.open('${r.photo}','_blank')" />` : ''}
-                        </div>`;
-                      }).join('')}
+  const isMine = r.sender === myName;
+  const seenBy = Array.isArray(r.seen_by) ? r.seen_by.filter(s => s !== r.sender) : [];
+  const seenTick = isMine
+    ? (seenBy.length > 0
+        ? `<span title="Seen by: ${seenBy.join(', ')}" style="color:#52b788;font-size:10px;margin-left:4px;">✓✓</span>`
+        : `<span style="color:#aaa;font-size:10px;margin-left:4px;">✓</span>`)
+    : '';
+  return `<div style="display:flex;flex-direction:column;align-items:${isMine ? 'flex-end' : 'flex-start'};margin-bottom:8px;">
+    <div style="max-width:85%;background:${isMine ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid ${isMine ? '#b7dfc8' : 'var(--border)'};border-radius:${isMine ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px 12px;">
+      ${!isMine ? `<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px;">${r.sender}</div>` : ''}
+      ${r.text ? `<div style="font-size:12px;color:var(--ink);line-height:1.5;word-break:break-word;">${r.text}</div>` : ''}
+      ${r.photo ? `<img src="${r.photo}" style="max-width:100%;max-height:180px;border-radius:8px;margin-top:6px;cursor:pointer;display:block;" onclick="event.stopPropagation();window.open('${r.photo}','_blank')" />` : ''}
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:4px;">
+        <span style="font-size:9px;color:var(--ink-3);">${new Date(r.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
+        ${seenTick}
+      </div>
+    </div>
+  </div>`;
+}).join('')}
                     </div>
                   ` : ''}
                   ${t.status !== 'done' ? `
