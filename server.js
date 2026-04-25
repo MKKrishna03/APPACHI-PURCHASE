@@ -826,18 +826,51 @@ app.post("/api/vouchers", async (req, res) => {
   }
 });
 app.patch("/api/vouchers/:id", async (req, res) => {
-  const { date, total_value, description, linked_chittai_id } = req.body;
+  const {
+    date,
+    total_value,
+    description,
+    linked_chittai_id,
+    profile_id,
+    voucher_type,
+    bill_no,
+    entry_type,
+  } = req.body;
   try {
     let result;
-    if (linked_chittai_id !== undefined) {
+    if (linked_chittai_id !== undefined && Object.keys(req.body).length === 1) {
       result = await pool.query(
         `UPDATE vouchers SET linked_chittai_id=$1 WHERE id=$2 RETURNING *`,
         [linked_chittai_id, req.params.id],
       );
     } else {
+      // Handle chittai linking if against chittai
+      let linked_chittai_id_val = null;
+      if (entry_type === "against" && bill_no && profile_id) {
+        const chittaiMatch = await pool.query(
+          `SELECT id FROM chittai WHERE chittai_no = $1 AND profile_id = $2 LIMIT 1`,
+          [bill_no, profile_id],
+        );
+        if (chittaiMatch.rows[0]) {
+          linked_chittai_id_val = chittaiMatch.rows[0].id;
+          await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [
+            linked_chittai_id_val,
+          ]);
+        }
+      }
       result = await pool.query(
-        `UPDATE vouchers SET date=$1, total_value=$2, description=$3 WHERE id=$4 RETURNING *`,
-        [date, total_value, description, req.params.id],
+        `UPDATE vouchers SET profile_id=$1, voucher_type=$2, date=$3, bill_no=$4, entry_type=$5, description=$6, total_value=$7, linked_chittai_id=COALESCE($8, linked_chittai_id) WHERE id=$9 RETURNING *`,
+        [
+          profile_id,
+          voucher_type,
+          date,
+          bill_no,
+          entry_type,
+          description,
+          total_value,
+          linked_chittai_id_val,
+          req.params.id,
+        ],
       );
     }
     res.json(result.rows[0]);

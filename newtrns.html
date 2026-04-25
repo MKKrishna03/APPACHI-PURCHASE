@@ -698,18 +698,32 @@
         payload.created_by = getCurrentUser()?.id || null;
         try {
           saveButton.disabled = true;
-          const res = await fetch("/api/vouchers", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const editId = new URLSearchParams(location.search).get("edit");
+          const res = editId
+            ? await fetch(`/api/vouchers/${editId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              })
+            : await fetch("/api/vouchers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
           const result = await res.json();
           if (result.id) {
-            const kind = transactionKind.value;
-            resetForm();
-            transactionKind.value = kind;
-            updateSaveLabel();
-            setMessage("Transaction saved successfully.", "success");
+            if (!editId) {
+              const kind = transactionKind.value;
+              resetForm();
+              transactionKind.value = kind;
+              updateSaveLabel();
+            }
+            setMessage(
+              editId
+                ? "Transaction updated successfully."
+                : "Transaction saved successfully.",
+              "success",
+            );
           } else setMessage(result.error || "Failed to save.", "error");
         } catch (err) {
           setMessage("Network error: " + err.message, "error");
