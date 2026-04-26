@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
       :root {
         --bg: #f5f5f0;
@@ -1714,8 +1714,10 @@
         const url = `${window.location.origin}/upload/${uploadToken}`;
         const qrDiv = document.getElementById("qrCode");
         qrDiv.innerHTML = "";
-        QRCode.toCanvas(url, { width: 180 }, (err, canvas) => {
-          if (!err) qrDiv.appendChild(canvas);
+        new QRCode(qrDiv, {
+          text: url,
+          width: 180,
+          height: 180,
         });
 
         document.getElementById("photoArea").style.display = "none";
