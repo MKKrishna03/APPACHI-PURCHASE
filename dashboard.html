@@ -1433,7 +1433,7 @@
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
 
         <!-- Card 3: Pending Purchase Bills for Payments -->
-        <div class="dash-card">
+        <div class="dash-card" style="display:none;">
           <div class="dash-card-header">
             <span class="dash-card-title">Pending Purchase Bills for Payments</span>
             <span class="dash-card-badge" id="pendingPurchasePayCount">0</span>
@@ -1445,7 +1445,7 @@
         </div>
 
         <!-- Card 4: Pending Payment for Purchase Bill -->
-        <div class="dash-card">
+        <div class="dash-card" style="display:none;">
           <div class="dash-card-header">
             <span class="dash-card-title">Pending Payment for Purchase Bill</span>
             <span class="dash-card-badge" id="pendingPurchasePaidCount">0</span>
@@ -2951,7 +2951,14 @@ function doLogout() {
         try {
           const res = await fetch('/api/todos?user_id=' + encodeURIComponent(myId));
           todos = await res.json();
-          renderTodos();
+          const panel = document.getElementById("todoPanel");
+          const anyInputFocused = panel && panel.querySelector('input:focus, textarea:focus');
+          const anyBodyOpen = panel && panel.querySelector('.ri-card-body.show');
+          if (!anyInputFocused && !anyBodyOpen) {
+            renderTodos();
+          } else {
+            updateTodoBadge();
+          }
         } catch(e) { console.error('Failed to load todos', e); }
       }
 
@@ -2963,6 +2970,10 @@ function doLogout() {
       let _lastTodoSnapshot = null;
 
       async function pollTodos() {
+        const panel = document.getElementById("todoPanel");
+        const anyInputFocused = panel && panel.querySelector('input:focus, textarea:focus');
+        const anyBodyOpen = panel && panel.querySelector('.ri-card-body.show');
+
         const me = getCurrentUser();
         const myId = me?.id || me?.user_id;
         const myName = me?.name;
@@ -2998,7 +3009,11 @@ function doLogout() {
 
           _lastTodoSnapshot = fresh;
           todos = fresh;
-          renderTodos();
+          if (!anyInputFocused && !anyBodyOpen) {
+            renderTodos();
+          } else {
+            updateTodoBadge();
+          }
         } catch(e) {}
       }
 
@@ -3042,6 +3057,7 @@ function doLogout() {
           if (e.target.tagName === 'BUTTON') return;
           document.getElementById('todoPanel').classList.add('open');
           bubble.remove();
+          e.stopPropagation();
         });
         container.appendChild(bubble);
         setTimeout(() => {
@@ -3100,9 +3116,13 @@ function doLogout() {
         const panel = document.getElementById("todoPanel");
         const btn = document.getElementById("todoBtn");
         const completedPanel = document.getElementById("completedPanel");
-        if (panel.classList.contains("open") && !panel.contains(e.target) && !btn.contains(e.target) && !completedPanel.contains(e.target)) {
-          panel.classList.remove("open");
-        }
+        if (!panel.classList.contains("open")) return;
+        if (panel.contains(e.target)) return;
+        if (btn.contains(e.target)) return;
+        if (completedPanel.contains(e.target)) return;
+        const alertContainer = document.getElementById("alertCardsContainer");
+        if (alertContainer && alertContainer.contains(e.target)) return;
+        panel.classList.remove("open");
       });
 
       let pendingPhotoData = null;
@@ -3366,15 +3386,17 @@ function doLogout() {
             const replies = Array.isArray(t.replies) ? t.replies : [];
             const unseenForMe = replies.filter(r => r.sender !== myName && (!r.seen_by || !r.seen_by.includes(myName))).length;
             const unseenBadge = unseenForMe > 0 ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;background:#1d6fa4;color:#fff;font-size:9px;font-weight:800;">💬 ${unseenForMe}</span>` : '';
+            const cardGlow = unseenForMe > 0 ? `box-shadow:0 0 0 2px #1d6fa4,0 4px 16px rgba(29,111,164,0.18);` : '';
 
             html += `
-              <div class="ri-card ${urg}" onclick="toggleTodoCard(${t.id})" ${priorityStripe}>
+              <div class="ri-card ${urg}" onclick="if(!event.target.closest('.ri-card-body'))toggleTodoCard(${t.id})" ${priorityStripe.replace('style="', `style="${cardGlow}`)}>
                 <div class="ri-card-top">
                   <div style="flex:1">
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
                       ${t.status !== 'done' ? priorityBadge : ''}
+                      ${unseenBadge}
                     </div>
-                    <div class="ri-card-title" style="${t.status === 'done' ? 'text-decoration:line-through;' : ''}">${t.title}</div>
+                    <div class="ri-card-title" style="${t.status === 'done' ? 'text-decoration:line-through;' : ''}${unseenForMe > 0 ? 'color:#1d6fa4;' : ''}">${t.title}</div>
                     <div class="ri-card-time">
                       <span>⏰ ${fmt12Todo(t.time)} · ${deadlineDate}</span>
                     </div>
@@ -3390,7 +3412,7 @@ function doLogout() {
                     ${isAssigner ? `<button class="ri-del-btn" onclick="event.stopPropagation();deleteTodo(${t.id})">✕</button>` : ''}
                   </div>
                 </div>
-                <div class="ri-card-body" id="td_body_${t.id}" onclick="if(${unseenForMe}>0)markRepliesSeen(${t.id})">
+                <div class="ri-card-body" id="td_body_${t.id}" onclick="event.stopPropagation();if(${unseenForMe}>0)markRepliesSeen(${t.id})">
                   
                   ${t.photo ? `<div style="margin-bottom:8px;display:flex;flex-direction:column;align-items:${(t.giver === myName || t.giver === myId) ? 'flex-end' : 'flex-start'};">
   <div style="max-width:85%;background:${(t.giver === myName || t.giver === myId) ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid var(--border);border-radius:${(t.giver === myName || t.giver === myId) ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px;">
@@ -3441,8 +3463,8 @@ function doLogout() {
                     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);" onclick="event.stopPropagation();">
                       <div style="display:flex;gap:6px;align-items:center;">
                         <input type="text" id="td-reply-input-${t.id}" placeholder="Type a reply..." style="flex:1;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:11px;font-family:inherit;background:var(--surface);color:var(--ink);" onkeypress="if(event.key==='Enter')sendTodoReply(${t.id})" />
-                        <label style="cursor:pointer;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;font-size:13px;" title="Attach photo">
-                          📎<input type="file" id="td-reply-photo-${t.id}" accept="image/*" style="display:none;" />
+                        <label style="cursor:pointer;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;font-size:13px;" title="Attach photo" onclick="event.stopPropagation();">
+                          📎<input type="file" id="td-reply-photo-${t.id}" accept="image/*" style="display:none;" onclick="event.stopPropagation();" />
                         </label>
                         <button onclick="sendTodoReply(${t.id})" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Send</button>
                       </div>
@@ -3468,8 +3490,18 @@ function doLogout() {
 
       window.toggleTodoCard = function(id) {
         const body = document.getElementById(`td_body_${id}`);
-        if (body) body.classList.toggle('show');
+        if (body) {
+          const wasHidden = !body.classList.contains('show');
+          body.classList.toggle('show');
+          if (wasHidden) {
+            markRepliesSeen(id);
+          }
+        }
       };
+
+      document.addEventListener("click", function(e) {
+        if (e.target.closest('.ri-card-body')) e.stopPropagation();
+      }, true);
 
       window.toggleCompletedPanel = function() {
         document.getElementById("completedPanel").classList.toggle("open");
@@ -3738,9 +3770,7 @@ function doLogout() {
             fetch("/api/profile/all").then(r => r.json()),
           ]);
           const purchaseProfileIds = new Set(
-            profileRes
-              .filter(p => Array.isArray(p.ledger_types) && p.ledger_types.includes("PURCHASES"))
-              .map(p => String(p.id))
+            profileRes.map(p => String(p.id))
           );
           const linkedVoucherIds = new Set(
             (Array.isArray(chittaisRes) ? chittaisRes : [])

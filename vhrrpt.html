@@ -1647,7 +1647,9 @@
           document.getElementById("footPayment").textContent =
             "₹" + Math.round(totalPayment).toLocaleString("en-IN");
           document.getElementById("reportFoot").style.display = "";
-          const uniqueIVs = new Set(filteredRows.map((r) => r.issueNo)).size;
+          const uniqueIVs = new Set(
+            filteredRows.filter((r) => !r.isSubtotal).map((r) => r.issueNo),
+          ).size;
           const uniqueRVs = filteredRows.filter((r) => r.billNo !== "-").length;
           updateSummary(uniqueIVs, uniqueRVs, totalBillVal, totalPayment);
         } catch (e) {
