@@ -12,6 +12,41 @@ const express = require("express");
 const { Pool } = require("pg");
 const path = require("path");
 const bcrypt = require("bcrypt");
+const multer = require("multer");
+const crypto = require("crypto");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+
+// Cloudinary config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Multer + Cloudinary storage
+const upload = multer({
+  storage: new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: "purchase_bills",
+      allowed_formats: ["jpg", "jpeg", "png", "webp", "heic"],
+      transformation: [
+        { width: 1600, height: 1600, crop: "limit", quality: "auto" },
+      ],
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+// In-memory upload sessions (token -> { bill_no, company, photo_url, expires })
+const uploadSessions = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of uploadSessions) {
+    if (v.expires < now) uploadSessions.delete(k);
+  }
+}, 60000);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -100,6 +135,9 @@ async function initDB() {
   );
   await pool.query(
     `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS created_by TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS created_by TEXT`,
@@ -1063,8 +1101,8 @@ app.post("/api/purchases", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
-        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         profile_id,
         date,
@@ -1085,6 +1123,7 @@ app.post("/api/purchases", async (req, res) => {
           ? linked_chittai_ids[0]
           : null,
         req.body.created_by || null,
+        req.body.photo_url || null,
       ],
     );
     const purchaseId = result.rows[0].id;
@@ -1742,5 +1781,51 @@ app.get("/api/auth/users-list", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── PHOTO UPLOAD SESSION ROUTES ──
+
+// PC creates an upload session
+app.post("/api/upload-session", (req, res) => {
+  const { bill_no, company } = req.body;
+  const token = crypto.randomBytes(8).toString("hex");
+  uploadSessions.set(token, {
+    bill_no: bill_no || "",
+    company: company || "",
+    photo_url: null,
+    expires: Date.now() + 30 * 60 * 1000, // 30 min
+  });
+  res.json({ token });
+});
+
+// Phone loads session info
+app.get("/api/upload-session/:token/status", (req, res) => {
+  const session = uploadSessions.get(req.params.token);
+  if (!session) return res.json({ error: "Invalid or expired" });
+  res.json({
+    bill_no: session.bill_no,
+    company: session.company,
+    uploaded: !!session.photo_url,
+    photo_url: session.photo_url,
+  });
+});
+
+// Phone uploads the photo
+app.post(
+  "/api/upload-session/:token/upload",
+  upload.single("photo"),
+  (req, res) => {
+    const session = uploadSessions.get(req.params.token);
+    if (!session) return res.status(404).json({ error: "Invalid or expired" });
+    if (!req.file) return res.status(400).json({ error: "No file" });
+    // Cloudinary URL is in req.file.path
+    session.photo_url = req.file.path;
+    res.json({ status: "SUCCESS", photo_url: session.photo_url });
+  },
+);
+
+// Phone upload page
+app.get("/upload/:token", (req, res) =>
+  res.sendFile(path.join(__dirname, "mobile-upload.html")),
+);
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

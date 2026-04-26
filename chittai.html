@@ -300,10 +300,32 @@
               id="againstVoucherGroup"
               style="margin-bottom: 0; display: none"
             >
-              <label>Payment Voucher *</label>
-              <select id="chittaiAgainstVoucher">
-                <option value="">— Select —</option>
-              </select>
+              <label>Payment Vouchers * (sum must equal Total)</label>
+              <div
+                id="chittaiAgainstVoucherBox"
+                style="
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  background: var(--surface-2);
+                  padding: 6px;
+                  max-height: 140px;
+                  overflow-y: auto;
+                  font-size: 13px;
+                "
+              >
+                <div style="color: var(--ink-3); padding: 6px">
+                  — Select Company first —
+                </div>
+              </div>
+              <div
+                id="chittaiAgainstSum"
+                style="
+                  font-size: 11px;
+                  color: var(--ink-3);
+                  margin-top: 4px;
+                  font-weight: 600;
+                "
+              ></div>
             </div>
           </div>
           <div class="form-row form-row-3">
@@ -523,12 +545,14 @@
         }
       }
 
-      async function loadUnmappedPaymentVouchers() {
+      async function loadUnmappedPaymentVouchers(preselectedIds = []) {
         const profileId = document.getElementById("chittaiCompany").value;
-        const sel = document.getElementById("chittaiAgainstVoucher");
-        sel.innerHTML = '<option value="">— Loading… —</option>';
+        const box = document.getElementById("chittaiAgainstVoucherBox");
+        box.innerHTML =
+          '<div style="color:var(--ink-3);padding:6px;">— Loading… —</div>';
         if (!profileId) {
-          sel.innerHTML = '<option value="">— Select Company first —</option>';
+          box.innerHTML =
+            '<div style="color:var(--ink-3);padding:6px;">— Select Company first —</div>';
           return;
         }
         try {
@@ -536,34 +560,57 @@
             fetch(
               `/api/vouchers/list?profile_id=${encodeURIComponent(profileId)}&voucher_type=Payment Voucher&_t=${Date.now()}`,
             ),
-            fetch(`/api/chittai/list/all?_t=${Date.now()}`),
+            fetch(`/api/vouchers/list?_t=${Date.now()}`),
           ]);
           const vouchers = await vRes.json();
-          const chittais = await cRes.json();
+          const allVouchers = await cRes.json();
+          const preSet = new Set(preselectedIds.map(String));
           const mappedVoucherIds = new Set(
-            chittais
-              .filter((c) => c.linked_voucher_id)
-              .map((c) => String(c.linked_voucher_id)),
+            allVouchers
+              .filter((v) => v.linked_chittai_id)
+              .map((v) => String(v.id)),
           );
           unmappedPaymentVouchers = vouchers.filter(
-            (v) => !mappedVoucherIds.has(String(v.id)),
+            (v) =>
+              !mappedVoucherIds.has(String(v.id)) || preSet.has(String(v.id)),
           );
           if (!unmappedPaymentVouchers.length) {
-            sel.innerHTML =
-              '<option value="">No unmapped Payment Vouchers found</option>';
+            box.innerHTML =
+              '<div style="color:var(--ink-3);padding:6px;">No unmapped Payment Vouchers found</div>';
             return;
           }
-          sel.innerHTML =
-            '<option value="">— Select —</option>' +
-            unmappedPaymentVouchers
-              .map(
-                (v) =>
-                  `<option value="${v.id}" data-amount="${v.total_value || ""}" data-voucher_no="${v.voucher_no || ""}">${v.voucher_no || v.bill_no || "ID-" + v.id} · ₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</option>`,
-              )
-              .join("");
+          box.innerHTML = unmappedPaymentVouchers
+            .map(
+              (v) => `
+                <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background=''">
+                  <input type="checkbox" class="chittai-pay-chk" value="${v.id}" data-amount="${parseFloat(v.total_value || 0)}" ${preSet.has(String(v.id)) ? "checked" : ""} onchange="updateAgainstSum()" style="width:auto;margin:0;cursor:pointer;accent-color:var(--accent);">
+                  <span style="flex:1;">${v.voucher_no || v.bill_no || "ID-" + v.id}</span>
+                  <span style="color:var(--accent);font-weight:600;">₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</span>
+                </label>`,
+            )
+            .join("");
+          updateAgainstSum();
         } catch (e) {
-          sel.innerHTML = '<option value="">Error loading vouchers</option>';
+          box.innerHTML =
+            '<div style="color:var(--danger);padding:6px;">Error loading vouchers</div>';
         }
+      }
+
+      function getSelectedPaymentVoucherIds() {
+        return Array.from(
+          document.querySelectorAll(".chittai-pay-chk:checked"),
+        ).map((c) => c.value);
+      }
+
+      function updateAgainstSum() {
+        const checked = document.querySelectorAll(".chittai-pay-chk:checked");
+        let sum = 0;
+        checked.forEach((c) => (sum += parseFloat(c.dataset.amount) || 0));
+        const total =
+          parseFloat(document.getElementById("chittaiTotal").value) || 0;
+        const el = document.getElementById("chittaiAgainstSum");
+        const matches = Math.abs(sum - total) < 0.01;
+        el.innerHTML = `Selected sum: ₹${sum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / Total: ₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${checked.length ? (matches ? '<span style="color:var(--accent);">✓ matches</span>' : '<span style="color:var(--danger);">✗ does not match</span>') : ""}`;
       }
       const debouncedCalc = debounce(calcChittai, 300);
       const debouncedRefresh = debounce(refreshChittaiNo, 400);
@@ -586,6 +633,7 @@
           document.getElementById("chittaiValue").value = value.toFixed(2);
           document.getElementById("chittaiTotal").value = total.toFixed(2);
           document.getElementById("chittaiRtgs").value = rtgs.toFixed(2);
+          if (typeof updateAgainstSum === "function") updateAgainstSum();
         });
       }
 
@@ -681,6 +729,23 @@
           msg.className = "message error";
           return;
         }
+        if (entryType === "against") {
+          const vids = getSelectedPaymentVoucherIds();
+          if (!vids.length) {
+            msg.textContent = "Please select at least one Payment Voucher.";
+            msg.className = "message error";
+            return;
+          }
+          let sum = 0;
+          document
+            .querySelectorAll(".chittai-pay-chk:checked")
+            .forEach((c) => (sum += parseFloat(c.dataset.amount) || 0));
+          if (Math.abs(sum - parseFloat(total)) >= 0.01) {
+            msg.textContent = `Sum of selected vouchers (₹${sum.toFixed(2)}) must equal Total (₹${parseFloat(total).toFixed(2)}).`;
+            msg.className = "message error";
+            return;
+          }
+        }
         try {
           const res = await fetch("/api/chittai", {
             method: "POST",
@@ -714,24 +779,20 @@
                 document.getElementById("paymentSection").style.display !==
                 "none";
             if (entryType === "against") {
-              const selVoucher = document.getElementById(
-                "chittaiAgainstVoucher",
-              );
-              const vid = selVoucher.value;
-              if (vid) {
+              const vids = getSelectedPaymentVoucherIds();
+              if (vids.length) {
                 await fetch(`/api/chittai/${data.id}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    linked_voucher_id: vid,
-                    is_paid: true,
-                  }),
+                  body: JSON.stringify({ is_paid: true }),
                 });
-                await fetch(`/api/vouchers/${vid}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ linked_chittai_id: data.id }),
-                });
+                for (const vid of vids) {
+                  await fetch(`/api/vouchers/${vid}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ linked_chittai_id: data.id }),
+                  });
+                }
               }
             }
             if (
@@ -827,6 +888,19 @@
               .map((co) => `<option value="${co.id}">${co.alias}</option>`)
               .join("");
           sel.value = c.profile_id;
+          // Check if any payment vouchers are linked to this chittai (against mode)
+          const allVRes = await fetch("/api/vouchers/list");
+          const allVouchers = await allVRes.json();
+          const linkedAgainst = allVouchers.filter(
+            (v) =>
+              String(v.linked_chittai_id) === String(id) &&
+              v.voucher_type === "Payment Voucher",
+          );
+          if (linkedAgainst.length) {
+            document.getElementById("chittaiEntryType").value = "against";
+            document.getElementById("againstVoucherGroup").style.display = "";
+            await loadUnmappedPaymentVouchers(linkedAgainst.map((v) => v.id));
+          }
           // Fix date timezone
           const ist = new Date(
             new Date(c.date).getTime() + 5.5 * 60 * 60 * 1000,
