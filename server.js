@@ -1828,4 +1828,22 @@ app.get("/upload/:token", (req, res) =>
   res.sendFile(path.join(__dirname, "mobile-upload.html")),
 );
 
+// Update purchase photo (for retake)
+app.patch("/api/purchases/:id/photo", async (req, res) => {
+  try {
+    await pool.query(`UPDATE purchases SET photo_url = $1 WHERE id = $2`, [
+      req.body.photo_url || null,
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Media page
+app.get("/media", (req, res) =>
+  res.sendFile(path.join(__dirname, "media.html")),
+);
+
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

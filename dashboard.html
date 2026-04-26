@@ -1277,10 +1277,17 @@
         <div class="sidebar-section" id="purchaseSection">
           <div
             class="sidebar-section-header"
-            onclick="window.location.href = '/purchase'"
-            style="cursor: pointer"
+            onclick="toggleSection('purchaseSection')"
           >
             <span><span class="sidebar-section-icon">▸</span> Purchase</span>
+          </div>
+          <div class="sidebar-section-content">
+            <div class="sidebar-option" onclick="window.location.href = '/purchase'">
+              New Purchase Voucher
+            </div>
+            <div class="sidebar-option" onclick="window.location.href = '/media'">
+              📸 Bill Photos
+            </div>
           </div>
         </div>
 
