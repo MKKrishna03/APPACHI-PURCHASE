@@ -13,6 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
       :root {
         --bg: #f5f5f0;
@@ -910,6 +911,131 @@
             </div>
           </div>
 
+          <div
+            style="
+              margin-top: 20px;
+              padding: 16px;
+              background: var(--surface-2);
+              border-radius: var(--radius);
+              border: 1px dashed var(--border-strong);
+            "
+          >
+            <div
+              style="
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--ink-3);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin-bottom: 10px;
+              "
+            >
+              📸 Bill Photo (Optional)
+            </div>
+            <div id="photoArea">
+              <button
+                type="button"
+                onclick="startPhoneUpload()"
+                style="
+                  padding: 9px 16px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+              >
+                📱 Attach from Phone
+              </button>
+              <span
+                style="font-size: 12px; color: var(--ink-3); margin-left: 10px"
+                >Scan QR with your phone to take a photo</span
+              >
+            </div>
+            <div
+              id="qrArea"
+              style="display: none; text-align: center; padding: 12px"
+            >
+              <div
+                id="qrCode"
+                style="
+                  display: inline-block;
+                  background: #fff;
+                  padding: 10px;
+                  border-radius: 8px;
+                "
+              ></div>
+              <div
+                style="font-size: 12px; color: var(--ink-3); margin-top: 10px"
+              >
+                Scan with phone camera, take photo, upload
+              </div>
+              <div
+                id="qrStatus"
+                style="
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--accent);
+                  margin-top: 8px;
+                "
+              >
+                Waiting for photo…
+              </div>
+              <button
+                type="button"
+                onclick="cancelPhoneUpload()"
+                style="
+                  margin-top: 8px;
+                  padding: 6px 14px;
+                  background: none;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 12px;
+                "
+              >
+                Cancel
+              </button>
+            </div>
+            <div id="photoPreview" style="display: none; margin-top: 10px">
+              <img
+                id="photoImg"
+                style="
+                  max-width: 200px;
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                "
+              />
+              <div style="margin-top: 6px">
+                <span
+                  style="font-size: 12px; color: var(--green); font-weight: 600"
+                  >✓ Photo attached</span
+                >
+                <button
+                  type="button"
+                  onclick="removePhoto()"
+                  style="
+                    margin-left: 10px;
+                    padding: 4px 10px;
+                    background: var(--danger-light);
+                    color: var(--danger);
+                    border: 1px solid #f09898;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    font-weight: 600;
+                  "
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div class="action-bar" style="margin-top: 20px">
             <button class="btn-submit" onclick="submitPurchase()">
               Submit Purchase Voucher →
@@ -950,6 +1076,9 @@
       let selectedVoucherData = null;
       let selectedVoucherIds = [];
       let selectedChittaiIds = [];
+      let uploadToken = null;
+      let uploadedPhotoUrl = null;
+      let uploadPollInterval = null;
 
       // ── UTILS ──
       function toggleSection(name) {
@@ -1530,6 +1659,7 @@
           linked_chittai_id: selectedChittaiId || null,
           items,
           created_by: getCurrentUser()?.id || null,
+          photo_url: uploadedPhotoUrl || null,
         };
 
         try {
@@ -1565,6 +1695,64 @@
           msg.style.display = "none";
         }
       }
+
+      // ── PHONE PHOTO UPLOAD ──
+      async function startPhoneUpload() {
+        const billNo = document.getElementById("billNo").value.trim();
+        const companySel = document.getElementById("companySelect");
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
+
+        const res = await fetch("/api/upload-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bill_no: billNo, company }),
+        });
+        const data = await res.json();
+        uploadToken = data.token;
+
+        const url = `${window.location.origin}/upload/${uploadToken}`;
+        const qrDiv = document.getElementById("qrCode");
+        qrDiv.innerHTML = "";
+        QRCode.toCanvas(url, { width: 180 }, (err, canvas) => {
+          if (!err) qrDiv.appendChild(canvas);
+        });
+
+        document.getElementById("photoArea").style.display = "none";
+        document.getElementById("qrArea").style.display = "block";
+
+        // Poll every 2 seconds
+        uploadPollInterval = setInterval(checkUploadStatus, 2000);
+      }
+
+      async function checkUploadStatus() {
+        if (!uploadToken) return;
+        try {
+          const res = await fetch(`/api/upload-session/${uploadToken}/status`);
+          const data = await res.json();
+          if (data.uploaded && data.photo_url) {
+            uploadedPhotoUrl = data.photo_url;
+            clearInterval(uploadPollInterval);
+            document.getElementById("qrArea").style.display = "none";
+            document.getElementById("photoImg").src = data.photo_url;
+            document.getElementById("photoPreview").style.display = "block";
+          }
+        } catch (e) {}
+      }
+
+      function cancelPhoneUpload() {
+        if (uploadPollInterval) clearInterval(uploadPollInterval);
+        uploadToken = null;
+        document.getElementById("qrArea").style.display = "none";
+        document.getElementById("photoArea").style.display = "block";
+      }
+
+      function removePhoto() {
+        uploadedPhotoUrl = null;
+        document.getElementById("photoPreview").style.display = "none";
+        document.getElementById("photoArea").style.display = "block";
+      }
+
       // ── INIT ──
       window.onload = async () => {
         await loadCompanies();

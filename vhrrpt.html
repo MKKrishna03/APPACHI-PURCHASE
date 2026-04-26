@@ -1226,23 +1226,65 @@
         const start = pageSize === 0 ? 0 : (currentPage - 1) * pageSize;
         const end = pageSize === 0 ? total : Math.min(start + pageSize, total);
         const page = sorted.slice(start, end);
-        tbody.innerHTML = page
+        const visibleRows = page.filter((row) => {
+          if (row.rvGroupId && !row.isSubtotal) {
+            return expandedGroups.has(String(row.rvGroupId));
+          }
+          return true;
+        });
+        tbody.innerHTML = visibleRows
           .map((row) => {
             const dateStr = row.date ? fmt(row.date) : "-";
-            return `<tr>
-            <td>${dateStr}</td>
-            <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.companyName}</td>
-            <td class="mono">${row.issueNo || "-"}</td>
-            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            let ivSum = 0;
+            if (row.isSubtotal) {
+              const nums = (row.issueNo.match(/\(([^)]+)\)/)?.[1] || "")
+                .split("+")
+                .map((s) => s.trim());
+              nums.forEach((n) => {
+                const m = allRows.find(
+                  (r) =>
+                    r.issueNo === n &&
+                    !r.isSubtotal &&
+                    r.rvGroupId === row.rvGroupId,
+                );
+                if (m) ivSum += m.ivWeight || 0;
+              });
+            }
+            const isExpanded =
+              row.isSubtotal && expandedGroups.has(String(row.rvGroupId));
+            const rowStyle = row.isSubtotal
+              ? ' style="background:var(--accent-light);font-weight:700;cursor:pointer;"'
+              : row.rvGroupId
+                ? ' style="background:rgba(45,106,79,0.04);"'
+                : "";
+            const onClick = row.isSubtotal
+              ? ` onclick="toggleGroup('${row.rvGroupId}')"`
+              : "";
+            const caret = row.isSubtotal
+              ? `<span style="display:inline-block;width:12px;color:var(--accent);">${isExpanded ? "▾" : "▸"}</span> `
+              : "";
+            return `<tr${rowStyle}${onClick}>
+            <td>${caret}${dateStr}</td>
+            <td style="color:var(--ink);font-weight:500;${row.isSubtotal ? "" : "cursor:pointer;"}" ${row.isSubtotal ? "" : `onclick="window.location.href='/company?id=${row.profile_id}'"`}>${row.companyName}</td>
+            <td class="mono"${row.isSubtotal ? ' style="color:var(--accent);font-weight:700;"' : ""}>${row.issueNo || "-"}</td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.isSubtotal ? (ivSum > 0 ? ivSum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-") : row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
             <td class="mono">${row.billNo}</td>
-            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
-            <td style="font-family:'DM Mono',monospace;text-align:right;">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
-            <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
-            <td><span class="tag ${row.status === "paid" ? "tag-done" : "tag-pending"}">${row.status === "paid" ? "Paid" : "Unpaid"}</span></td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
+            <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:${row.isSubtotal ? "700" : "600"};text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
+            <td>${row.isSubtotal ? "" : `<span class="tag ${row.status === "paid" ? "tag-done" : "tag-pending"}">${row.status === "paid" ? "Paid" : "Unpaid"}</span>`}</td>
           </tr>`;
           })
           .join("");
         renderPagination(total);
+      }
+
+      const expandedGroups = new Set();
+      function toggleGroup(id) {
+        const key = String(id);
+        if (expandedGroups.has(key)) expandedGroups.delete(key);
+        else expandedGroups.add(key);
+        renderRows();
       }
 
       function renderPagination(total) {
@@ -1335,11 +1377,17 @@
             (b) => b.voucher_type === "Receipt Voucher",
           );
 
-          // Build receipt map by issue_number
+          // Build receipt map by issue_number — split comma-separated keys
           const receiptMap = {};
           receipts.forEach((r) => {
-            if (!receiptMap[r.issue_number]) receiptMap[r.issue_number] = [];
-            receiptMap[r.issue_number].push(r);
+            const nums = (r.issue_number || "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            nums.forEach((n) => {
+              if (!receiptMap[n]) receiptMap[n] = [];
+              receiptMap[n].push(r);
+            });
           });
 
           // Build payment map by linked_labour_id
@@ -1410,20 +1458,55 @@
                   : null;
                 if (!inRange(iv.date) && !inRange(rv.date)) return;
                 const payment = paymentMap[rv.id];
+                const issueNums = (rv.issue_number || "")
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                const isMulti = issueNums.length > 1;
                 rows.push({
                   date: rvDate || ivDate,
                   companyName,
                   issueNo: iv.issue_number,
                   ivWeight: parseFloat(iv.weight || 0),
-                  billNo: rv.receipt_bill_no || "-",
-                  rvWeight: parseFloat(rv.weight || 0),
-                  billValue: parseFloat(
-                    rv.bill_value_after_deduction || rv.total || 0,
-                  ),
-                  payment: payment ? parseFloat(payment.total_value || 0) : 0,
+                  billNo: isMulti ? "-" : rv.receipt_bill_no || "-",
+                  rvWeight: 0,
+                  billValue: 0,
+                  payment: 0,
                   status: payment ? "paid" : "unpaid",
                   profile_id: iv.profile_id,
+                  rvGroupId: isMulti ? rv.id : null,
+                  isSubtotal: false,
                 });
+                if (
+                  isMulti &&
+                  iv.issue_number === issueNums[issueNums.length - 1]
+                ) {
+                  rows.push({
+                    date: rvDate || ivDate,
+                    companyName,
+                    issueNo: "Subtotal (" + issueNums.join(" + ") + ")",
+                    ivWeight: 0,
+                    billNo: rv.receipt_bill_no || "-",
+                    rvWeight: parseFloat(rv.weight || 0),
+                    billValue: parseFloat(
+                      rv.bill_value_after_deduction || rv.total || 0,
+                    ),
+                    payment: payment ? parseFloat(payment.total_value || 0) : 0,
+                    status: payment ? "paid" : "unpaid",
+                    profile_id: iv.profile_id,
+                    rvGroupId: rv.id,
+                    isSubtotal: true,
+                    rvId: rv.id,
+                  });
+                } else if (!isMulti) {
+                  rows[rows.length - 1].rvWeight = parseFloat(rv.weight || 0);
+                  rows[rows.length - 1].billValue = parseFloat(
+                    rv.bill_value_after_deduction || rv.total || 0,
+                  );
+                  rows[rows.length - 1].payment = payment
+                    ? parseFloat(payment.total_value || 0)
+                    : 0;
+                }
               });
             }
           });
@@ -1473,7 +1556,11 @@
           });
           receipts.forEach((rv) => {
             rows.forEach((row) => {
-              if (
+              if (row.isSubtotal && row.rvId === rv.id) {
+                row.rvWeight = rvWeightMap[rv.id] || 0;
+              } else if (
+                !row.isSubtotal &&
+                !row.rvGroupId &&
                 row.billNo === rv.receipt_bill_no &&
                 row.issueNo === rv.issue_number
               ) {
@@ -1528,10 +1615,18 @@
             totalBillVal = 0,
             totalPayment = 0;
           filteredRows.forEach((row) => {
+            if (row.isSubtotal) return;
             totalIV += row.ivWeight;
             totalRV += row.rvWeight;
             totalBillVal += row.billValue;
             totalPayment += row.payment;
+          });
+          filteredRows.forEach((row) => {
+            if (row.isSubtotal) {
+              totalRV += row.rvWeight;
+              totalBillVal += row.billValue;
+              totalPayment += row.payment;
+            }
           });
           allRows = filteredRows;
           updateSortIcons();
