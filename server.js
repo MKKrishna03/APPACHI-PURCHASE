@@ -24,12 +24,27 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer + Cloudinary storage
+// Multer + Cloudinary storage (purchase bills)
 const upload = multer({
   storage: new CloudinaryStorage({
     cloudinary,
     params: {
       folder: "purchase_bills",
+      allowed_formats: ["jpg", "jpeg", "png", "webp", "heic"],
+      transformation: [
+        { width: 1600, height: 1600, crop: "limit", quality: "auto" },
+      ],
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+// Multer + Cloudinary storage (chittai bills)
+const uploadChittai = multer({
+  storage: new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: "chittai_bills",
       allowed_formats: ["jpg", "jpeg", "png", "webp", "heic"],
       transformation: [
         { width: 1600, height: 1600, crop: "limit", quality: "auto" },
@@ -142,6 +157,10 @@ async function initDB() {
   await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_url TEXT`,
+  );
+  await pool.query(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS remarks TEXT`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -1238,7 +1257,7 @@ app.patch("/api/chittai/:id", async (req, res) => {
     let result;
     if (profile_id !== undefined) {
       result = await pool.query(
-        `UPDATE chittai SET profile_id=$1, chittai_no=$2, date=$3, weight=$4, rate=$5, value=$6, others=$7, total=$8, tds=$9, rtgs_amount=$10 WHERE id=$11 RETURNING *`,
+        `UPDATE chittai SET profile_id=$1, chittai_no=$2, date=$3, weight=$4, rate=$5, value=$6, others=$7, total=$8, tds=$9, rtgs_amount=$10, photo_url=COALESCE($11, photo_url), remarks=COALESCE($12, remarks) WHERE id=$13 RETURNING *`,
         [
           profile_id,
           chittai_no,
@@ -1250,6 +1269,8 @@ app.patch("/api/chittai/:id", async (req, res) => {
           total,
           tds || 0,
           rtgs_amount,
+          req.body.photo_url !== undefined ? req.body.photo_url || null : null,
+          req.body.remarks !== undefined ? req.body.remarks || null : null,
           req.params.id,
         ],
       );
@@ -1299,11 +1320,13 @@ app.post("/api/chittai", async (req, res) => {
     total,
     tds,
     rtgs_amount,
+    photo_url,
+    remarks,
   } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount, created_by, photo_url, remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [
         profile_id,
         chittai_no,
@@ -1316,6 +1339,8 @@ app.post("/api/chittai", async (req, res) => {
         tds || 0,
         rtgs_amount,
         req.body.created_by || null,
+        photo_url || null,
+        remarks || null,
       ],
     );
     const chittai_id = result.rows[0].id;
@@ -1786,11 +1811,12 @@ app.get("/api/auth/users-list", async (req, res) => {
 
 // PC creates an upload session
 app.post("/api/upload-session", (req, res) => {
-  const { bill_no, company } = req.body;
+  const { bill_no, company, folder } = req.body;
   const token = crypto.randomBytes(8).toString("hex");
   uploadSessions.set(token, {
     bill_no: bill_no || "",
     company: company || "",
+    folder: folder || "purchase",
     photo_url: null,
     expires: Date.now() + 30 * 60 * 1000, // 30 min
   });
@@ -1810,18 +1836,21 @@ app.get("/api/upload-session/:token/status", (req, res) => {
 });
 
 // Phone uploads the photo
-app.post(
-  "/api/upload-session/:token/upload",
-  upload.single("photo"),
-  (req, res) => {
-    const session = uploadSessions.get(req.params.token);
-    if (!session) return res.status(404).json({ error: "Invalid or expired" });
-    if (!req.file) return res.status(400).json({ error: "No file" });
-    // Cloudinary URL is in req.file.path
-    session.photo_url = req.file.path;
-    res.json({ status: "SUCCESS", photo_url: session.photo_url });
-  },
-);
+// Custom middleware to pick the right uploader based on session.folder
+function pickUploader(req, res, next) {
+  const session = uploadSessions.get(req.params.token);
+  const uploader =
+    session && session.folder === "chittai" ? uploadChittai : upload;
+  uploader.single("photo")(req, res, next);
+}
+
+app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
+  const session = uploadSessions.get(req.params.token);
+  if (!session) return res.status(404).json({ error: "Invalid or expired" });
+  if (!req.file) return res.status(400).json({ error: "No file" });
+  session.photo_url = req.file.path;
+  res.json({ status: "SUCCESS", photo_url: session.photo_url });
+});
 
 // Phone upload page
 app.get("/upload/:token", (req, res) =>
@@ -1845,5 +1874,24 @@ app.patch("/api/purchases/:id/photo", async (req, res) => {
 app.get("/media", (req, res) =>
   res.sendFile(path.join(__dirname, "media.html")),
 );
+
+// Chittai photo direct upload (PC)
+app.post("/api/chittai-upload", uploadChittai.single("photo"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file" });
+  res.json({ status: "SUCCESS", photo_url: req.file.path });
+});
+
+// Update chittai photo (for retake)
+app.patch("/api/chittai/:id/photo", async (req, res) => {
+  try {
+    await pool.query(`UPDATE chittai SET photo_url = $1 WHERE id = $2`, [
+      req.body.photo_url || null,
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

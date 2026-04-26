@@ -932,7 +932,15 @@
             >
               📸 Bill Photo (Optional)
             </div>
-            <div id="photoArea">
+            <div
+              id="photoArea"
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+              "
+            >
               <button
                 type="button"
                 onclick="startPhoneUpload()"
@@ -948,11 +956,32 @@
                   color: var(--ink-2);
                 "
               >
-                📱 Attach from Phone
+                📱 From Phone
               </button>
-              <span
-                style="font-size: 12px; color: var(--ink-3); margin-left: 10px"
-                >Scan QR with your phone to take a photo</span
+              <label
+                style="
+                  padding: 9px 16px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+              >
+                💻 Upload
+                <input
+                  type="file"
+                  id="pcFileInput"
+                  accept="image/*,application/pdf"
+                  style="display: none"
+                  onchange="uploadFromPC(event)"
+                />
+              </label>
+              <span style="font-size: 12px; color: var(--ink-3)"
+                >Scan QR or upload directly</span
               >
             </div>
             <div
@@ -1752,7 +1781,63 @@
       function removePhoto() {
         uploadedPhotoUrl = null;
         document.getElementById("photoPreview").style.display = "none";
-        document.getElementById("photoArea").style.display = "block";
+        document.getElementById("photoArea").style.display = "flex";
+      }
+
+      // ── PC FILE UPLOAD ──
+      async function uploadFromPC(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+          showMessage("File must be under 15 MB", "error");
+          event.target.value = "";
+          return;
+        }
+
+        // Create an upload session
+        const billNo = document.getElementById("billNo").value.trim();
+        const companySel = document.getElementById("companySelect");
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
+
+        try {
+          showMessage("Uploading...", "success");
+          const sessRes = await fetch("/api/upload-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_no: billNo, company }),
+          });
+          const sessData = await sessRes.json();
+          const token = sessData.token;
+
+          const fd = new FormData();
+          fd.append("photo", file);
+          const upRes = await fetch(`/api/upload-session/${token}/upload`, {
+            method: "POST",
+            body: fd,
+          });
+          const upData = await upRes.json();
+
+          if (upData.status === "SUCCESS") {
+            uploadedPhotoUrl = upData.photo_url;
+            document.getElementById("photoArea").style.display = "none";
+            document.getElementById("photoImg").src = upData.photo_url;
+            document.getElementById("photoPreview").style.display = "block";
+            showMessage("Photo uploaded ✓", "success");
+            setTimeout(() => {
+              const m = document.getElementById("message");
+              m.style.display = "none";
+            }, 1500);
+          } else {
+            showMessage(
+              "Upload failed: " + (upData.error || "unknown"),
+              "error",
+            );
+          }
+        } catch (e) {
+          showMessage("Upload error: " + e.message, "error");
+        }
+        event.target.value = "";
       }
 
       // ── INIT ──

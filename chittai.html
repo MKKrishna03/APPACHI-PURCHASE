@@ -13,6 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       :root {
         --bg: #f5f5f0;
@@ -413,7 +414,7 @@
               />
             </div>
           </div>
-          <div class="form-row form-row-2" style="margin-bottom: 0">
+          <div class="form-row form-row-2" style="margin-bottom: 16px">
             <div class="form-group" style="margin-bottom: 0">
               <label>TDS</label
               ><input
@@ -433,6 +434,178 @@
                 readonly
                 placeholder="0.00"
               />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px">
+            <label>Remarks</label>
+            <textarea
+              id="chittaiRemarks"
+              rows="2"
+              placeholder="Optional remarks..."
+              style="
+                font-family: inherit;
+                padding: 10px 13px;
+                border: 1px solid var(--border-strong);
+                border-radius: var(--radius);
+                font-size: 14px;
+                color: var(--ink);
+                background: var(--surface-2);
+                width: 100%;
+                resize: vertical;
+              "
+            ></textarea>
+          </div>
+
+          <div
+            style="
+              padding: 14px;
+              background: var(--surface-2);
+              border-radius: var(--radius);
+              border: 1px dashed var(--border-strong);
+            "
+          >
+            <div
+              style="
+                font-size: 10px;
+                font-weight: 700;
+                color: var(--ink-3);
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                margin-bottom: 10px;
+              "
+            >
+              📸 Chittai Bill Photo (Optional)
+            </div>
+            <div
+              id="ctPhotoArea"
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+              "
+            >
+              <button
+                type="button"
+                onclick="ctStartPhoneUpload()"
+                style="
+                  padding: 8px 14px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+              >
+                📱 From Phone
+              </button>
+              <label
+                style="
+                  padding: 8px 14px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+              >
+                💻 Upload from PC
+                <input
+                  type="file"
+                  accept="image/*"
+                  style="display: none"
+                  onchange="ctUploadFromPC(event)"
+                />
+              </label>
+            </div>
+            <div
+              id="ctQrArea"
+              style="display: none; text-align: center; padding: 10px"
+            >
+              <div
+                id="ctQrCode"
+                style="
+                  display: inline-block;
+                  background: #fff;
+                  padding: 8px;
+                  border-radius: 8px;
+                "
+              ></div>
+              <div
+                style="font-size: 11px; color: var(--ink-3); margin-top: 6px"
+              >
+                Scan, snap, upload
+              </div>
+              <div
+                style="
+                  font-size: 12px;
+                  color: var(--accent);
+                  margin-top: 4px;
+                  font-weight: 600;
+                "
+              >
+                Waiting for photo…
+              </div>
+              <button
+                type="button"
+                onclick="ctCancelPhoneUpload()"
+                style="
+                  margin-top: 6px;
+                  padding: 5px 12px;
+                  background: none;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 11px;
+                "
+              >
+                Cancel
+              </button>
+            </div>
+            <div id="ctPhotoPreview" style="display: none; margin-top: 10px">
+              <img
+                id="ctPhotoImg"
+                style="
+                  max-width: 180px;
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                "
+              />
+              <div style="margin-top: 6px">
+                <span
+                  style="
+                    font-size: 12px;
+                    color: var(--accent);
+                    font-weight: 600;
+                  "
+                  >✓ Photo attached</span
+                >
+                <button
+                  type="button"
+                  onclick="ctRemovePhoto()"
+                  style="
+                    margin-left: 10px;
+                    padding: 3px 9px;
+                    background: var(--danger-light);
+                    color: var(--danger);
+                    border: 1px solid #f09898;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    font-weight: 600;
+                  "
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -525,6 +698,9 @@
       }
       let companyCache = null;
       let unmappedPaymentVouchers = [];
+      let ctUploadToken = null;
+      let ctUploadedPhotoUrl = null;
+      let ctUploadPollInterval = null;
 
       async function handleCompanyChange() {
         debouncedRefresh();
@@ -677,7 +853,99 @@
         document.getElementById("payMop").value = "";
         document.getElementById("addPayBtn").textContent = "+ Add Payment";
         document.getElementById("chittaiDate").valueAsDate = new Date();
+        document.getElementById("chittaiRemarks").value = "";
+        ctRemovePhoto();
         refreshChittaiNo();
+      }
+
+      // ── CHITTAI PHOTO UPLOAD ──
+      async function ctStartPhoneUpload() {
+        const chittaiNo = document.getElementById("chittaiNo").value;
+        const companySel = document.getElementById("chittaiCompany");
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
+
+        const res = await fetch("/api/upload-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bill_no: chittaiNo,
+            company,
+            folder: "chittai",
+          }),
+        });
+        const data = await res.json();
+        ctUploadToken = data.token;
+
+        const url = `${window.location.origin}/upload/${ctUploadToken}`;
+        const qrDiv = document.getElementById("ctQrCode");
+        qrDiv.innerHTML = "";
+        new QRCode(qrDiv, { text: url, width: 160, height: 160 });
+
+        document.getElementById("ctPhotoArea").style.display = "none";
+        document.getElementById("ctQrArea").style.display = "block";
+
+        ctUploadPollInterval = setInterval(ctCheckUploadStatus, 2000);
+      }
+
+      async function ctCheckUploadStatus() {
+        if (!ctUploadToken) return;
+        try {
+          const res = await fetch(
+            `/api/upload-session/${ctUploadToken}/status`,
+          );
+          const data = await res.json();
+          if (data.uploaded && data.photo_url) {
+            ctUploadedPhotoUrl = data.photo_url;
+            clearInterval(ctUploadPollInterval);
+            document.getElementById("ctQrArea").style.display = "none";
+            document.getElementById("ctPhotoImg").src = data.photo_url;
+            document.getElementById("ctPhotoPreview").style.display = "block";
+          }
+        } catch (e) {}
+      }
+
+      function ctCancelPhoneUpload() {
+        if (ctUploadPollInterval) clearInterval(ctUploadPollInterval);
+        ctUploadToken = null;
+        document.getElementById("ctQrArea").style.display = "none";
+        document.getElementById("ctPhotoArea").style.display = "flex";
+      }
+
+      async function ctUploadFromPC(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+          alert("File must be under 15 MB");
+          event.target.value = "";
+          return;
+        }
+        try {
+          const fd = new FormData();
+          fd.append("photo", file);
+          const res = await fetch("/api/chittai-upload", {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json();
+          if (data.status === "SUCCESS") {
+            ctUploadedPhotoUrl = data.photo_url;
+            document.getElementById("ctPhotoArea").style.display = "none";
+            document.getElementById("ctPhotoImg").src = data.photo_url;
+            document.getElementById("ctPhotoPreview").style.display = "block";
+          } else {
+            alert("Upload failed: " + (data.error || ""));
+          }
+        } catch (e) {
+          alert("Upload error: " + e.message);
+        }
+        event.target.value = "";
+      }
+
+      function ctRemovePhoto() {
+        ctUploadedPhotoUrl = null;
+        document.getElementById("ctPhotoPreview").style.display = "none";
+        document.getElementById("ctPhotoArea").style.display = "flex";
       }
 
       function closeChittai() {
@@ -693,12 +961,7 @@
         try {
           if (!companyCache) {
             const res = await fetch("/api/profiles/list");
-            const all = await res.json();
-            companyCache = all.filter(
-              (c) =>
-                Array.isArray(c.ledger_types) &&
-                c.ledger_types.includes("PURCHASES"),
-            );
+            companyCache = await res.json();
           }
           const sel = document.getElementById("chittaiCompany");
           sel.innerHTML =
@@ -768,6 +1031,9 @@
                     null
                   : null,
               created_by: getCurrentUser()?.id || null,
+              photo_url: ctUploadedPhotoUrl || null,
+              remarks:
+                document.getElementById("chittaiRemarks").value.trim() || null,
             }),
           });
           const data = await res.json();
@@ -918,6 +1184,13 @@
           document.getElementById("chittaiTotal").value = c.total || "";
           document.getElementById("chittaiTds").value = c.tds || "";
           document.getElementById("chittaiRtgs").value = c.rtgs_amount || "";
+          document.getElementById("chittaiRemarks").value = c.remarks || "";
+          if (c.photo_url) {
+            ctUploadedPhotoUrl = c.photo_url;
+            document.getElementById("ctPhotoArea").style.display = "none";
+            document.getElementById("ctPhotoImg").src = c.photo_url;
+            document.getElementById("ctPhotoPreview").style.display = "block";
+          }
           // Auto-open payment section if payment exists
           const vRes = await fetch("/api/vouchers/list");
           const vouchers = await vRes.json();
@@ -992,6 +1265,9 @@
               total,
               tds,
               rtgs_amount: rtgs,
+              photo_url: ctUploadedPhotoUrl || null,
+              remarks:
+                document.getElementById("chittaiRemarks").value.trim() || null,
             }),
           });
           const data = await res.json();

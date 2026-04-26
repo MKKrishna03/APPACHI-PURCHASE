@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snap Bill Photo</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -76,6 +81,49 @@
         max-width: 100%;
         max-height: 400px;
         display: none;
+      }
+      .preview.show {
+        display: block;
+      }
+      .crop-container {
+        margin: 16px 0;
+        max-width: 100%;
+        max-height: 60vh;
+        display: none;
+        background: #000;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .crop-container.show {
+        display: block;
+      }
+      .crop-container img {
+        max-width: 100%;
+        display: block;
+      }
+      .crop-controls {
+        display: none;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 10px;
+      }
+      .crop-controls.show {
+        display: flex;
+      }
+      .crop-btn {
+        padding: 8px 12px;
+        background: #f0efe9;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        color: #444466;
+      }
+      .crop-btn:active {
+        background: #ddd;
       }
       .preview.show {
         display: block;
@@ -164,8 +212,26 @@
         onchange="onPhotoSelected(event)"
       />
 
+      <div class="crop-container" id="cropContainer">
+        <img id="cropImg" />
+      </div>
+
+      <div class="crop-controls" id="cropControls">
+        <button class="crop-btn" onclick="rotateCrop(-90)">↺ Rotate L</button>
+        <button class="crop-btn" onclick="rotateCrop(90)">↻ Rotate R</button>
+        <button class="crop-btn" onclick="resetCrop()">Reset</button>
+      </div>
+
       <img class="preview" id="preview" />
 
+      <button
+        class="upload-btn"
+        id="confirmCropBtn"
+        onclick="confirmCrop()"
+        style="display: none; background: #1d6fa4"
+      >
+        ✂ Use Cropped Photo
+      </button>
       <button class="upload-btn" id="uploadBtn" onclick="uploadPhoto()">
         ✓ Use This Photo
       </button>
@@ -204,23 +270,86 @@
       }
 
       function openCamera() {
+        if (cropper) {
+          cropper.destroy();
+          cropper = null;
+        }
+        document.getElementById("cropContainer").classList.remove("show");
+        document.getElementById("cropControls").classList.remove("show");
+        document.getElementById("confirmCropBtn").style.display = "none";
+        document.getElementById("preview").classList.remove("show");
+        document.getElementById("uploadBtn").classList.remove("show");
         document.getElementById("fileInput").click();
       }
+
+      let cropper = null;
 
       function onPhotoSelected(e) {
         const file = e.target.files[0];
         if (!file) return;
-        selectedFile = file;
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const img = document.getElementById("preview");
+          const img = document.getElementById("cropImg");
           img.src = ev.target.result;
-          img.classList.add("show");
-          document.getElementById("uploadBtn").classList.add("show");
+          document.getElementById("cropContainer").classList.add("show");
+          document.getElementById("cropControls").classList.add("show");
+          document.getElementById("confirmCropBtn").style.display = "block";
           document.getElementById("retakeBtn").classList.add("show");
           document.getElementById("cameraBtn").style.display = "none";
+          document.getElementById("preview").classList.remove("show");
+          document.getElementById("uploadBtn").classList.remove("show");
+
+          if (cropper) cropper.destroy();
+          cropper = new Cropper(img, {
+            viewMode: 1,
+            autoCropArea: 1,
+            background: false,
+            movable: true,
+            zoomable: true,
+            scalable: true,
+            rotatable: true,
+          });
         };
         reader.readAsDataURL(file);
+      }
+
+      function rotateCrop(deg) {
+        if (cropper) cropper.rotate(deg);
+      }
+      function resetCrop() {
+        if (cropper) cropper.reset();
+      }
+
+      function confirmCrop() {
+        if (!cropper) return;
+        const canvas = cropper.getCroppedCanvas({
+          maxWidth: 2000,
+          maxHeight: 2000,
+          imageSmoothingQuality: "high",
+        });
+        canvas.toBlob(
+          (blob) => {
+            selectedFile = new File([blob], "bill_cropped.jpg", {
+              type: "image/jpeg",
+            });
+            const url = URL.createObjectURL(blob);
+
+            document.getElementById("cropContainer").classList.remove("show");
+            document.getElementById("cropControls").classList.remove("show");
+            document.getElementById("confirmCropBtn").style.display = "none";
+            if (cropper) {
+              cropper.destroy();
+              cropper = null;
+            }
+
+            const img = document.getElementById("preview");
+            img.src = url;
+            img.classList.add("show");
+            document.getElementById("uploadBtn").classList.add("show");
+          },
+          "image/jpeg",
+          0.9,
+        );
       }
 
       async function uploadPhoto() {
