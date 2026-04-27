@@ -944,6 +944,19 @@
                   class="total-input"
                 />
               </div>
+              <div style="display: flex; gap: 12px; align-items: center">
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >Value Added</span
+                >
+                <input
+                  type="number"
+                  id="hmValueAdded"
+                  step="0.01"
+                  class="total-input"
+                  oninput="updateHallmarkTotals()"
+                />
+              </div>
               <div
                 id="hmCgstRow"
                 style="display: flex; gap: 12px; align-items: center"
@@ -1053,6 +1066,16 @@
                 id="billTaxable"
                 class="total-input"
                 readonly
+              />
+            </div>
+            <div class="total-row">
+              <span class="total-label">Value Added</span>
+              <input
+                type="number"
+                id="billValueAdded"
+                class="total-input"
+                step="0.01"
+                oninput="updateTotals()"
               />
             </div>
             <div class="total-row" id="cgstRow">
@@ -1886,9 +1909,11 @@
           selectedGstType === "CGST_SGST" ? "flex" : "none";
         document.getElementById("hmIgstRow").style.display =
           selectedGstType === "IGST" ? "flex" : "none";
+        const valueAdded =
+          parseFloat(document.getElementById("hmValueAdded").value) || 0;
         const roundOff =
           parseFloat(document.getElementById("hmRoundOff").value) || 0;
-        const total = taxable + cgst + sgst + igst + roundOff;
+        const total = taxable + valueAdded + cgst + sgst + igst + roundOff;
         document.getElementById("hmTotal").value = total.toFixed(2);
         const tds = parseFloat(document.getElementById("hmTds").value) || 0;
         const payable = total - tds;
@@ -1939,9 +1964,11 @@
         document.getElementById("billSgst").value = sgst.toFixed(2);
         document.getElementById("billIgst").value = igst.toFixed(2);
 
+        const valueAdded =
+          parseFloat(document.getElementById("billValueAdded").value) || 0;
         const roundOff =
           parseFloat(document.getElementById("billRoundOff").value) || 0;
-        const total = taxable + cgst + sgst + igst + roundOff;
+        const total = taxable + valueAdded + cgst + sgst + igst + roundOff;
         document.getElementById("billTotal").value = total.toFixed(2);
 
         const tds = parseFloat(document.getElementById("billTds").value) || 0;

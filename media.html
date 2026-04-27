@@ -499,6 +499,14 @@
             <option value="all">All Time</option>
           </select>
         </div>
+        <div class="filter-group">
+          <label>Accounted</label>
+          <select id="filterAccounted" onchange="applyFilters()">
+            <option value="">All</option>
+            <option value="no">Non-Accounted</option>
+            <option value="yes">Accounted</option>
+          </select>
+        </div>
         <button class="btn btn-secondary" onclick="clearFilters()">
           Clear
         </button>
@@ -529,6 +537,25 @@
           >
             Select All
           </button>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              color: var(--ink-2);
+              cursor: pointer;
+              padding: 9px 4px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="markAccountedChk"
+              style="width: 16px; height: 16px; cursor: pointer"
+            />
+            Mark as Accounted on Download
+          </label>
           <button
             class="btn btn-primary"
             onclick="downloadSelected('jpg')"
@@ -673,6 +700,7 @@
         const from = document.getElementById("filterFrom").value;
         const to = document.getElementById("filterTo").value;
 
+        const accounted = document.getElementById("filterAccounted").value;
         filtered = allPurchases.filter((p) => {
           if (company && String(p.profile_id) !== String(company)) return false;
           if (from || to) {
@@ -681,6 +709,8 @@
             if (from && d < from) return false;
             if (to && d > to) return false;
           }
+          if (accounted === "yes" && !p.is_accounted) return false;
+          if (accounted === "no" && p.is_accounted) return false;
           return true;
         });
 
@@ -733,6 +763,7 @@
         document.getElementById("filterFrom").value = "";
         document.getElementById("filterTo").value = "";
         document.getElementById("filterQuick").value = "";
+        document.getElementById("filterAccounted").value = "";
         applyFilters();
       }
 
@@ -768,6 +799,7 @@
               <div class="photo-bill">${p.bill_no || "—"}</div>
               <div class="photo-company">${getCompanyName(p.profile_id)}</div>
               <div class="photo-date">${fmtDate(p.date)}</div>
+              ${p.is_accounted ? `<div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--green);background:var(--green-light);border-radius:4px;padding:2px 6px;display:inline-block;">✓ ACCOUNTED</div>` : ""}
             </div>
           </div>`;
           })
@@ -873,6 +905,22 @@
         }
       }
 
+      async function markItemsAccounted(items) {
+        const chk = document.getElementById("markAccountedChk");
+        if (!chk.checked) return;
+        for (const p of items) {
+          try {
+            await fetch(`/api/purchases/${p.id}/accounted`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ is_accounted: true }),
+            });
+            p.is_accounted = true;
+          } catch (e) {}
+        }
+        renderGallery();
+      }
+
       async function downloadSelected(type) {
         const items = filtered.filter((p) => selected.has(p.id));
         if (!items.length) return;
@@ -895,6 +943,7 @@
               await new Promise((r) => setTimeout(r, 200));
             } catch (e) {}
           }
+          await markItemsAccounted(items);
           showToast(`Downloaded ${items.length} photos`, "success");
         } else if (type === "pdf") {
           showToast(`Generating PDF (${items.length} photos)...`);
@@ -902,6 +951,7 @@
             items,
             `bill_photos_${new Date().toISOString().slice(0, 10)}.pdf`,
           );
+          await markItemsAccounted(items);
         }
       }
 

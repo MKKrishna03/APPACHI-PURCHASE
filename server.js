@@ -155,6 +155,9 @@ async function initDB() {
     `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
   await pool.query(
@@ -1857,6 +1860,19 @@ app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
 app.get("/upload/:token", (req, res) =>
   res.sendFile(path.join(__dirname, "mobile-upload.html")),
 );
+
+// Mark accounted
+app.patch("/api/purchases/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(`UPDATE purchases SET is_accounted = $1 WHERE id = $2`, [
+      req.body.is_accounted,
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Update purchase photo (for retake)
 app.patch("/api/purchases/:id/photo", async (req, res) => {
