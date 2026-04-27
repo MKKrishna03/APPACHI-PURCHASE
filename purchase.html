@@ -1417,25 +1417,38 @@
           const purchasesRes = await fetch("/api/purchases/list");
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
 
-          // Sum purchases per voucher
-          const purchasedByVoucher = {};
+          // Build voucher -> purchase map using the vouchers' linked_purchase_id
+          // (because a single purchase may be linked to multiple vouchers, we read
+          // the link from the vouchers side)
+          // For each voucher, find the purchase it's linked to and compute net_value
+          const purchaseById = {};
           purchases.forEach((p) => {
-            if (p.linked_voucher_id) {
-              purchasedByVoucher[p.linked_voucher_id] =
-                (purchasedByVoucher[p.linked_voucher_id] || 0) +
-                parseFloat(p.net_value || p.total_value || 0);
+            purchaseById[p.id] = p;
+          });
+
+          const purchasedByVoucher = {};
+          all.forEach((v) => {
+            if (v.linked_purchase_id && purchaseById[v.linked_purchase_id]) {
+              const p = purchaseById[v.linked_purchase_id];
+              purchasedByVoucher[v.id] = parseFloat(
+                p.net_value || p.total_value || 0,
+              );
             }
           });
 
-          // Filter: payment vouchers or chittai payments that still have balance
+          // Filter: payment vouchers or chittai payments where balance != 0 (over OR under)
+          // Hide only when payment exactly matches purchase (settled)
           const payments = all.filter((v) => {
             const isPayment =
               v.voucher_type === "Payment Voucher" ||
               v.voucher_type === "Chittai Payment";
             if (!isPayment) return false;
+            // Not linked yet → always show
+            if (!v.linked_purchase_id) return true;
             const paid = purchasedByVoucher[v.id] || 0;
             const balance = parseFloat(v.total_value || 0) - paid;
-            return balance > 0.01;
+            // Hide only if exactly settled
+            return Math.abs(balance) > 0.01;
           });
 
           if (!payments.length) {
@@ -1883,6 +1896,10 @@
         document.querySelectorAll("#hallmarkTable tr").forEach((row) => {
           taxable += parseFloat(row.querySelector(".hm-taxable")?.value) || 0;
         });
+        const valueAdded =
+          parseFloat(document.getElementById("hmValueAdded").value) || 0;
+
+        // GST is charged on (taxable + valueAdded) — proportional split per row
         let cgst = 0,
           sgst = 0,
           igst = 0;
@@ -1892,11 +1909,13 @@
             row._hmTaxPct ||
             parseFloat(row.querySelector(".hm-tax-percent")?.value) ||
             0;
+          const share = taxable > 0 ? (base / taxable) * valueAdded : 0;
+          const gstBase = base + share;
           if (selectedGstType === "CGST_SGST") {
-            cgst += (base * (pct / 2)) / 100;
-            sgst += (base * (pct / 2)) / 100;
+            cgst += (gstBase * (pct / 2)) / 100;
+            sgst += (gstBase * (pct / 2)) / 100;
           } else {
-            igst += (base * pct) / 100;
+            igst += (gstBase * pct) / 100;
           }
         });
         document.getElementById("hmTaxable").value = taxable.toFixed(2);
@@ -1909,8 +1928,6 @@
           selectedGstType === "CGST_SGST" ? "flex" : "none";
         document.getElementById("hmIgstRow").style.display =
           selectedGstType === "IGST" ? "flex" : "none";
-        const valueAdded =
-          parseFloat(document.getElementById("hmValueAdded").value) || 0;
         const roundOff =
           parseFloat(document.getElementById("hmRoundOff").value) || 0;
         const total = taxable + valueAdded + cgst + sgst + igst + roundOff;
@@ -1940,6 +1957,10 @@
           footQty += parseFloat(row.querySelector(".quantity")?.value) || 0;
         });
 
+        const valueAdded =
+          parseFloat(document.getElementById("billValueAdded").value) || 0;
+
+        // GST is charged on (taxable + valueAdded) — proportional split per row
         let cgst = 0,
           sgst = 0,
           igst = 0;
@@ -1949,11 +1970,14 @@
             row._taxPct ||
             parseFloat(row.querySelector(".tax-percent")?.value) ||
             0;
+          // each row's share of value added, proportional to its taxable
+          const share = taxable > 0 ? (base / taxable) * valueAdded : 0;
+          const gstBase = base + share;
           if (selectedGstType === "CGST_SGST") {
-            cgst += (base * (pct / 2)) / 100;
-            sgst += (base * (pct / 2)) / 100;
+            cgst += (gstBase * (pct / 2)) / 100;
+            sgst += (gstBase * (pct / 2)) / 100;
           } else {
-            igst += (base * pct) / 100;
+            igst += (gstBase * pct) / 100;
           }
         });
 
@@ -1964,8 +1988,6 @@
         document.getElementById("billSgst").value = sgst.toFixed(2);
         document.getElementById("billIgst").value = igst.toFixed(2);
 
-        const valueAdded =
-          parseFloat(document.getElementById("billValueAdded").value) || 0;
         const roundOff =
           parseFloat(document.getElementById("billRoundOff").value) || 0;
         const total = taxable + valueAdded + cgst + sgst + igst + roundOff;

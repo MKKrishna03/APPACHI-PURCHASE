@@ -3870,14 +3870,7 @@ function doLogout() {
             fetch("/api/vouchers/list").then(r => r.json()),
             fetch("/api/profile/all").then(r => r.json()),
           ]);
-          // Build a set of payment voucher IDs that are linked to ANY purchase
-          const linkedPaymentIds = new Set(
-            purchasesRes
-              .map(p => p.linked_voucher_id)
-              .filter(Boolean)
-              .map(String)
-          );
-          // Also keep bill_no fallback in case a purchase was entered using same bill_no
+          // bill_no fallback (purchase entered using same bill_no as payment)
           const purchaseBillNos = new Set(purchasesRes.map(p => p.bill_no).filter(Boolean));
 
           const paymentVouchers = vouchersRes.filter(v => {
@@ -3885,8 +3878,8 @@ function doLogout() {
             const isPayment = vt === "payment voucher" || vt === "purchase payment voucher" || vt === "chittai payment";
             const isLabour = vt.includes("labour");
             if (!isPayment || isLabour) return false;
-            // omit if this payment is linked to a purchase by id
-            if (linkedPaymentIds.has(String(v.id))) return false;
+            // omit if this voucher is linked to a purchase (vouchers.linked_purchase_id)
+            if (v.linked_purchase_id) return false;
             // omit if this payment's bill_no matches a purchase bill_no
             if (v.bill_no && purchaseBillNos.has(v.bill_no)) return false;
             return true;
