@@ -1648,6 +1648,10 @@
           showMessage("Please enter bill date", "error");
           return;
         }
+        if (!uploadedPhotoUrl) {
+          showMessage("Please attach a bill photo before saving", "error");
+          return;
+        }
 
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, idx) => {

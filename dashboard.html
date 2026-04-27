@@ -3233,11 +3233,14 @@ function doLogout() {
       };
 
       window.markTodoSeen = async function(id) {
-        await fetch('/api/todos/' + id, {
+        console.log('markTodoSeen called', id);
+        const res = await fetch('/api/todos/' + id, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'seen' })
         });
+        const data = await res.json();
+        console.log('markTodoSeen response', data);
         loadTodos();
       };
 
@@ -3356,7 +3359,7 @@ function doLogout() {
             const me = getCurrentUser();
             const myId = me?.id || me?.user_id;
             const myName = me?.name;
-            const isAssignee = t.receiver === 'all' || t.receiver === myId;
+            const isAssignee = t.receiver === 'all' || t.receiver === myId || t.receiver === myName;
             const isAssigner = t.giver === myId || t.giver === myName;
             const roleTag = isAssigner && !isAssignee
               ? `<span style="padding:2px 7px;border-radius:99px;background:#dbeeff;color:#1d6fa4;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Assigned by you</span>`
@@ -3377,6 +3380,12 @@ function doLogout() {
               } else if (t.status === 'seen') {
                 actionBtns = `<button onclick="event.stopPropagation();markTodoDone(${t.id})" style="padding:4px 10px;background:#d8f3dc;color:#2d6a4f;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Mark Done</button>`;
               }
+            } else if (isAssigner && !isAssignee) {
+              if (t.status === 'pending') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoSeen(${t.id})" style="padding:4px 10px;background:#fef0d6;color:#b5620a;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 Mark Seen</button>`;
+              } else if (t.status === 'seen') {
+                actionBtns = `<button onclick="event.stopPropagation();markTodoDone(${t.id})" style="padding:4px 10px;background:#d8f3dc;color:#2d6a4f;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Mark Done</button>`;
+              }
             }
 
             const pMeta = getPriorityMeta(t.priority);
@@ -3389,7 +3398,7 @@ function doLogout() {
             const cardGlow = unseenForMe > 0 ? `box-shadow:0 0 0 2px #1d6fa4,0 4px 16px rgba(29,111,164,0.18);` : '';
 
             html += `
-              <div class="ri-card ${urg}" onclick="if(!event.target.closest('.ri-card-body'))toggleTodoCard(${t.id})" ${priorityStripe.replace('style="', `style="${cardGlow}`)}>
+              <div class="ri-card ${urg}" onclick="if(!event.target.closest('.ri-card-body') && !event.target.closest('button'))toggleTodoCard(${t.id})" ${priorityStripe.replace('style="', `style="${cardGlow}`)}>
                 <div class="ri-card-top">
                   <div style="flex:1">
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
@@ -3397,6 +3406,7 @@ function doLogout() {
                       ${unseenBadge}
                     </div>
                     <div class="ri-card-title" style="${t.status === 'done' ? 'text-decoration:line-through;' : ''}${unseenForMe > 0 ? 'color:#1d6fa4;' : ''}">${t.title}</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${actionBtns}</div>
                     <div class="ri-card-time">
                       <span>⏰ ${fmt12Todo(t.time)} · ${deadlineDate}</span>
                     </div>
@@ -3426,9 +3436,6 @@ function doLogout() {
     <div style="font-size:12px;color:var(--ink);line-height:1.5;word-break:break-word;">${t.notes}</div>
   </div>
 </div>` : '')}
-                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    ${actionBtns}
-                  </div>
                   ${t.seen_at ? `<div style="font-size:10px;color:var(--ink-3);margin-top:6px;">Seen: ${new Date(t.seen_at).toLocaleString('en-GB')}</div>` : ''}
                   ${t.done_at ? `<div style="font-size:10px;color:var(--accent);margin-top:2px;">Done: ${new Date(t.done_at).toLocaleString('en-GB')}</div>` : ''}
                   ${replies.length ? `
