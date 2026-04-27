@@ -1468,6 +1468,18 @@
           </div>
         </div>
 
+        <!-- Card 6: Pending Bills for the Payments (purchase payments without a purchase bill) -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-title">Pending Bills for the Payments</span>
+            <span class="dash-card-badge" id="pendingBillsForPayCount">0</span>
+          </div>
+          <input type="text" class="pending-search" id="pendingBillsForPaySearch" placeholder="Search..." oninput="filterPendingBillsForPay(this.value)" />
+          <div class="pending-list" id="pendingBillsForPayList">
+            <div class="empty-msg">Loading...</div>
+          </div>
+        </div>
+
       </div>
         </div>
       </div>
@@ -3623,6 +3635,7 @@ function doLogout() {
       loadPendingPurchasePayments();
       loadPendingPurchasePaid();
       loadPendingChittai();
+      loadPendingBillsForPay();
       const _actDate = document.getElementById("activityDate");
       _actDate.value = new Date().toISOString().split("T")[0];
       loadActivity(_actDate.value);
@@ -3847,6 +3860,93 @@ function doLogout() {
         const all = window._pendingChittaiVouchers || [];
         const f = q.toLowerCase();
         renderPendingChittai(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
+      }
+
+      // ── Pending Bills for the Payments (payments NOT linked to any purchase, excluding labour) ──
+      async function loadPendingBillsForPay() {
+        try {
+          const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
+            fetch("/api/purchases/list").then(r => r.json()),
+            fetch("/api/vouchers/list").then(r => r.json()),
+            fetch("/api/profile/all").then(r => r.json()),
+          ]);
+          // Build a set of payment voucher IDs that are linked to ANY purchase
+          const linkedPaymentIds = new Set(
+            purchasesRes
+              .map(p => p.linked_voucher_id)
+              .filter(Boolean)
+              .map(String)
+          );
+          // Also keep bill_no fallback in case a purchase was entered using same bill_no
+          const purchaseBillNos = new Set(purchasesRes.map(p => p.bill_no).filter(Boolean));
+
+          const paymentVouchers = vouchersRes.filter(v => {
+            const vt = (v.voucher_type || "").toLowerCase();
+            const isPayment = vt === "payment voucher" || vt === "purchase payment voucher" || vt === "chittai payment";
+            const isLabour = vt.includes("labour");
+            if (!isPayment || isLabour) return false;
+            // omit if this payment is linked to a purchase by id
+            if (linkedPaymentIds.has(String(v.id))) return false;
+            // omit if this payment's bill_no matches a purchase bill_no
+            if (v.bill_no && purchaseBillNos.has(v.bill_no)) return false;
+            return true;
+          });
+          paymentVouchers.forEach(v => {
+            const prof = profileRes.find(c => String(c.id) === String(v.profile_id));
+            if (prof) v.company_name = prof.company || prof.alias;
+          });
+          window._pendingBillsForPayVouchers = paymentVouchers;
+          document.getElementById("pendingBillsForPayCount").textContent = paymentVouchers.length;
+          renderPendingBillsForPay(paymentVouchers);
+        } catch(e) {
+          document.getElementById("pendingBillsForPayList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderPendingBillsForPay(list) {
+        const el = document.getElementById("pendingBillsForPayList");
+        if (!list.length) { el.innerHTML = '<div class="empty-msg">No pending entries</div>'; return; }
+        const grouped = {};
+        list.forEach(v => { const k = v.company_name || "-"; if (!grouped[k]) grouped[k] = []; grouped[k].push(v); });
+        el.innerHTML = Object.entries(grouped).map(([company, bills], i) => `
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="togglePendingBillsForPayGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--blue);cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" onclick="event.stopPropagation();window.location.href='/company?id=${bills[0].profile_id}'">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} payment${bills.length > 1 ? "s" : ""} without purchase bill</div>
+              </div>
+              <span id="pbfparrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="pbfpgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+              ${bills.map(b => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="window.location.href='/purchase'">
+                  <div>
+                    <div style="font-weight:600;color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;">${b.bill_no || "ID-"+b.id}</div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"} · ${b.voucher_type || ""}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="padding:2px 8px;border-radius:99px;background:var(--blue-light);color:var(--blue);font-size:10px;font-weight:700;">No Bill</span>
+                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.total_value||0).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>`).join("")}
+            </div>
+          </div>`).join("");
+      }
+
+      function togglePendingBillsForPayGroup(event, i) {
+        event.stopPropagation();
+        const body = document.getElementById(`pbfpgroup_${i}`);
+        const arrow = document.getElementById(`pbfparrow_${i}`);
+        const isOpen = body.style.display === "block";
+        document.querySelectorAll('[id^="pbfpgroup_"]').forEach(g => g.style.display = "none");
+        document.querySelectorAll('[id^="pbfparrow_"]').forEach(a => a.style.transform = "");
+        if (!isOpen) { body.style.display = "block"; arrow.style.transform = "rotate(180deg)"; }
+      }
+
+      function filterPendingBillsForPay(q) {
+        const all = window._pendingBillsForPayVouchers || [];
+        const f = q.toLowerCase();
+        renderPendingBillsForPay(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
       }
       function toggleActivityPanel() {
         const panel = document.getElementById("activityPanel");
