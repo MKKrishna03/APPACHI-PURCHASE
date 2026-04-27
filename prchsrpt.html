@@ -716,6 +716,7 @@
                   Payment Amount<span class="si" id="si_paid">⇅</span>
                 </th>
                 <th style="text-align: center">Status</th>
+                <th>Entered By</th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -727,7 +728,7 @@
             </tbody>
             <tfoot id="reportFoot" style="display: none">
               <tr>
-                <td colspan="4">Total</td>
+                <td colspan="5">Total</td>
                 <td id="footTaxable" style="text-align: right">—</td>
                 <td id="footGst" style="text-align: right">—</td>
                 <td id="footTds" style="text-align: right">—</td>
@@ -1201,6 +1202,7 @@
           <td class="num" style="text-align:right;font-weight:600;">${inrZ(row.net)}</td>
           <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${inr(row.paid)}</td>
           <td style="text-align:center;"><span class="tag ${row.isPaid ? "tag-paid" : "tag-unpaid"}">${row.isPaid ? "Paid" : "Unpaid"}</span></td>
+          <td style="font-size:11px;color:var(--ink-3);">${row.enteredBy || "—"}</td>
         </tr>`,
           )
           .join("");
@@ -1277,7 +1279,7 @@
         const companyId = document.getElementById("companySelect").value;
         const payFilter = document.getElementById("payFilter").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="loading-state">Loading...</td></tr>`;
         try {
           const [purchasesRes, profileRes, voucherRes] = await Promise.all([
             fetch("/api/purchases/list").then((r) => r.json()),
@@ -1346,6 +1348,7 @@
               net,
               paid,
               isPaid,
+              enteredBy: p.created_by_name || p.created_by || "—",
             };
           });
 
@@ -1356,7 +1359,7 @@
           document.getElementById("rowCount").textContent = allRows.length;
 
           if (!allRows.length) {
-            tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No purchase records found for selected range</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No purchase records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0, 0, 0);
             return;

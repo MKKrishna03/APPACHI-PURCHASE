@@ -587,7 +587,7 @@ app.get("/api/labour/:id", async (req, res) => {
 app.get("/api/labour", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM labour ORDER BY created_at DESC`,
+      `SELECT l.*, u.name AS created_by_name FROM labour l LEFT JOIN auth_users u ON u.user_id::text = l.created_by ORDER BY l.created_at DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -952,10 +952,9 @@ app.get("/api/vouchers/list", async (req, res) => {
       where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND linked_purchase_id IS NULL AND voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
-      `SELECT id, profile_id, voucher_type, date, bill_no, total_value, entry_type, description, linked_labour_id, linked_chittai_id, linked_purchase_id, created_at
-       FROM vouchers
-       ${where}
-       ORDER BY created_at DESC`,
+      `SELECT v.id, v.profile_id, v.voucher_type, v.date, v.bill_no, v.total_value, v.entry_type, v.description, v.linked_labour_id, v.linked_chittai_id, v.linked_purchase_id, v.created_at, v.created_by, u.name AS created_by_name FROM vouchers v LEFT JOIN auth_users u ON u.user_id::text = v.created_by
+       ${where.replace("profile_id", "v.profile_id").replace("voucher_type", "v.voucher_type")}
+       ORDER BY v.created_at DESC`,
       params,
     );
     res.json(result.rows);
@@ -1052,7 +1051,7 @@ app.get("/api/purchases/list", async (req, res) => {
       where = `WHERE profile_id = $1`;
     }
     const result = await pool.query(
-      `SELECT * FROM purchases ${where} ORDER BY created_at DESC`,
+      `SELECT p.*, u.name AS created_by_name FROM purchases p LEFT JOIN auth_users u ON u.user_id::text = p.created_by ${where ? where.replace("WHERE", "WHERE p.") : ""} ORDER BY p.created_at DESC`,
       params,
     );
     let purchases = result.rows;
@@ -1217,7 +1216,9 @@ app.post("/api/labour", async (req, res) => {
 });
 app.get("/api/chittai/list/all", async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM chittai ORDER BY date DESC`);
+    const result = await pool.query(
+      `SELECT c.*, u.name AS created_by_name FROM chittai c LEFT JOIN auth_users u ON u.user_id::text = c.created_by ORDER BY c.date DESC`,
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

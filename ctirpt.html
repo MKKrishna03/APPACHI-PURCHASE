@@ -725,6 +725,7 @@
                 >
                   Difference<span class="si" id="si_diff">⇅</span>
                 </th>
+                <th>Entered By</th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -1252,6 +1253,7 @@
             <td>${c.payDate ? fmtDate(c.payDate) : "-"}</td>
             <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${c.payAmt > 0 ? "₹" + Math.round(c.payAmt).toLocaleString("en-IN") : "-"}</td>
             <td class="num ${diffClass}" style="text-align:right;font-weight:600;">${c.diff !== 0 ? diffSign + "₹" + Math.round(Math.abs(c.diff)).toLocaleString("en-IN") : "—"}</td>
+            <td style="font-size:11px;color:var(--ink-3);">${c.enteredBy || "—"}</td>
           </tr>`;
           })
           .join("");
@@ -1311,7 +1313,7 @@
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="9" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Loading...</td></tr>`;
 
         try {
           const [chittaiRes, voucherRes, profileRes] = await Promise.all([
@@ -1339,7 +1341,7 @@
           document.getElementById("rowCount").textContent = rows.length;
 
           if (!rows.length) {
-            tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found for selected range</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0, 0, 0);
             return;
@@ -1381,6 +1383,7 @@
               payAmt,
               payDate,
               diff,
+              enteredBy: c.created_by_name || c.created_by || "—",
             };
           });
           updateSortIcons();
@@ -1452,7 +1455,7 @@
             totalDiff,
           );
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
