@@ -564,11 +564,12 @@
                   <th>Date</th>
                   <th>Type</th>
                   <th>Status</th>
+                  <th>Entered By</th>
                 </tr>
               </thead>
               <tbody id="issueTable">
                 <tr>
-                  <td colspan="4" class="loading">Loading...</td>
+                  <td colspan="5" class="loading">Loading...</td>
                 </tr>
               </tbody>
             </table>
@@ -587,11 +588,12 @@
                   <th>Bill No</th>
                   <th>Date</th>
                   <th>Total</th>
+                  <th>Entered By</th>
                 </tr>
               </thead>
               <tbody id="receiptTable">
                 <tr>
-                  <td colspan="4" class="loading">Loading...</td>
+                  <td colspan="5" class="loading">Loading...</td>
                 </tr>
               </tbody>
             </table>
@@ -615,9 +617,9 @@
                   <th>Bill No</th>
                   <th>Qty/Weight</th>
                   <th>Taxable Amt</th>
-                  <th>TDS</th>
                   <th>Tax Amt</th>
                   <th>Bill Value After Deduction</th>
+                  <th>Entered By</th>
                 </tr>
               </thead>
               <tbody id="purchaseTable">
@@ -643,11 +645,12 @@
                   <th>Type</th>
                   <th>Date</th>
                   <th>Amount</th>
+                  <th>Entered By</th>
                 </tr>
               </thead>
               <tbody id="txnTable">
                 <tr>
-                  <td colspan="4" class="loading">Loading...</td>
+                  <td colspan="5" class="loading">Loading...</td>
                 </tr>
               </tbody>
             </table>
@@ -666,11 +669,12 @@
                   <th>Date</th>
                   <th>Weight</th>
                   <th>Amount</th>
+                  <th>Entered By</th>
                 </tr>
               </thead>
               <tbody id="chittaiTable">
                 <tr>
-                  <td colspan="4" class="loading">Loading...</td>
+                  <td colspan="5" class="loading">Loading...</td>
                 </tr>
               </tbody>
             </table>
@@ -680,13 +684,19 @@
     </div>
 
     <!-- Bill Detail Popup -->
-    <div id="billPopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2000;align-items:center;justify-content:center;">
-      <div style="background:#fff;border-radius:16px;padding:28px;min-width:400px;max-width:600px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.15);position:relative;">
-        <button onclick="closeBillPopup()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:#8888aa;">✕</button>
-        <div id="billPopupContent"></div>
-        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
-          <button id="billDeleteBtn" onclick="startDelete()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:1px solid #f09898;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Delete</button>
-          <button id="billEditBtn" onclick="goEditBill()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
+    <div id="billPopup" style="display:none;position:fixed;inset:0;background:rgba(26,26,46,0.55);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+      <div style="background:#fff;border-radius:18px;width:100%;max-width:760px;box-shadow:0 30px 80px rgba(0,0,0,0.25);position:relative;overflow:hidden;display:flex;flex-direction:column;max-height:92vh;">
+        <div id="billPopupHead" style="padding:20px 28px;background:linear-gradient(135deg,#2d6a4f 0%,#52b788 100%);color:#fff;position:relative;">
+          <button onclick="closeBillPopup()" style="position:absolute;top:16px;right:18px;background:rgba(255,255,255,0.18);border:none;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;">✕</button>
+          <div id="billPopupHeadContent"></div>
+        </div>
+        <div id="billPopupContent" style="padding:24px 28px;overflow-y:auto;flex:1;"></div>
+        <div style="padding:14px 28px;border-top:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f9f9f6;">
+          <div id="billEnteredBy" style="font-size:11px;color:#8888aa;"></div>
+          <div style="display:flex;gap:10px;">
+            <button id="billDeleteBtn" onclick="startDelete()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:1px solid #f09898;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Delete</button>
+            <button id="billEditBtn" onclick="goEditBill()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1141,10 +1151,11 @@ return d >= drpStart && d <= drpEnd;
               <td>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
               <td>${b.labour_item_type || "-"}</td>
               <td><span class="tag ${closedSet.has(b.issue_number) ? "tag-done" : "tag-pending"}">${closedSet.has(b.issue_number) ? "Closed" : "Pending"}</span></td>
+              <td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || "—"}</td>
             </tr>`,
               )
               .join("")
-          : `<tr><td colspan="4" class="empty-state">No issue vouchers</td></tr>`;
+          : `<tr><td colspan="5" class="empty-state">No issue vouchers</td></tr>`;
 
         document.getElementById("receiptTable").innerHTML = receipts.length
           ? receipts
@@ -1154,10 +1165,11 @@ return d >= drpStart && d <= drpEnd;
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('receipt',${b.id},'${b.receipt_bill_no}')">${b.receipt_bill_no || "-"}</span></td>
               <td>${b.date ?new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
               <td>₹${parseFloat(b.total || 0).toLocaleString("en-IN")}</td>
+              <td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || "—"}</td>
             </tr>`,
               )
               .join("")
-          : `<tr><td colspan="4" class="empty-state">No receipt vouchers</td></tr>`;
+          : `<tr><td colspan="5" class="empty-state">No receipt vouchers</td></tr>`;
 
         // Transactions
         const txns = vouchers.filter((v) => inRange(v.date));
@@ -1171,33 +1183,88 @@ return d >= drpStart && d <= drpEnd;
               <td>${v.voucher_type || "-"}</td>
               <td>${v.date ? new Date(v.date).toLocaleDateString("en-IN") : "-"}</td>
               <td>₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</td>
+              <td style="font-size:11px;color:var(--ink-3);">${v.created_by_name || "—"}</td>
             </tr>`,
               )
               .join("")
-          : `<tr><td colspan="4" class="empty-state">No transactions</td></tr>`;
+          : `<tr><td colspan="5" class="empty-state">No transactions</td></tr>`;
 
-        // Purchases
+        // Purchases — merge rows that share the same bill_no
+        // Hallmark: sum taxable + tax INTO main, but DO NOT sum total/net_value
         const purchases = await fetch(`/api/purchases/list?profile_id=${profileId}`)
           .then(r => r.json()).catch(() => []);
         const myPurchases = purchases.filter(p => inRange(p.date));
-        document.getElementById("purchaseCount").textContent = myPurchases.length;
-        document.getElementById("purchaseTable").innerHTML = myPurchases.length
-          ? myPurchases.map(p => {
-              const chittaiNo = p.linked_chittai_id
-                ? (chittai.find(c => c.id == p.linked_chittai_id)?.chittai_no || '-')
+
+        // fetch qty per purchase from purchase_items (sum quantity)
+        const qtyMap = {};
+        await Promise.all(myPurchases.map(async p => {
+          try {
+            const r = await fetch(`/api/purchases/${p.id}`);
+            if (r.ok) {
+              const d = await r.json();
+              const items = d.items || [];
+              qtyMap[p.id] = items.reduce((s,i) => s + parseFloat(i.quantity||0), 0);
+            }
+          } catch(e) { qtyMap[p.id] = 0; }
+        }));
+
+        const isHallmark = (x) => (x.description || '').toLowerCase().includes('hallmark') || (x.voucher_type || '').toLowerCase().includes('hallmark');
+
+        const mergedMap = {};
+        myPurchases.forEach(p => {
+          const key = p.bill_no || `__id_${p.id}`;
+          if (!mergedMap[key]) {
+            mergedMap[key] = {
+              ids: [],
+              main_id: null,
+              bill_no: p.bill_no,
+              date: p.date,
+              chittai_ids: [],
+              voucher_ids: [],
+              qty: 0,
+              taxable_value: 0,
+              tax_amount: 0,
+              net_value: 0,
+              created_by_name: '',
+            };
+          }
+          const m = mergedMap[key];
+          m.ids.push(p.id);
+          if (!isHallmark(p) && !m.main_id) m.main_id = p.id;
+          if (p.linked_chittai_id && m.chittai_ids.indexOf(p.linked_chittai_id) === -1) m.chittai_ids.push(p.linked_chittai_id);
+          if (p.linked_voucher_id && m.voucher_ids.indexOf(p.linked_voucher_id) === -1) m.voucher_ids.push(p.linked_voucher_id);
+          // qty + taxable + tax: sum across hallmark + main
+          m.qty += parseFloat(qtyMap[p.id] || 0);
+          m.taxable_value += parseFloat(p.taxable_value || 0);
+          m.tax_amount += parseFloat(p.cgst || 0) + parseFloat(p.sgst || 0) + parseFloat(p.igst || 0);
+          // net_value: only from main (don't sum hallmark)
+          if (!isHallmark(p)) {
+            m.net_value += parseFloat(p.net_value || 0);
+          }
+          if (!m.created_by_name && p.created_by_name) m.created_by_name = p.created_by_name;
+        });
+        // fallback main_id if all entries were hallmark
+        Object.values(mergedMap).forEach(m => { if (!m.main_id && m.ids.length) m.main_id = m.ids[0]; });
+        const mergedPurchases = Object.values(mergedMap);
+
+        document.getElementById("purchaseCount").textContent = mergedPurchases.length;
+        document.getElementById("purchaseTable").innerHTML = mergedPurchases.length
+          ? mergedPurchases.map(p => {
+              const chittaiNo = p.chittai_ids.length
+                ? p.chittai_ids.map(id => chittai.find(c => c.id == id)?.chittai_no || '-').join(', ')
                 : '-';
-              const paymentNo = p.linked_voucher_id
-                ? (vouchers.find(v => v.id == p.linked_voucher_id)?.bill_no || '-')
+              const paymentNo = p.voucher_ids.length
+                ? p.voucher_ids.map(id => vouchers.find(v => v.id == id)?.bill_no || '-').join(', ')
                 : '-';
               return `<tr>
-                <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('purchase',${p.id},'${p.bill_no}')">${chittaiNo}</span></td>
+                <td>${chittaiNo}</td>
                 <td>${paymentNo}</td>
-                <td>${p.bill_no || '-'}</td>
-                <td>${parseFloat(p.qty || p.weight || 0).toLocaleString('en-IN')}</td>
-                <td>₹${parseFloat(p.taxable_value || 0).toLocaleString('en-IN')}</td>
-                <td>₹${parseFloat(p.tds || 0).toLocaleString('en-IN')}</td>
-                <td>₹${parseFloat(p.tax_amount || p.igst || 0).toLocaleString('en-IN')}</td>
-                <td>₹${parseFloat(p.net_value || 0).toLocaleString('en-IN')}</td>
+                <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('purchase',${p.main_id},'${p.bill_no}')">${p.bill_no || '-'}</span></td>
+                <td>${p.qty ? p.qty.toLocaleString('en-IN') + ' g' : '—'}</td>
+                <td>₹${p.taxable_value.toLocaleString('en-IN')}</td>
+                <td>₹${p.tax_amount.toLocaleString('en-IN')}</td>
+                <td>₹${p.net_value.toLocaleString('en-IN')}</td>
+                <td style="font-size:11px;color:var(--ink-3);">${p.created_by_name || "—"}</td>
               </tr>`;
             }).join('')
           : `<tr><td colspan="8" class="empty-state">No purchases</td></tr>`;
@@ -1216,10 +1283,11 @@ return d >= drpStart && d <= drpEnd;
               <td>${c.date ? new Date(c.date).toLocaleDateString("en-IN") : "-"}</td>
               <td>${parseFloat(c.weight || 0).toLocaleString("en-IN")} g</td>
               <td>₹${parseFloat(c.rtgs_amount || 0).toLocaleString("en-IN")}</td>
+              <td style="font-size:11px;color:var(--ink-3);">${c.created_by_name || "—"}</td>
             </tr>`,
               )
               .join("")
-          : `<tr><td colspan="4" class="empty-state">No chittai records</td></tr>`;
+          : `<tr><td colspan="5" class="empty-state">No chittai records</td></tr>`;
       }
 
       async function loadCompanyName() {
@@ -1271,11 +1339,63 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
       }
       checkDeleteAccess();
 
+      // Reusable styled blocks for the popup
+      function bvField(label, value, accent) {
+        return `<div style="background:#f9f9f6;border:1px solid rgba(0,0,0,0.05);border-radius:10px;padding:10px 12px;">
+          <div style="font-size:10px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
+          <div style="font-size:13px;font-weight:600;color:${accent || '#1a1a2e'};">${value || '—'}</div>
+        </div>`;
+      }
+      function bvHead(badge, title, sub) {
+        return `<div style="display:inline-block;padding:3px 10px;background:rgba(255,255,255,0.22);border-radius:99px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${badge}</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-0.3px;line-height:1.1;">${title}</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.78);margin-top:4px;">${sub}</div>`;
+      }
+      function bvSectionTitle(t) {
+        return `<div style="font-size:10px;font-weight:700;color:#8888aa;letter-spacing:0.1em;text-transform:uppercase;margin:18px 0 10px;">${t}</div>`;
+      }
+      function bvItemsTable(items, opts) {
+        opts = opts || {};
+        const showTax = opts.showTax;
+        return `<table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid rgba(0,0,0,0.06);border-radius:10px;overflow:hidden;">
+          <thead><tr style="background:#f0efe9;">
+            <th style="padding:8px 10px;text-align:left;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Sl</th>
+            <th style="padding:8px 10px;text-align:left;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Description</th>
+            <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Qty</th>
+            <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Rate</th>
+            ${showTax?`<th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Tax %</th>`:''}
+            <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Amount</th>
+          </tr></thead>
+          <tbody>${items.map(i => `<tr>
+            <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);font-family:'DM Mono',monospace;font-size:11px;color:#2d6a4f;">${i.sl_no}</td>
+            <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);">${i.description||'-'}</td>
+            <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;">${parseFloat(i.quantity||0).toFixed(2)}</td>
+            <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;">${parseFloat(i.rate||0).toFixed(2)}</td>
+            ${showTax?`<td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;">${parseFloat(i.tax_percent||0)}%</td>`:''}
+            <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;font-weight:600;">${parseFloat(i.amount||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      }
+      function bvTotalsRow(label, val, opts) {
+        opts = opts || {};
+        return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;padding:5px 0;${opts.bold?'font-weight:700;font-size:14px;border-top:1px solid rgba(0,0,0,0.08);margin-top:6px;padding-top:10px;':'font-size:12px;'}">
+          <span style="color:${opts.bold?'#1a1a2e':'#8888aa'};min-width:140px;text-align:right;">${label}</span>
+          <span style="font-family:'DM Mono',monospace;color:${opts.accent||'#1a1a2e'};min-width:120px;text-align:right;">${val}</span>
+        </div>`;
+      }
+      function fmtAmt(v) {
+        return '₹' + parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+      }
+
       async function showBillPopup(type, id, label) {
         _popupType = type;
         _popupId = id;
+        const head = document.getElementById('billPopupHeadContent');
         const el = document.getElementById('billPopupContent');
-        el.innerHTML = '<div style="color:#8888aa;padding:20px 0;">Loading...</div>';
+        const enteredBy = document.getElementById('billEnteredBy');
+        head.innerHTML = '';
+        enteredBy.textContent = '';
+        el.innerHTML = '<div style="color:#8888aa;padding:20px 0;text-align:center;">Loading...</div>';
         document.getElementById('billPopup').style.display = 'flex';
 
         try {
@@ -1284,53 +1404,109 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             const d = await res.json();
             const l = d.labour;
             const items = d.items || [];
-            const rows = items.map(i => `<tr><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${i.sl_no}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${i.description||'-'}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.quantity||0).toFixed(2)}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.rate||0).toFixed(2)}</td><td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;">${parseFloat(i.amount||0).toFixed(2)}</td></tr>`).join('');
-            el.innerHTML = `
-              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">${l.voucher_type}</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:13px;">
-                <div><span style="color:#8888aa;">Issue No</span><br><strong style="color:#2d6a4f;">${l.issue_number||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Date</span><br><strong>${l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-'}</strong></div>
-                <div><span style="color:#8888aa;">Company</span><br><strong>${l.company_name||'-'}</strong></div>
-                ${l.receipt_bill_no?`<div><span style="color:#8888aa;">Receipt Bill No</span><br><strong>${l.receipt_bill_no}</strong></div>`:''}
-                ${l.total?`<div><span style="color:#8888aa;">Total</span><br><strong>₹${parseFloat(l.total).toLocaleString('en-IN')}</strong></div>`:''}
-              </div>
-              ${items.length?`<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#f9f9f6;"><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Sl</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Desc</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Qty</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Rate</th><th style="padding:6px 8px;text-align:left;color:#8888aa;font-size:10px;">Amt</th></tr></thead><tbody>${rows}</tbody></table>`:''}`;
+            const isReceipt = type === 'receipt';
+            head.innerHTML = bvHead(
+              isReceipt ? 'Receipt Voucher' : 'Issue Voucher',
+              isReceipt ? (l.receipt_bill_no || '—') : (l.issue_number || '—'),
+              `${l.company_name||'-'} · ${l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-'}`
+            );
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+              ${bvField('Issue No', l.issue_number, '#2d6a4f')}
+              ${isReceipt?bvField('Receipt Bill No', l.receipt_bill_no, '#2d6a4f'):''}
+              ${bvField('Date', l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-')}
+              ${bvField('Item Type', l.labour_item_type)}
+              ${bvField('Company', l.company_name)}
+            </div>`;
+            if (items.length) html += bvSectionTitle('Line Items') + bvItemsTable(items);
+            if (isReceipt && (l.taxable_total||l.cgst||l.sgst||l.igst||l.total||l.tds||l.bill_value_after_deduction)) {
+              html += bvSectionTitle('Totals');
+              html += '<div>';
+              if (l.taxable_total) html += bvTotalsRow('Taxable Total', fmtAmt(l.taxable_total));
+              if (parseFloat(l.cgst)) html += bvTotalsRow('CGST', fmtAmt(l.cgst));
+              if (parseFloat(l.sgst)) html += bvTotalsRow('SGST', fmtAmt(l.sgst));
+              if (parseFloat(l.igst)) html += bvTotalsRow('IGST', fmtAmt(l.igst));
+              if (parseFloat(l.round_off)) html += bvTotalsRow('Round Off', fmtAmt(l.round_off));
+              if (l.total) html += bvTotalsRow('Total', fmtAmt(l.total), {bold:true});
+              if (parseFloat(l.tds)) html += bvTotalsRow('TDS', fmtAmt(l.tds));
+              if (l.bill_value_after_deduction) html += bvTotalsRow('Net Payable', fmtAmt(l.bill_value_after_deduction), {bold:true,accent:'#2d6a4f'});
+              html += '</div>';
+            }
+            el.innerHTML = html;
+            enteredBy.textContent = l.created_by_name ? 'Entered by: ' + l.created_by_name : '';
           } else if (type === 'txn') {
             const res = await fetch(`/api/vouchers/list?profile_id=${profileId}`);
             const all = await res.json();
             const v = all.find(x => x.id == id);
-            if (!v) { el.innerHTML = '<div style="color:#b5301e;">Not found</div>'; return; }
-            el.innerHTML = `
-              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">${v.voucher_type}</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
-                <div><span style="color:#8888aa;">Bill No</span><br><strong style="color:#2d6a4f;">${v.bill_no||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Date</span><br><strong>${v.date?new Date(v.date).toLocaleDateString('en-IN'):'-'}</strong></div>
-                <div><span style="color:#8888aa;">Type</span><br><strong>${v.voucher_type||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Entry</span><br><strong>${v.entry_type||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Amount</span><br><strong>₹${parseFloat(v.total_value||0).toLocaleString('en-IN')}</strong></div>
-              </div>`;
+            if (!v) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
+            head.innerHTML = bvHead(v.voucher_type || 'Transaction', v.bill_no || '—', `${v.date?new Date(v.date).toLocaleDateString('en-GB'):'-'} · ${v.entry_type||''}`);
+            el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+              ${bvField('Bill No', v.bill_no, '#2d6a4f')}
+              ${bvField('Voucher Type', v.voucher_type)}
+              ${bvField('Date', v.date?new Date(v.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Entry Type', v.entry_type)}
+              ${bvField('Amount', fmtAmt(v.total_value), '#2d6a4f')}
+              ${v.description?bvField('Description', v.description):''}
+            </div>`;
+            enteredBy.textContent = v.created_by_name ? 'Entered by: ' + v.created_by_name : '';
           } else if (type === 'chittai') {
             const res = await fetch(`/api/chittai/list/all`);
             const all = await res.json();
             const c = all.find(x => x.id == id);
-            if (!c) { el.innerHTML = '<div style="color:#b5301e;">Not found</div>'; return; }
-            el.innerHTML = `
-              <div style="font-size:11px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Chittai</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
-                <div><span style="color:#8888aa;">Chittai No</span><br><strong style="color:#2d6a4f;">${c.chittai_no||'-'}</strong></div>
-                <div><span style="color:#8888aa;">Date</span><br><strong>${c.date?new Date(c.date).toLocaleDateString('en-IN'):'-'}</strong></div>
-                <div><span style="color:#8888aa;">Weight</span><br><strong>${parseFloat(c.weight||0).toLocaleString('en-IN')} g</strong></div>
-                <div><span style="color:#8888aa;">Rate</span><br><strong>₹${parseFloat(c.rate||0).toLocaleString('en-IN')}</strong></div>
-                <div><span style="color:#8888aa;">Value</span><br><strong>₹${parseFloat(c.value||0).toLocaleString('en-IN')}</strong></div>
-                <div><span style="color:#8888aa;">TDS</span><br><strong>₹${parseFloat(c.tds||0).toLocaleString('en-IN')}</strong></div>
-                <div><span style="color:#8888aa;">RTGS Amount</span><br><strong>₹${parseFloat(c.rtgs_amount||0).toLocaleString('en-IN')}</strong></div>
-                <div><span style="color:#8888aa;">Status</span><br><strong>${c.is_paid?'Paid':'Unpaid'}</strong></div>
-              </div>`;
+            if (!c) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
+            head.innerHTML = bvHead('Chittai', c.chittai_no || '—', `${c.date?new Date(c.date).toLocaleDateString('en-GB'):'-'} · ${c.is_paid?'Paid':'Unpaid'}`);
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+              ${bvField('Chittai No', c.chittai_no, '#2d6a4f')}
+              ${bvField('Date', c.date?new Date(c.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Weight', parseFloat(c.weight||0).toLocaleString('en-IN')+' g')}
+              ${bvField('Rate', fmtAmt(c.rate))}
+              ${bvField('Value', fmtAmt(c.value))}
+              ${bvField('Others', fmtAmt(c.others))}
+              ${bvField('Total', fmtAmt(c.total))}
+              ${bvField('TDS', fmtAmt(c.tds))}
+              ${bvField('RTGS Amount', fmtAmt(c.rtgs_amount), '#2d6a4f')}
+              ${bvField('Status', c.is_paid?'Paid':'Unpaid', c.is_paid?'#2d6a4f':'#b5620a')}
+            </div>`;
+            if (c.remarks) html += bvSectionTitle('Remarks') + `<div style="background:#f9f9f6;border:1px solid rgba(0,0,0,0.05);border-radius:10px;padding:12px;font-size:13px;color:#444466;">${c.remarks}</div>`;
+            if (c.photo_url) html += bvSectionTitle('Bill Photo') + `<img src="${c.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${c.photo_url}','_blank')" />`;
+            el.innerHTML = html;
+            enteredBy.textContent = c.created_by_name ? 'Entered by: ' + c.created_by_name : '';
+          } else if (type === 'purchase') {
+            // fetch all purchases, find this one + any with same bill_no for same company → merge
+            const res = await fetch(`/api/purchases/list?profile_id=${profileId}`);
+            const all = await res.json();
+            const target = all.find(x => x.id == id);
+            if (!target) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
+            const group = all.filter(x => x.bill_no && x.bill_no === target.bill_no);
+            const sum = (k) => group.reduce((s,x) => s + parseFloat(x[k]||0), 0);
+            const taxable = sum('taxable_value');
+            const cgst = sum('cgst'), sgst = sum('sgst'), igst = sum('igst');
+            const round = sum('round_off'), total = sum('total_value');
+            const tds = sum('tds'), net = sum('net_value');
+            head.innerHTML = bvHead('Purchase Voucher', target.bill_no || '—', `${target.date?new Date(target.date).toLocaleDateString('en-GB'):'-'} ${group.length>1?' · '+group.length+' linked entries':''}`);
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+              ${bvField('Bill No', target.bill_no, '#2d6a4f')}
+              ${bvField('Date', target.date?new Date(target.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Linked Entries', group.length)}
+              ${bvField('Net Payable', fmtAmt(net), '#2d6a4f')}
+            </div>`;
+            html += bvSectionTitle('Totals (Combined)');
+            html += '<div>';
+            if (taxable) html += bvTotalsRow('Taxable Total', fmtAmt(taxable));
+            if (cgst) html += bvTotalsRow('CGST', fmtAmt(cgst));
+            if (sgst) html += bvTotalsRow('SGST', fmtAmt(sgst));
+            if (igst) html += bvTotalsRow('IGST', fmtAmt(igst));
+            if (round) html += bvTotalsRow('Round Off', fmtAmt(round));
+            if (total) html += bvTotalsRow('Total', fmtAmt(total), {bold:true});
+            if (tds) html += bvTotalsRow('TDS', fmtAmt(tds));
+            html += bvTotalsRow('Net Payable', fmtAmt(net), {bold:true,accent:'#2d6a4f'});
+            html += '</div>';
+            if (target.photo_url) html += bvSectionTitle('Bill Photo') + `<img src="${target.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${target.photo_url}','_blank')" />`;
+            el.innerHTML = html;
+            enteredBy.textContent = target.created_by_name ? 'Entered by: ' + target.created_by_name : '';
           }
-        // Show delete button if user has access
-        document.getElementById('billDeleteBtn').style.display = _canDelete ? 'block' : 'none';
+          document.getElementById('billDeleteBtn').style.display = _canDelete ? 'inline-block' : 'none';
         } catch(e) {
-          el.innerHTML = '<div style="color:#b5301e;">Error loading details</div>';
+          el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Error loading details</div>';
         }
       }
 
@@ -1341,7 +1517,8 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
       function goEditBill() {
         if (_popupType === 'issue') window.location.href = `/labour?edit=${_popupId}`;
         else if (_popupType === 'receipt') window.location.href = `/labclose?edit=${_popupId}`;
-else if (_popupType === 'txn') {
+        else if (_popupType === 'purchase') window.location.href = `/purchase?edit=${_popupId}`;
+        else if (_popupType === 'txn') {
           // Check if it's a chittai payment — redirect to chittai edit instead
           fetch('/api/vouchers/list').then(r=>r.json()).then(all => {
             const v = all.find(x => x.id == _popupId);
@@ -1351,7 +1528,8 @@ else if (_popupType === 'txn') {
               window.location.href = `/transaction?edit=${_popupId}`;
             }
           });
-        }        else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
+        }
+        else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
       }
 
       document.getElementById('billPopup').addEventListener('click', function(e) {

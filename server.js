@@ -1102,6 +1102,22 @@ app.get("/api/purchases/list", async (req, res) => {
   }
 });
 
+app.get("/api/purchases/:id", async (req, res) => {
+  try {
+    const p = await pool.query("SELECT * FROM purchases WHERE id=$1", [
+      req.params.id,
+    ]);
+    if (!p.rows[0]) return res.status(404).json({ error: "Not found" });
+    const items = await pool.query(
+      "SELECT * FROM purchase_items WHERE purchase_id=$1 ORDER BY sl_no",
+      [req.params.id],
+    );
+    res.json({ purchase: p.rows[0], items: items.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/purchases", async (req, res) => {
   const {
     profile_id,
