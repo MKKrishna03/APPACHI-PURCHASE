@@ -716,8 +716,11 @@
           await loadUnmappedPaymentVouchers();
         } else {
           group.style.display = "none";
-          document.getElementById("chittaiAgainstVoucher").innerHTML =
-            '<option value="">— Select —</option>';
+          const box = document.getElementById("chittaiAgainstVoucherBox");
+          if (box) {
+            box.innerHTML =
+              '<div style="color:var(--ink-3);padding:6px;">— Select Company first —</div>';
+          }
         }
       }
 
@@ -1027,8 +1030,7 @@
               is_paid: entryType === "against",
               linked_voucher_id:
                 entryType === "against"
-                  ? document.getElementById("chittaiAgainstVoucher").value ||
-                    null
+                  ? getSelectedPaymentVoucherIds()[0] || null
                   : null,
               created_by: getCurrentUser()?.id || null,
               photo_url: ctUploadedPhotoUrl || null,
