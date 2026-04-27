@@ -741,11 +741,12 @@
                   Payment<span class="si" id="si_payment">⇅</span>
                 </th>
                 <th>Status</th>
+                <th>Entered By</th>
               </tr>
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="9" class="loading-state">
+                <td colspan="10" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
@@ -1216,7 +1217,7 @@
           return 0;
         });
         if (!sorted.length) {
-          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No records found</td></tr>`;
           renderPagination(0);
           return;
         }
@@ -1273,6 +1274,7 @@
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
             <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:${row.isSubtotal ? "700" : "600"};text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
             <td>${row.isSubtotal ? "" : `<span class="tag ${row.status === "paid" ? "tag-done" : "tag-pending"}">${row.status === "paid" ? "Paid" : "Unpaid"}</span>`}</td>
+            <td style="font-size:11px;color:var(--ink-3);">${row.isSubtotal ? "" : row.enteredBy || "—"}</td>
           </tr>`;
           })
           .join("");
@@ -1337,7 +1339,7 @@
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="9" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Loading...</td></tr>`;
 
         try {
           const [labourRes, voucherRes, profileRes, descRes] =
@@ -1604,7 +1606,7 @@
           document.getElementById("rowCount").textContent = filteredRows.length;
 
           if (!filteredRows.length) {
-            tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found for selected range</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0, 0);
             return;
@@ -1653,7 +1655,7 @@
           const uniqueRVs = filteredRows.filter((r) => r.billNo !== "-").length;
           updateSummary(uniqueIVs, uniqueRVs, totalBillVal, totalPayment);
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 

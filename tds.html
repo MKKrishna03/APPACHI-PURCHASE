@@ -682,6 +682,7 @@
                 >
                   Bill Value<span class="si" id="si_billValue">⇅</span>
                 </th>
+                <th>Entered By</th>
               </tr>
             </thead>
             <tbody id="reportTable">
@@ -1096,7 +1097,7 @@
         const companyId = document.getElementById("companySelect").value;
         const sourceFilter = document.getElementById("sourceFilter").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="5" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loading-state">Loading...</td></tr>`;
 
         try {
           const [labourRes, chittaiRes, profileRes] = await Promise.all([
@@ -1131,6 +1132,7 @@
                 ),
                 source: "purchase",
                 profile_id: l.profile_id,
+                enteredBy: l.created_by_name || l.created_by || "—",
               });
             });
           }
@@ -1184,7 +1186,7 @@
           renderRows();
         } catch (e) {
           document.getElementById("reportTable").innerHTML =
-            `<tr><td colspan="5" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+            `<tr><td colspan="6" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
@@ -1245,7 +1247,7 @@
           return 0;
         });
         if (!sorted.length) {
-          tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No TDS records found for selected range</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No TDS records found for selected range</td></tr>`;
           renderPagination(0);
           return;
         }
@@ -1263,6 +1265,7 @@
           <td class="mono">${row.billNo}</td>
           <td class="num" style="text-align:right;color:var(--danger);font-weight:600;">₹${Math.round(row.tds).toLocaleString("en-IN")}</td>
           <td class="num" style="text-align:right;">₹${Math.round(row.billValue).toLocaleString("en-IN")}</td>
+          <td style="font-size:11px;color:var(--ink-3);">${row.enteredBy || "—"}</td>
         </tr>`,
           )
           .join("");
