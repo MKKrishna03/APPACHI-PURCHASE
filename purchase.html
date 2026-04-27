@@ -842,6 +842,198 @@
             <button class="btn-add-row" onclick="addRow()">
               <span>＋</span> Add Row
             </button>
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12px;
+                font-weight: 600;
+                color: var(--ink-2);
+                cursor: pointer;
+                margin-left: 8px;
+              "
+            >
+              <input
+                type="checkbox"
+                id="hallmarkToggle"
+                onchange="toggleHallmark()"
+                style="
+                  width: 14px;
+                  height: 14px;
+                  cursor: pointer;
+                  accent-color: var(--accent);
+                "
+              />
+              Hallmark Charges
+            </label>
+          </div>
+
+          <!-- Hallmark Section -->
+          <div
+            id="hallmarkSection"
+            style="
+              display: none;
+              margin-top: 16px;
+              padding: 16px;
+              background: var(--surface-2);
+              border-radius: var(--radius);
+              border: 1px solid var(--border-strong);
+            "
+          >
+            <div
+              style="
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--ink-3);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin-bottom: 12px;
+              "
+            >
+              🔖 Hallmark Charges
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sl</th>
+                    <th>Description</th>
+                    <th>Qty / g</th>
+                    <th>Rate / g</th>
+                    <th>Tax %</th>
+                    <th>Taxable</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="hallmarkTable"></tbody>
+              </table>
+            </div>
+            <div class="action-bar" style="margin-bottom: 0; margin-top: 10px">
+              <button class="btn-add-row" onclick="addHallmarkRow()">
+                <span>＋</span> Add Row
+              </button>
+            </div>
+            <div
+              style="
+                margin-top: 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 8px;
+                font-size: 13px;
+              "
+            >
+              <div style="display: flex; gap: 12px; align-items: center">
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >Taxable Total</span
+                >
+                <input
+                  type="number"
+                  id="hmTaxable"
+                  readonly
+                  class="total-input"
+                />
+              </div>
+              <div
+                id="hmCgstRow"
+                style="display: flex; gap: 12px; align-items: center"
+              >
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >CGST</span
+                >
+                <input type="number" id="hmCgst" readonly class="total-input" />
+              </div>
+              <div
+                id="hmSgstRow"
+                style="display: flex; gap: 12px; align-items: center"
+              >
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >SGST</span
+                >
+                <input type="number" id="hmSgst" readonly class="total-input" />
+              </div>
+              <div
+                id="hmIgstRow"
+                style="
+                  display: none;
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                "
+              >
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >IGST</span
+                >
+                <input type="number" id="hmIgst" readonly class="total-input" />
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center">
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >Round Off</span
+                >
+                <input
+                  type="number"
+                  id="hmRoundOff"
+                  step="0.01"
+                  class="total-input"
+                  oninput="updateHallmarkTotals()"
+                />
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                  font-weight: 600;
+                "
+              >
+                <span style="width: 210px; text-align: right">Total</span>
+                <input
+                  type="number"
+                  id="hmTotal"
+                  readonly
+                  class="total-input"
+                  style="font-weight: 600"
+                />
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center">
+                <span
+                  style="color: var(--ink-3); width: 210px; text-align: right"
+                  >TDS</span
+                >
+                <input
+                  type="number"
+                  id="hmTds"
+                  step="0.01"
+                  class="total-input"
+                  oninput="updateHallmarkTotals()"
+                />
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                  font-weight: 600;
+                "
+              >
+                <span style="width: 210px; text-align: right; color: var(--ink)"
+                  >Hallmark Payable</span
+                >
+                <input
+                  type="number"
+                  id="hmPayable"
+                  readonly
+                  class="total-input"
+                  style="font-weight: 600; border-color: var(--accent)"
+                />
+              </div>
+            </div>
           </div>
 
           <!-- Totals -->
@@ -1223,7 +1415,8 @@
           list.innerHTML = payments
             .map((p) => {
               const paid = purchasedByVoucher[p.id] || 0;
-              const balance = parseFloat(p.total_value || 0) - paid;
+              const total = parseFloat(p.total_value || 0);
+              const balance = total - paid;
               const company = companies.find(
                 (c) => String(c.id) === String(p.profile_id),
               );
@@ -1231,14 +1424,22 @@
                 ? company.alias || company.company
                 : "—";
               const hasChittai = !!p.linked_chittai_id;
-              return `<div class="pay-card ${hasChittai ? "has-chittai" : ""}" id="pay_${p.id}" onclick="selectPayment(${p.id})">
-          <div class="pay-card-id">${p.bill_no || "—"}</div>
+              const balanceColor =
+                balance > 0
+                  ? "var(--accent)"
+                  : balance < 0
+                    ? "var(--danger)"
+                    : "var(--green)";
+              const balanceLabel =
+                balance > 0 ? "Balance" : balance < 0 ? "Excess" : "Settled";
+              return `<div class="pay-card ${hasChittai ? "has-chittai" : ""}" id="pay_${p.id}" onclick="selectPayment(${p.id})" data-balance="${balance}" data-total="${total}" data-paid="${paid}">
+          <div class="pay-card-id">${p.bill_no || p.voucher_no || "PV-" + p.id}</div>
           <div class="pay-card-company">${companyName}</div>
           <div class="pay-card-row"><span>Date</span><span>${new Date(p.date).toLocaleDateString("en-GB")}</span></div>
           <div class="pay-card-row"><span>Type</span><span>${p.voucher_type}</span></div>
-          <div class="pay-card-balance">
-            <span>Balance</span>
-            <span>₹${fmt(balance)}</span>
+          <div class="pay-card-balance" style="background:${balance > 0 ? "rgba(29,111,164,0.08)" : balance < 0 ? "rgba(181,48,30,0.08)" : "rgba(45,106,79,0.08)"};color:${balanceColor}">
+            <span>${balanceLabel}</span>
+            <span style="color:${balanceColor};font-weight:700;">₹${fmt(Math.abs(balance))}</span>
           </div>
         </div>`;
             })
@@ -1449,6 +1650,16 @@
             .toISOString()
             .split("T")[0];
         }
+
+        // Auto-fill net payable from selected vouchers balance
+        const totalBalance = selectedVoucherIds.reduce((s, id) => {
+          const el = document.getElementById(`pay_${id}`);
+          return s + (el ? parseFloat(el.dataset.balance || 0) : 0);
+        }, 0);
+        document.getElementById("billNet").value = totalBalance.toFixed(2);
+        document.getElementById("billTotal").value = totalBalance.toFixed(2);
+        document.getElementById("billTaxable").value = totalBalance.toFixed(2);
+        updateLinkBanner();
       }
 
       function updateLinkBanner() {
@@ -1586,6 +1797,108 @@
         updateTotals();
       }
 
+      // ── HALLMARK ──
+      let hallmarkRowCount = 0;
+
+      function toggleHallmark() {
+        const show = document.getElementById("hallmarkToggle").checked;
+        document.getElementById("hallmarkSection").style.display = show
+          ? "block"
+          : "none";
+        if (
+          show &&
+          document.getElementById("hallmarkTable").rows.length === 0
+        ) {
+          addHallmarkRow();
+        }
+        updateHallmarkTotals();
+      }
+
+      function addHallmarkRow() {
+        hallmarkRowCount++;
+        const tbody = document.getElementById("hallmarkTable");
+        const row = document.createElement("tr");
+        row.id = `hmrow_${hallmarkRowCount}`;
+        row.innerHTML = `
+          <td><input type="number" value="${hallmarkRowCount}" readonly style="width:44px;"></td>
+          <td><input type="text" class="hm-description" placeholder="Description" style="min-width:120px;" list="descriptionList"></td>
+          <td><input type="number" class="hm-quantity" step="0.001" placeholder="0.00" oninput="calcHallmarkRow(${hallmarkRowCount})" style="width:90px;"></td>
+          <td><input type="number" class="hm-rate" step="0.01" placeholder="0.00" oninput="calcHallmarkRow(${hallmarkRowCount})" style="width:90px;"></td>
+          <td><select class="hm-tax-percent" onchange="calcHallmarkRow(${hallmarkRowCount})" style="width:80px;">${taxOptions()}</select></td>
+          <td><input type="number" class="hm-taxable" step="0.01" placeholder="0.00" readonly style="width:90px;"></td>
+          <td><button class="btn-row-del" onclick="deleteHallmarkRow(${hallmarkRowCount})">Del</button></td>`;
+        tbody.appendChild(row);
+      }
+
+      function calcHallmarkRow(idx) {
+        const row = document.getElementById(`hmrow_${idx}`);
+        if (!row) return;
+        const qty = parseFloat(row.querySelector(".hm-quantity").value) || 0;
+        const rate = parseFloat(row.querySelector(".hm-rate").value) || 0;
+        row.querySelector(".hm-taxable").value = (qty * rate).toFixed(2);
+        row._hmTaxPct =
+          parseFloat(row.querySelector(".hm-tax-percent").value) || 0;
+        updateHallmarkTotals();
+      }
+
+      function deleteHallmarkRow(idx) {
+        document.getElementById(`hmrow_${idx}`)?.remove();
+        updateHallmarkTotals();
+      }
+
+      function updateHallmarkTotals() {
+        if (!document.getElementById("hallmarkToggle").checked) return;
+        let taxable = 0;
+        document.querySelectorAll("#hallmarkTable tr").forEach((row) => {
+          taxable += parseFloat(row.querySelector(".hm-taxable")?.value) || 0;
+        });
+        let cgst = 0,
+          sgst = 0,
+          igst = 0;
+        document.querySelectorAll("#hallmarkTable tr").forEach((row) => {
+          const base = parseFloat(row.querySelector(".hm-taxable")?.value) || 0;
+          const pct =
+            row._hmTaxPct ||
+            parseFloat(row.querySelector(".hm-tax-percent")?.value) ||
+            0;
+          if (selectedGstType === "CGST_SGST") {
+            cgst += (base * (pct / 2)) / 100;
+            sgst += (base * (pct / 2)) / 100;
+          } else {
+            igst += (base * pct) / 100;
+          }
+        });
+        document.getElementById("hmTaxable").value = taxable.toFixed(2);
+        document.getElementById("hmCgst").value = cgst.toFixed(2);
+        document.getElementById("hmSgst").value = sgst.toFixed(2);
+        document.getElementById("hmIgst").value = igst.toFixed(2);
+        document.getElementById("hmCgstRow").style.display =
+          selectedGstType === "CGST_SGST" ? "flex" : "none";
+        document.getElementById("hmSgstRow").style.display =
+          selectedGstType === "CGST_SGST" ? "flex" : "none";
+        document.getElementById("hmIgstRow").style.display =
+          selectedGstType === "IGST" ? "flex" : "none";
+        const roundOff =
+          parseFloat(document.getElementById("hmRoundOff").value) || 0;
+        const total = taxable + cgst + sgst + igst + roundOff;
+        document.getElementById("hmTotal").value = total.toFixed(2);
+        const tds = parseFloat(document.getElementById("hmTds").value) || 0;
+        const payable = total - tds;
+        document.getElementById("hmPayable").value = payable.toFixed(2);
+        updateNetWithHallmark();
+      }
+
+      function updateNetWithHallmark() {
+        const baseNet =
+          parseFloat(document.getElementById("billNet").value) || 0;
+        const hmPayable = document.getElementById("hallmarkToggle").checked
+          ? parseFloat(document.getElementById("hmPayable").value) || 0
+          : 0;
+        const combined = baseNet + hmPayable;
+        document.getElementById("billNet").value = combined.toFixed(2);
+        updateLinkBanner();
+      }
+
       function updateTotals() {
         let taxable = 0,
           footQty = 0;
@@ -1625,7 +1938,10 @@
 
         const tds = parseFloat(document.getElementById("billTds").value) || 0;
         const net = total - tds;
-        document.getElementById("billNet").value = net.toFixed(2);
+        const hmPayable = document.getElementById("hallmarkToggle").checked
+          ? parseFloat(document.getElementById("hmPayable").value) || 0
+          : 0;
+        document.getElementById("billNet").value = (net + hmPayable).toFixed(2);
 
         updateLinkBanner();
       }
@@ -1703,7 +2019,100 @@
           });
           const result = await res.json();
           if (result.status === "SUCCESS") {
+            // Save hallmark voucher if checked
+            if (document.getElementById("hallmarkToggle").checked) {
+              const hmItems = [];
+              document
+                .querySelectorAll("#hallmarkTable tr")
+                .forEach((row, idx) => {
+                  const qty =
+                    parseFloat(row.querySelector(".hm-quantity")?.value) || 0;
+                  if (qty > 0) {
+                    hmItems.push({
+                      sl_no: idx + 1,
+                      description:
+                        row.querySelector(".hm-description")?.value || "",
+                      quantity: qty,
+                      rate:
+                        parseFloat(row.querySelector(".hm-rate")?.value) || 0,
+                      tax_percent:
+                        parseFloat(
+                          row.querySelector(".hm-tax-percent")?.value,
+                        ) || 0,
+                      amount:
+                        parseFloat(row.querySelector(".hm-taxable")?.value) ||
+                        0,
+                    });
+                  }
+                });
+              if (hmItems.length > 0) {
+                const hmPayload = {
+                  profile_id: companyId,
+                  date: billDate,
+                  bill_no: billNo,
+                  voucher_type: "Hallmark Voucher",
+                  description: "Hallmark Charges",
+                  taxable_value:
+                    parseFloat(document.getElementById("hmTaxable").value) || 0,
+                  cgst:
+                    parseFloat(document.getElementById("hmCgst").value) || 0,
+                  sgst:
+                    parseFloat(document.getElementById("hmSgst").value) || 0,
+                  igst:
+                    parseFloat(document.getElementById("hmIgst").value) || 0,
+                  round_off:
+                    parseFloat(document.getElementById("hmRoundOff").value) ||
+                    0,
+                  total_value:
+                    parseFloat(document.getElementById("hmTotal").value) || 0,
+                  tds: parseFloat(document.getElementById("hmTds").value) || 0,
+                  net_value:
+                    parseFloat(document.getElementById("hmPayable").value) || 0,
+                  items: hmItems,
+                  created_by: getCurrentUser()?.id || null,
+                  photo_url: uploadedPhotoUrl || null,
+                };
+                await fetch("/api/purchases", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(hmPayload),
+                });
+              }
+            }
             showMessage("Purchase Voucher created successfully!", "success");
+            // Update selected cards balance live
+            const netVal =
+              parseFloat(document.getElementById("billNet").value) || 0;
+            selectedVoucherIds.forEach((id) => {
+              const card = document.getElementById(`pay_${id}`);
+              if (!card) return;
+              const oldBalance = parseFloat(card.dataset.balance || 0);
+              const newBalance = oldBalance - netVal;
+              card.dataset.balance = newBalance;
+              const balanceDiv = card.querySelector(".pay-card-balance");
+              const balanceColor =
+                newBalance > 0
+                  ? "var(--accent)"
+                  : newBalance < 0
+                    ? "var(--danger)"
+                    : "var(--green)";
+              const balanceLabel =
+                newBalance > 0
+                  ? "Balance"
+                  : newBalance < 0
+                    ? "Excess"
+                    : "Settled";
+              if (balanceDiv) {
+                balanceDiv.style.color = balanceColor;
+                balanceDiv.style.background =
+                  newBalance > 0
+                    ? "rgba(29,111,164,0.08)"
+                    : newBalance < 0
+                      ? "rgba(181,48,30,0.08)"
+                      : "rgba(45,106,79,0.08)";
+                balanceDiv.innerHTML = `<span>${balanceLabel}</span><span style="color:${balanceColor};font-weight:700;">₹${fmt(Math.abs(newBalance))}</span>`;
+              }
+            });
             setTimeout(() => (location.href = "/"), 1500);
           } else {
             showMessage("Error: " + result.error, "error");

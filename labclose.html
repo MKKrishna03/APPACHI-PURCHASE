@@ -1788,6 +1788,14 @@
             document.getElementById("billValueAfterDeduction").value =
               parseFloat(l.bill_value_after_deduction).toFixed(2);
 
+          // prefill photo if exists
+          if (l.photo_url) {
+            uploadedPhotoUrl = l.photo_url;
+            document.getElementById("photoImg").src = l.photo_url;
+            document.getElementById("photoPreview").style.display = "block";
+            document.getElementById("photoArea").style.display = "none";
+          }
+
           // switch submit button to update mode
           const btn = document.querySelector(".btn-submit");
           btn.textContent = "Update Close Voucher →";
@@ -1805,6 +1813,10 @@
             "Please fill closing date and receipt bill number",
             "error",
           );
+          return;
+        }
+        if (!uploadedPhotoUrl) {
+          showMessage("Please attach a bill photo before saving", "error");
           return;
         }
         const items = [];
@@ -1825,6 +1837,7 @@
               date: closingDate,
               receipt_bill_no: receiptBillNo,
               items,
+              photo_url: uploadedPhotoUrl || null,
               taxable_total:
                 parseFloat(document.getElementById("billTaxable").value) || 0,
               cgst: parseFloat(document.getElementById("billCgst").value) || 0,
