@@ -142,7 +142,15 @@
         transition: max-height 0.3s ease;
       }
       .section-body.show {
-        max-height: 800px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .section-body.show::-webkit-scrollbar {
+        width: 4px;
+      }
+      .section-body.show::-webkit-scrollbar-thumb {
+        background: var(--surface-3);
+        border-radius: 2px;
       }
 
       .pay-card {
