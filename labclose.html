@@ -13,6 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       :root {
         --bg: #f5f5f0;
@@ -946,6 +947,156 @@
             </div>
           </div>
 
+          <div
+            style="
+              margin-top: 20px;
+              padding: 16px;
+              background: var(--surface-2);
+              border-radius: var(--radius);
+              border: 1px dashed var(--border-strong);
+            "
+          >
+            <div
+              style="
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--ink-3);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin-bottom: 10px;
+              "
+            >
+              📸 Bill Photo (Optional)
+            </div>
+            <div
+              id="photoArea"
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+              "
+            >
+              <button
+                type="button"
+                onclick="startPhoneUpload()"
+                style="
+                  padding: 9px 16px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+              >
+                📱 From Phone
+              </button>
+              <label
+                style="
+                  padding: 9px 16px;
+                  background: #fff;
+                  border: 1px solid var(--border-strong);
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 500;
+                  color: var(--ink-2);
+                "
+                >💻 Upload<input
+                  type="file"
+                  id="pcFileInput"
+                  accept="image/*,application/pdf"
+                  style="display: none"
+                  onchange="uploadFromPC(event)"
+              /></label>
+              <span style="font-size: 12px; color: var(--ink-3)"
+                >Scan QR or upload directly</span
+              >
+            </div>
+            <div
+              id="qrArea"
+              style="display: none; text-align: center; padding: 12px"
+            >
+              <div
+                id="qrCode"
+                style="
+                  display: inline-block;
+                  background: #fff;
+                  padding: 10px;
+                  border-radius: 8px;
+                "
+              ></div>
+              <div
+                style="font-size: 12px; color: var(--ink-3); margin-top: 10px"
+              >
+                Scan with phone camera, take photo, upload
+              </div>
+              <div
+                id="qrStatus"
+                style="
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--accent);
+                  margin-top: 8px;
+                "
+              >
+                Waiting for photo…
+              </div>
+              <button
+                type="button"
+                onclick="cancelPhoneUpload()"
+                style="
+                  margin-top: 8px;
+                  padding: 6px 14px;
+                  background: none;
+                  border: 1px solid var(--border-strong);
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 12px;
+                "
+              >
+                Cancel
+              </button>
+            </div>
+            <div id="photoPreview" style="display: none; margin-top: 10px">
+              <img
+                id="photoImg"
+                style="
+                  max-width: 200px;
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                "
+              />
+              <div style="margin-top: 6px">
+                <span
+                  style="font-size: 12px; color: var(--green); font-weight: 600"
+                  >✓ Photo attached</span
+                >
+                <button
+                  type="button"
+                  onclick="removePhoto()"
+                  style="
+                    margin-left: 10px;
+                    padding: 4px 10px;
+                    background: var(--danger-light);
+                    color: var(--danger);
+                    border: 1px solid #f09898;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    font-weight: 600;
+                  "
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="action-bar" style="margin-top: 16px">
             <button class="btn-submit" onclick="submitCloseVoucher()">
               Submit Close Voucher →
@@ -973,6 +1124,9 @@
       let rowCount = 0;
       let selectedGstType = "CGST_SGST";
       let selectedPaymentVoucherId = null;
+      let uploadToken = null;
+      let uploadedPhotoUrl = null;
+      let uploadPollInterval = null;
 
       function toggleSection(name) {
         document.getElementById(`body_${name}`).classList.toggle("show");
@@ -1411,6 +1565,10 @@
           showMessage("Please enter receipt bill number", "error");
           return;
         }
+        if (!uploadedPhotoUrl) {
+          showMessage("Please attach a bill photo before saving", "error");
+          return;
+        }
 
         // Validate all selected bills have closing type chosen
         for (const id of selectedLabourIds) {
@@ -1705,6 +1863,99 @@
         } catch {
           return null;
         }
+      }
+      async function startPhoneUpload() {
+        const billNo = document.getElementById("receiptBillNo").value.trim();
+        const companySel = document.getElementById("companySelect");
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
+        const res = await fetch("/api/upload-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bill_no: billNo, company }),
+        });
+        const data = await res.json();
+        uploadToken = data.token;
+        const url = `${window.location.origin}/upload/${uploadToken}`;
+        const qrDiv = document.getElementById("qrCode");
+        qrDiv.innerHTML = "";
+        new QRCode(qrDiv, { text: url, width: 180, height: 180 });
+        document.getElementById("photoArea").style.display = "none";
+        document.getElementById("qrArea").style.display = "block";
+        uploadPollInterval = setInterval(checkUploadStatus, 2000);
+      }
+      async function checkUploadStatus() {
+        if (!uploadToken) return;
+        try {
+          const res = await fetch(`/api/upload-session/${uploadToken}/status`);
+          const data = await res.json();
+          if (data.uploaded && data.photo_url) {
+            uploadedPhotoUrl = data.photo_url;
+            clearInterval(uploadPollInterval);
+            document.getElementById("qrArea").style.display = "none";
+            document.getElementById("photoImg").src = data.photo_url;
+            document.getElementById("photoPreview").style.display = "block";
+          }
+        } catch (e) {}
+      }
+      function cancelPhoneUpload() {
+        if (uploadPollInterval) clearInterval(uploadPollInterval);
+        uploadToken = null;
+        document.getElementById("qrArea").style.display = "none";
+        document.getElementById("photoArea").style.display = "flex";
+      }
+      function removePhoto() {
+        uploadedPhotoUrl = null;
+        document.getElementById("photoPreview").style.display = "none";
+        document.getElementById("photoArea").style.display = "flex";
+      }
+      async function uploadFromPC(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+          showMessage("File must be under 15 MB", "error");
+          event.target.value = "";
+          return;
+        }
+        const billNo = document.getElementById("receiptBillNo").value.trim();
+        const companySel = document.getElementById("companySelect");
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
+        try {
+          showMessage("Uploading...", "success");
+          const sessRes = await fetch("/api/upload-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_no: billNo, company }),
+          });
+          const sessData = await sessRes.json();
+          const token = sessData.token;
+          const fd = new FormData();
+          fd.append("photo", file);
+          const upRes = await fetch(`/api/upload-session/${token}/upload`, {
+            method: "POST",
+            body: fd,
+          });
+          const upData = await upRes.json();
+          if (upData.status === "SUCCESS") {
+            uploadedPhotoUrl = upData.photo_url;
+            document.getElementById("photoArea").style.display = "none";
+            document.getElementById("photoImg").src = upData.photo_url;
+            document.getElementById("photoPreview").style.display = "block";
+            showMessage("Photo uploaded ✓", "success");
+            setTimeout(() => {
+              document.getElementById("message").style.display = "none";
+            }, 1500);
+          } else {
+            showMessage(
+              "Upload failed: " + (upData.error || "unknown"),
+              "error",
+            );
+          }
+        } catch (e) {
+          showMessage("Upload error: " + e.message, "error");
+        }
+        event.target.value = "";
       }
     </script>
   </body>
