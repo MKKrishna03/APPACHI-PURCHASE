@@ -7,7 +7,7 @@
         visibility: hidden;
       }
     </style>
-    <title>Purchase Voucher</title>
+    <title>Credit / Debit Note</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -403,6 +403,55 @@
         padding-right: 28px;
       }
 
+      /* Note Type Selector */
+      .note-type-selector {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 0;
+      }
+      .note-type-card {
+        padding: 18px 16px;
+        border: 2px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        cursor: pointer;
+        transition: all 0.18s;
+        text-align: center;
+      }
+      .note-type-card:hover {
+        border-color: var(--accent-2);
+        background: var(--surface);
+      }
+      .note-type-card.selected.credit {
+        border-color: var(--green);
+        background: var(--green-light);
+      }
+      .note-type-card.selected.debit {
+        border-color: var(--danger);
+        background: var(--danger-light);
+      }
+      .note-type-icon {
+        font-size: 22px;
+        margin-bottom: 6px;
+      }
+      .note-type-label {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 2px;
+      }
+      .note-type-desc {
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+      .note-type-card.selected.credit .note-type-label {
+        color: var(--green);
+      }
+      .note-type-card.selected.debit .note-type-label {
+        color: var(--danger);
+      }
+
       /* Linked info banner */
       .link-banner {
         display: none;
@@ -564,6 +613,22 @@
       .btn-submit:active {
         transform: scale(0.99);
       }
+      .btn-submit.credit {
+        background: var(--green);
+        box-shadow: 0 2px 8px rgba(45, 106, 79, 0.2);
+      }
+      .btn-submit.credit:hover {
+        background: #245c43;
+        box-shadow: 0 4px 16px rgba(45, 106, 79, 0.3);
+      }
+      .btn-submit.debit {
+        background: var(--danger);
+        box-shadow: 0 2px 8px rgba(181, 48, 30, 0.2);
+      }
+      .btn-submit.debit:hover {
+        background: #962718;
+        box-shadow: 0 4px 16px rgba(181, 48, 30, 0.3);
+      }
 
       .totals-section {
         margin-top: 20px;
@@ -638,8 +703,8 @@
   <body>
     <div class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-logo">Purchase Management</div>
-        <div class="sidebar-title">Purchase Voucher</div>
+        <div class="sidebar-logo">Adjustment Notes</div>
+        <div class="sidebar-title">Credit / Debit Note</div>
       </div>
       <div class="sidebar-body">
         <!-- Unlinked Payments -->
@@ -664,13 +729,13 @@
           <div id="chittaiList"><div class="no-data">Loading…</div></div>
         </div>
 
-        <!-- Recent Purchases -->
+        <!-- Recent Notes -->
         <button
           class="section-toggle"
           onclick="toggleSection('recent')"
           style="margin-top: 8px"
         >
-          <span>Recent Purchases</span>
+          <span>Recent Notes</span>
           <span class="section-icon" id="arrow_recent">▾</span>
         </button>
         <div class="section-body" id="body_recent">
@@ -683,18 +748,43 @@
       <div class="breadcrumb">
         <a href="/">Dashboard</a>
         <span>/</span>
-        <span>Purchase Voucher</span>
+        <span>Credit / Debit Note</span>
       </div>
 
-      <div class="page-title">Purchase Voucher</div>
-      <div class="page-sub">
-        Create a GST purchase entry linked to payment and chittai
+      <div class="page-title" id="pageTitle">Credit / Debit Note</div>
+      <div class="page-sub" id="pageSub">
+        Create a credit or debit note linked to a purchase, payment or chittai
       </div>
 
       <div id="message" class="message"></div>
 
-      <!-- Company Select -->
+      <!-- Note Type Selector -->
       <div class="card">
+        <div class="card-title">Note Type</div>
+        <div class="note-type-selector">
+          <div
+            class="note-type-card"
+            id="creditCard"
+            onclick="selectNoteType('credit')"
+          >
+            <div class="note-type-icon">📥</div>
+            <div class="note-type-label">Credit Note</div>
+            <div class="note-type-desc">Reduce supplier liability</div>
+          </div>
+          <div
+            class="note-type-card"
+            id="debitCard"
+            onclick="selectNoteType('debit')"
+          >
+            <div class="note-type-icon">📤</div>
+            <div class="note-type-label">Debit Note</div>
+            <div class="note-type-desc">Increase supplier liability</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Company Select -->
+      <div class="card" id="companyCard" style="display: none">
         <div class="card-title">Company</div>
         <div class="form-group" style="margin-bottom: 0">
           <label class="field-label">Select Company *</label>
@@ -706,8 +796,10 @@
 
       <div id="emptyState">
         <div class="empty-state">
-          <div class="empty-icon">🧾</div>
-          <div class="empty-text">Select a company to begin</div>
+          <div class="empty-icon" id="emptyIcon">🧾</div>
+          <div class="empty-text" id="emptyText">
+            Select Credit Note or Debit Note to begin
+          </div>
           <button
             id="createFreeBtn"
             onclick="createFreeEntry()"
@@ -728,7 +820,7 @@
               letter-spacing: 0.02em;
             "
           >
-            ＋ Create Purchase Entry
+            ＋ Create Note Entry
           </button>
         </div>
       </div>
@@ -754,14 +846,14 @@
 
         <!-- Bill Details -->
         <div class="card">
-          <div class="card-title">Purchase Bill Details</div>
+          <div class="card-title" id="billDetailsTitle">Note Details</div>
           <div class="form-grid">
             <div class="form-group">
-              <label class="field-label">Bill Number *</label>
+              <label class="field-label">Note Number *</label>
               <input
                 type="text"
                 id="billNo"
-                placeholder="Supplier bill no."
+                placeholder="Note no."
                 oninput="checkDuplicatePurchaseBillNo(this.value)"
               />
               <div
@@ -774,11 +866,11 @@
                   font-weight: 600;
                 "
               >
-                ⚠ This bill number already exists.
+                ⚠ This note number already exists.
               </div>
             </div>
             <div class="form-group">
-              <label class="field-label">Bill Date *</label>
+              <label class="field-label">Note Date *</label>
               <input type="date" id="billDate" />
             </div>
           </div>
@@ -1122,7 +1214,7 @@
             </div>
             <div class="total-row bold">
               <span class="total-label" style="color: var(--ink)"
-                >Net Payable</span
+                >Net Amount</span
               >
               <input
                 type="number"
@@ -1153,7 +1245,7 @@
                 margin-bottom: 10px;
               "
             >
-              📸 Bill Photo (Optional)
+              📸 Note Photo (Optional)
             </div>
             <div
               id="photoArea"
@@ -1289,8 +1381,12 @@
           </div>
 
           <div class="action-bar" style="margin-top: 20px">
-            <button class="btn-submit" onclick="submitPurchase()">
-              Submit Purchase Voucher →
+            <button
+              class="btn-submit"
+              id="submitBtn"
+              onclick="submitPurchase()"
+            >
+              Submit Note →
             </button>
           </div>
         </div>
@@ -1331,6 +1427,52 @@
       let uploadToken = null;
       let uploadedPhotoUrl = null;
       let uploadPollInterval = null;
+      let noteType = null; // 'credit' or 'debit'
+
+      // ── NOTE TYPE SELECT ──
+      function selectNoteType(type) {
+        noteType = type;
+        document
+          .getElementById("creditCard")
+          .classList.remove("selected", "credit", "debit");
+        document
+          .getElementById("debitCard")
+          .classList.remove("selected", "credit", "debit");
+        if (type === "credit") {
+          document
+            .getElementById("creditCard")
+            .classList.add("selected", "credit");
+          document.getElementById("pageTitle").textContent = "Credit Note";
+          document.getElementById("pageSub").textContent =
+            "Create a credit note linked to a purchase, payment or chittai";
+          document.getElementById("billDetailsTitle").textContent =
+            "Credit Note Details";
+          document.getElementById("emptyText").textContent =
+            "Select a company to begin";
+          document.getElementById("emptyIcon").textContent = "📥";
+          const btn = document.getElementById("submitBtn");
+          btn.textContent = "Submit Credit Note →";
+          btn.classList.remove("debit");
+          btn.classList.add("credit");
+        } else {
+          document
+            .getElementById("debitCard")
+            .classList.add("selected", "debit");
+          document.getElementById("pageTitle").textContent = "Debit Note";
+          document.getElementById("pageSub").textContent =
+            "Create a debit note linked to a purchase, payment or chittai";
+          document.getElementById("billDetailsTitle").textContent =
+            "Debit Note Details";
+          document.getElementById("emptyText").textContent =
+            "Select a company to begin";
+          document.getElementById("emptyIcon").textContent = "📤";
+          const btn = document.getElementById("submitBtn");
+          btn.textContent = "Submit Debit Note →";
+          btn.classList.remove("credit");
+          btn.classList.add("debit");
+        }
+        document.getElementById("companyCard").style.display = "block";
+      }
 
       // ── UTILS ──
       function toggleSection(name) {
@@ -1413,14 +1555,9 @@
           const res = await fetch(url);
           const all = await res.json();
 
-          // Get all purchases to know which vouchers are fully accounted
           const purchasesRes = await fetch("/api/purchases/list");
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
 
-          // Build voucher -> purchase map using the vouchers' linked_purchase_id
-          // (because a single purchase may be linked to multiple vouchers, we read
-          // the link from the vouchers side)
-          // For each voucher, find the purchase it's linked to and compute net_value
           const purchaseById = {};
           purchases.forEach((p) => {
             purchaseById[p.id] = p;
@@ -1436,18 +1573,14 @@
             }
           });
 
-          // Filter: payment vouchers or chittai payments where balance != 0 (over OR under)
-          // Hide only when payment exactly matches purchase (settled)
           const payments = all.filter((v) => {
             const isPayment =
               v.voucher_type === "Payment Voucher" ||
               v.voucher_type === "Chittai Payment";
             if (!isPayment) return false;
-            // Not linked yet → always show
             if (!v.linked_purchase_id) return true;
             const paid = purchasedByVoucher[v.id] || 0;
             const balance = parseFloat(v.total_value || 0) - paid;
-            // Hide only if exactly settled
             return Math.abs(balance) > 0.01;
           });
 
@@ -1507,7 +1640,6 @@
             (c) => String(c.profile_id) === String(filterCompany),
           );
 
-          // Get purchases to find linked chittai
           const purchasesRes = await fetch("/api/purchases/list");
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
           const linkedChittaiIds = new Set(
@@ -1555,16 +1687,19 @@
         try {
           const res = await fetch("/api/purchases/list");
           if (!res.ok) {
-            list.innerHTML = '<div class="no-data">No purchases yet</div>';
+            list.innerHTML = '<div class="no-data">No notes yet</div>';
             return;
           }
           let purchases = await res.json();
           purchases = purchases.filter(
-            (p) => String(p.profile_id) === String(filterCompany),
+            (p) =>
+              String(p.profile_id) === String(filterCompany) &&
+              (p.voucher_type === "Credit Note" ||
+                p.voucher_type === "Debit Note"),
           );
           purchases = purchases.slice(0, 8);
           if (!purchases.length) {
-            list.innerHTML = '<div class="no-data">No purchases yet</div>';
+            list.innerHTML = '<div class="no-data">No notes yet</div>';
             return;
           }
 
@@ -1576,18 +1711,26 @@
               const companyName = company
                 ? company.alias || company.company
                 : "—";
-              return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;border-left:3px solid var(--green);cursor:pointer;" onclick="viewPurchase(${p.id}, ${p.profile_id})">
-          <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--green);margin-bottom:3px;">${p.bill_no || "—"}</div>
+              const isCredit = p.voucher_type === "Credit Note";
+              const tagColor = isCredit ? "var(--green)" : "var(--danger)";
+              const tagBg = isCredit
+                ? "var(--green-light)"
+                : "var(--danger-light)";
+              return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;border-left:3px solid ${tagColor};cursor:pointer;" onclick="viewPurchase(${p.id}, ${p.profile_id})">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+            <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:${tagColor};">${p.bill_no || "—"}</div>
+            <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;background:${tagBg};color:${tagColor};text-transform:uppercase;">${isCredit ? "CR" : "DR"}</span>
+          </div>
           <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:3px;">${companyName}</div>
           <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);">
             <span>${p.date ? new Date(p.date).toLocaleDateString("en-GB") : "—"}</span>
-            <span style="font-weight:600;color:var(--green);">₹${fmt(p.net_value || p.total_value)}</span>
+            <span style="font-weight:600;color:${tagColor};">₹${fmt(p.net_value || p.total_value)}</span>
           </div>
         </div>`;
             })
             .join("");
         } catch (e) {
-          list.innerHTML = '<div class="no-data">No purchases yet</div>';
+          list.innerHTML = '<div class="no-data">No notes yet</div>';
         }
       }
 
@@ -1595,7 +1738,10 @@
       let allVouchers = [];
 
       async function selectPayment(voucherId) {
-        // Load all vouchers once
+        if (!noteType) {
+          showMessage("Please select Credit Note or Debit Note first", "error");
+          return;
+        }
         if (!allVouchers.length) {
           const res = await fetch(`/api/vouchers/list`);
           allVouchers = await res.json();
@@ -1607,7 +1753,6 @@
         const isSelected = selectedVoucherIds.includes(voucherId);
 
         if (isSelected) {
-          // Deselect
           selectedVoucherIds = selectedVoucherIds.filter(
             (id) => id !== voucherId,
           );
@@ -1615,13 +1760,11 @@
             .getElementById(`pay_${voucherId}`)
             ?.classList.remove("selected");
 
-          // Deselect linked chittai
           if (voucher.linked_chittai_id) {
             const chittaiEl = document.getElementById(
               `chittai_${voucher.linked_chittai_id}`,
             );
             if (chittaiEl) chittaiEl.classList.remove("linked");
-            // Remove from selectedChittaiIds
             selectedChittaiIds = selectedChittaiIds.filter(
               (id) => id !== voucher.linked_chittai_id,
             );
@@ -1636,13 +1779,11 @@
             return;
           }
         } else {
-          // Select
           selectedVoucherIds.push(voucherId);
           document
             .getElementById(`pay_${voucherId}`)
             ?.classList.add("selected");
 
-          // Auto-select linked chittai
           if (voucher.linked_chittai_id) {
             if (!selectedChittaiIds.includes(voucher.linked_chittai_id)) {
               selectedChittaiIds.push(voucher.linked_chittai_id);
@@ -1660,7 +1801,6 @@
         );
         selectedChittaiId = selectedChittaiIds[0] || null;
 
-        // Set company from first selected
         const firstVoucher = allVouchers.find(
           (v) => v.id === selectedVoucherIds[0],
         );
@@ -1673,7 +1813,6 @@
         updateLinkBanner();
         showPurchaseDetails();
 
-        // Update chittai banner
         if (selectedChittaiIds.length) {
           const chittaiRes = await fetch("/api/chittai/list/all");
           const chittais = await chittaiRes.json();
@@ -1695,6 +1834,13 @@
             .split("T")[0];
         }
 
+        const totalBalance = selectedVoucherIds.reduce((s, id) => {
+          const el = document.getElementById(`pay_${id}`);
+          return s + (el ? parseFloat(el.dataset.balance || 0) : 0);
+        }, 0);
+        document.getElementById("billNet").value = totalBalance.toFixed(2);
+        document.getElementById("billTotal").value = totalBalance.toFixed(2);
+        document.getElementById("billTaxable").value = totalBalance.toFixed(2);
         updateLinkBanner();
       }
 
@@ -1733,7 +1879,10 @@
       }
 
       function createFreeEntry() {
-        // Clear any previous selections
+        if (!noteType) {
+          showMessage("Please select Credit Note or Debit Note first", "error");
+          return;
+        }
         selectedVoucherIds = [];
         selectedChittaiIds = [];
         selectedVoucherId = null;
@@ -1772,7 +1921,6 @@
         if (btn) btn.style.display = "inline-block";
         if (reloadSidebar) loadSidebarData(companyId);
 
-        // Determine GST type
         const company = companies.find(
           (c) => String(c.id) === String(companyId),
         );
@@ -1893,7 +2041,6 @@
         const valueAdded =
           parseFloat(document.getElementById("hmValueAdded").value) || 0;
 
-        // GST is charged on (taxable + valueAdded) — proportional split per row
         let cgst = 0,
           sgst = 0,
           igst = 0;
@@ -1954,7 +2101,6 @@
         const valueAdded =
           parseFloat(document.getElementById("billValueAdded").value) || 0;
 
-        // GST is charged on (taxable + valueAdded) — proportional split per row
         let cgst = 0,
           sgst = 0,
           igst = 0;
@@ -1964,7 +2110,6 @@
             row._taxPct ||
             parseFloat(row.querySelector(".tax-percent")?.value) ||
             0;
-          // each row's share of value added, proportional to its taxable
           const share = taxable > 0 ? (base / taxable) * valueAdded : 0;
           const gstBase = base + share;
           if (selectedGstType === "CGST_SGST") {
@@ -1999,7 +2144,10 @@
 
       // ── SUBMIT ──
       async function submitPurchase() {
-        // Payment linking is optional — purchase can exist standalone
+        if (!noteType) {
+          showMessage("Please select Credit Note or Debit Note", "error");
+          return;
+        }
         const companyId = document.getElementById("companySelect").value;
         const billNo = document.getElementById("billNo").value.trim();
         const billDate = document.getElementById("billDate").value;
@@ -2008,15 +2156,15 @@
           return;
         }
         if (!billNo) {
-          showMessage("Please enter bill number", "error");
+          showMessage("Please enter note number", "error");
           return;
         }
         if (!billDate) {
-          showMessage("Please enter bill date", "error");
+          showMessage("Please enter note date", "error");
           return;
         }
         if (!uploadedPhotoUrl) {
-          showMessage("Please attach a bill photo before saving", "error");
+          showMessage("Please attach a note photo before saving", "error");
           return;
         }
 
@@ -2036,11 +2184,15 @@
           }
         });
 
+        const voucherTypeLabel =
+          noteType === "credit" ? "Credit Note" : "Debit Note";
+
         const payload = {
           profile_id: companyId,
           date: billDate,
           bill_no: billNo,
-          description: "",
+          voucher_type: voucherTypeLabel,
+          description: voucherTypeLabel,
           linked_voucher_ids: selectedVoucherIds,
           linked_chittai_ids: selectedChittaiIds,
           taxable_value:
@@ -2070,7 +2222,6 @@
           });
           const result = await res.json();
           if (result.status === "SUCCESS") {
-            // Save hallmark voucher if checked
             if (document.getElementById("hallmarkToggle").checked) {
               const hmItems = [];
               document
@@ -2101,7 +2252,7 @@
                   profile_id: companyId,
                   date: billDate,
                   bill_no: billNo,
-                  voucher_type: "Hallmark Voucher",
+                  voucher_type: voucherTypeLabel + " - Hallmark",
                   description: "Hallmark Charges",
                   taxable_value:
                     parseFloat(document.getElementById("hmTaxable").value) || 0,
@@ -2130,8 +2281,7 @@
                 });
               }
             }
-            showMessage("Purchase Voucher created successfully!", "success");
-            // Update selected cards balance live
+            showMessage(voucherTypeLabel + " created successfully!", "success");
             const netVal =
               parseFloat(document.getElementById("billNet").value) || 0;
             selectedVoucherIds.forEach((id) => {
@@ -2216,7 +2366,6 @@
         document.getElementById("photoArea").style.display = "none";
         document.getElementById("qrArea").style.display = "block";
 
-        // Poll every 2 seconds
         uploadPollInterval = setInterval(checkUploadStatus, 2000);
       }
 
@@ -2258,7 +2407,6 @@
           return;
         }
 
-        // Create an upload session
         const billNo = document.getElementById("billNo").value.trim();
         const companySel = document.getElementById("companySelect");
         const company =
@@ -2421,16 +2569,22 @@
           sgst = sum(group, "sgst"),
           igst = sum(group, "igst");
         const net = parseFloat(mainEntry.net_value || 0);
+        const docLabel =
+          target.voucher_type === "Credit Note"
+            ? "Credit Note"
+            : target.voucher_type === "Debit Note"
+              ? "Debit Note"
+              : "Note";
         head.innerHTML = bvHead(
-          "Purchase Voucher",
+          docLabel,
           target.bill_no || "—",
           `${target.date ? new Date(target.date).toLocaleDateString("en-GB") : "-"}${group.length > 1 ? " · includes hallmark" : ""}`,
         );
         let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
-          ${bvField("Bill No", target.bill_no, "#2d6a4f")}
+          ${bvField("Note No", target.bill_no, "#2d6a4f")}
           ${bvField("Date", target.date ? new Date(target.date).toLocaleDateString("en-GB") : "-")}
           ${bvField("Quantity", totalQty ? totalQty.toLocaleString("en-IN") + " g" : "—")}
-          ${bvField("Net Payable", fmtAmt(net), "#2d6a4f")}
+          ${bvField("Net Amount", fmtAmt(net), "#2d6a4f")}
         </div>`;
         if (allItems.length)
           html +=
@@ -2446,14 +2600,14 @@
         if (cgst) html += bvTotalsRow("CGST", fmtAmt(cgst));
         if (sgst) html += bvTotalsRow("SGST", fmtAmt(sgst));
         if (igst) html += bvTotalsRow("IGST", fmtAmt(igst));
-        html += bvTotalsRow("Net Payable", fmtAmt(net), {
+        html += bvTotalsRow("Net Amount", fmtAmt(net), {
           bold: true,
           accent: "#2d6a4f",
         });
         html += "</div>";
         if (mainEntry.photo_url)
           html +=
-            bvSectionTitle("Bill Photo") +
+            bvSectionTitle("Note Photo") +
             `<img src="${mainEntry.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${mainEntry.photo_url}','_blank')" />`;
         el.innerHTML = html;
         enteredBy.textContent = mainEntry.created_by_name
@@ -2466,7 +2620,6 @@
         await loadCompanies();
         await loadTaxFormats();
         loadDescriptions();
-        // Don't load sidebar until company selected
         document.getElementById("paymentsList").innerHTML =
           '<div class="no-data">Select a company first</div>';
         document.getElementById("chittaiList").innerHTML =
@@ -2479,16 +2632,6 @@
           .toISOString()
           .split("T")[0];
       };
-      function getCurrentUser() {
-        try {
-          const u =
-            localStorage.getItem("auth_user") ||
-            sessionStorage.getItem("auth_user");
-          return u ? JSON.parse(u) : null;
-        } catch {
-          return null;
-        }
-      }
     </script>
   </body>
 </html>

@@ -799,11 +799,16 @@
         }
       };
 
+      let _originalIssueNumber = null;
+      let _editProfileId = null;
+
       async function loadEditLabour(id) {
         try {
           const res = await fetch(`/api/labour/${id}`);
           const d = await res.json();
           const l = d.labour;
+          _originalIssueNumber = l.issue_number || null;
+          _editProfileId = l.profile_id;
           const company = companies.find(
             (c) => String(c.id) === String(l.profile_id),
           );
@@ -867,8 +872,39 @@
             });
         });
         const company = companies.find((c) => c.alias === companyAlias);
+        if (!company) {
+          alert("Company not found");
+          return;
+        }
+
+        // If issue number changed, check for linked RVs and confirm cascade
+        const issueNumberChanged =
+          _originalIssueNumber && _originalIssueNumber !== issueNumber;
+        if (issueNumberChanged) {
+          try {
+            const refRes = await fetch(
+              `/api/labour/rv-references?issue_number=${encodeURIComponent(_originalIssueNumber)}&profile_id=${_editProfileId}`,
+            );
+            const refs = await refRes.json();
+            if (refs.length) {
+              const rvList = refs
+                .map(
+                  (r) =>
+                    `• ${r.receipt_bill_no || "(no bill no)"} — ${r.date ? new Date(r.date).toLocaleDateString("en-GB") : "-"}`,
+                )
+                .join("\n");
+              const ok = confirm(
+                `This Issue Voucher is linked to ${refs.length} Receipt Voucher(s):\n\n${rvList}\n\nThe issue number reference will be updated:\n   OLD:  ${_originalIssueNumber}\n   NEW:  ${issueNumber}\n\nProceed?`,
+              );
+              if (!ok) return;
+            }
+          } catch (e) {
+            console.error("RV reference check failed:", e);
+          }
+        }
+
         try {
-          await fetch(`/api/labour/${id}`, {
+          const res = await fetch(`/api/labour/${id}/with-cascade`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -878,11 +914,21 @@
               issue_number: issueNumber,
               labour_item_type: labourItemType,
               items,
+              old_issue_number: _originalIssueNumber,
               created_by: getCurrentUser()?.id || null,
             }),
           });
-          alert("Updated successfully!");
-          window.history.back();
+          const result = await res.json();
+          if (result.status === "SUCCESS") {
+            const msg =
+              result.updated_rv_count > 0
+                ? `Updated successfully!\n${result.updated_rv_count} linked Receipt Voucher(s) updated.`
+                : "Updated successfully!";
+            alert(msg);
+            window.history.back();
+          } else {
+            alert("Error: " + (result.error || "Update failed"));
+          }
         } catch (e) {
           alert(e.message);
         }
