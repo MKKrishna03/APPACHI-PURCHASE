@@ -1190,6 +1190,7 @@ app.post("/api/purchases", async (req, res) => {
 app.get("/purchase", (req, res) =>
   res.sendFile(path.join(__dirname, "purchase.html")),
 );
+app.get("/note", (req, res) => res.sendFile(path.join(__dirname, "note.html")));
 app.post("/api/labour", async (req, res) => {
   const {
     profile_id,
