@@ -291,6 +291,36 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(
     `ALTER TABLE todos ADD COLUMN IF NOT EXISTS replies JSONB DEFAULT '[]'`,
   );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schedule_templates (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      receiver TEXT DEFAULT 'all',
+      priority TEXT DEFAULT 'medium',
+      day_of_month INTEGER NOT NULL,
+      deadline_days INTEGER DEFAULT 3,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schedule_instances (
+      id SERIAL PRIMARY KEY,
+      template_id INTEGER REFERENCES schedule_templates(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      receiver TEXT DEFAULT 'all',
+      priority TEXT DEFAULT 'medium',
+      notes TEXT,
+      scheduled_date DATE,
+      deadline_date DATE,
+      status TEXT DEFAULT 'pending',
+      done_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE`,
+  );
   console.log("DB ready");
 }
 
@@ -1660,7 +1690,11 @@ app.post("/api/auth/login", async (req, res) => {
     if (!match) return res.json({ error: "Incorrect password." });
     res.json({
       status: "SUCCESS",
-      user: { id: user.user_id, name: user.name },
+      user: {
+        id: user.user_id,
+        name: user.name,
+        can_delete: user.can_delete || false,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2045,6 +2079,81 @@ app.patch("/api/chittai/:id/photo", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+// ── Monthly Schedule Templates ──
+app.get("/api/schedule/templates", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM schedule_templates ORDER BY day_of_month ASC",
+  );
+  res.json(rows);
+});
+
+app.post("/api/schedule/templates", async (req, res) => {
+  const { title, receiver, priority, day_of_month, deadline_days, notes } =
+    req.body;
+  const { rows } = await pool.query(
+    "INSERT INTO schedule_templates (title, receiver, priority, day_of_month, deadline_days, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+    [title, receiver, priority, day_of_month, deadline_days, notes],
+  );
+  res.json(rows[0]);
+});
+
+app.delete("/api/schedule/templates/:id", async (req, res) => {
+  await pool.query("DELETE FROM schedule_templates WHERE id=$1", [
+    req.params.id,
+  ]);
+  res.json({ status: "SUCCESS" });
+});
+
+// ── Monthly Schedule Instances ──
+app.get("/api/schedule/instances", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM schedule_instances ORDER BY scheduled_date ASC",
+  );
+  res.json(rows);
+});
+
+app.post("/api/schedule/instances", async (req, res) => {
+  const {
+    template_id,
+    title,
+    receiver,
+    priority,
+    notes,
+    scheduled_date,
+    deadline_date,
+    status,
+  } = req.body;
+  const { rows } = await pool.query(
+    "INSERT INTO schedule_instances (template_id, title, receiver, priority, notes, scheduled_date, deadline_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+    [
+      template_id,
+      title,
+      receiver,
+      priority,
+      notes,
+      scheduled_date,
+      deadline_date,
+      status || "pending",
+    ],
+  );
+  res.json(rows[0]);
+});
+
+app.patch("/api/schedule/instances/:id", async (req, res) => {
+  const { status, done_at } = req.body;
+  const { rows } = await pool.query(
+    "UPDATE schedule_instances SET status=$1, done_at=$2 WHERE id=$3 RETURNING *",
+    [status, done_at || null, req.params.id],
+  );
+  res.json(rows[0]);
+});
+
+app.delete("/api/schedule/instances/:id", async (req, res) => {
+  await pool.query("DELETE FROM schedule_instances WHERE id=$1", [
+    req.params.id,
+  ]);
+  res.json({ status: "SUCCESS" });
 });
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

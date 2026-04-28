@@ -1376,6 +1376,16 @@
         <div style="display:flex;gap:10px;align-items:center;">
           <button
             class="bell-btn"
+            id="scheduleBtn"
+            onclick="window.toggleSchedulePanel()"
+            title="Monthly Schedule"
+            style="display:none;"
+          >
+            🗓️
+            <span class="bell-badge" id="scheduleBadge">0</span>
+          </button>
+          <button
+            class="bell-btn"
             id="todoBtn"
             onclick="window.toggleTodoPanel()"
             title="To-Do List"
@@ -1898,6 +1908,65 @@
         border-color: rgba(181,48,30,0.4);
       }
     </style>
+
+    <!-- Monthly Schedule Panel -->
+    <div class="reminder-panel" id="schedulePanel">
+      <div class="rp-header">
+        <div class="rp-title">🗓️ Monthly Schedule</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="scheduleAddBtn" onclick="toggleScheduleForm()" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">＋ New Template</button>
+          <button class="rp-close" onclick="toggleSchedulePanel()">✕</button>
+        </div>
+      </div>
+
+      <!-- Add Template Form -->
+      <div class="rp-form" id="scheduleForm">
+        <div class="rp-field">
+          <label>Task Name</label>
+          <input type="text" id="sch-title" placeholder="e.g. Submit GST Report" />
+        </div>
+        <div class="rp-form-row">
+          <div class="rp-field">
+            <label>Assigned To</label>
+            <select id="sch-receiver" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+              <option value="all">To All</option>
+            </select>
+          </div>
+          <div class="rp-field">
+            <label>Priority</label>
+            <select id="sch-priority" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);">
+              <option value="critical">🔥 Critical</option>
+              <option value="high">⚡ High</option>
+              <option value="medium" selected>● Medium</option>
+              <option value="low">○ Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="rp-form-row">
+          <div class="rp-field">
+            <label>Day of Month (task starts)</label>
+            <input type="number" id="sch-day" min="1" max="28" placeholder="e.g. 5" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);" />
+          </div>
+          <div class="rp-field">
+            <label>Deadline (days after start)</label>
+            <input type="number" id="sch-deadline-days" min="1" max="28" placeholder="e.g. 3" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:12px;font-family:inherit;background:var(--surface);color:var(--ink);" />
+          </div>
+        </div>
+        <div class="rp-field">
+          <label>Notes</label>
+          <textarea id="sch-notes" placeholder="Details about this recurring task..." style="height:55px"></textarea>
+        </div>
+        <button class="rp-save" onclick="saveScheduleTemplate()">Save Template</button>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface-2);">
+        <button id="sch-tab-instances" onclick="switchSchTab('instances')" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid var(--accent);font-size:12px;font-weight:700;color:var(--accent);cursor:pointer;font-family:inherit;">This Month</button>
+        <button id="sch-tab-templates" onclick="switchSchTab('templates')" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid transparent;font-size:12px;font-weight:700;color:var(--ink-3);cursor:pointer;font-family:inherit;">Templates</button>
+      </div>
+
+      <div class="rp-list" id="scheduleList"><div class="ri-empty">Loading...</div></div>
+    </div>
 
     <script>
       (function() {
@@ -3988,6 +4057,304 @@ function doLogout() {
     el.textContent = "Welcome, " + name;
   }
 })();
+
+// ── MONTHLY SCHEDULE ──
+let scheduleTemplates = [];
+let scheduleInstances = [];
+let schCurrentTab = 'instances';
+
+(function initSchedule() {
+  const me = getCurrentUser();
+  const canAdmin = me?.can_delete === true;
+  if (canAdmin) {
+    document.getElementById('scheduleBtn').style.display = 'flex';
+    document.getElementById('scheduleAddBtn').style.display = 'block';
+  } else {
+    // Non-admins still see the button to view their assigned tasks
+    document.getElementById('scheduleBtn').style.display = 'flex';
+  }
+  loadScheduleUsers();
+  loadSchedule();
+  setInterval(loadSchedule, 60000);
+})();
+
+async function loadScheduleUsers() {
+  try {
+    const res = await fetch('/api/auth/users-list');
+    const users = await res.json();
+    const sel = document.getElementById('sch-receiver');
+    sel.innerHTML = '<option value="all">To All</option>' +
+      users.map(u => `<option value="${u.user_id}">${u.name || u.user_id}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadSchedule() {
+  try {
+    const [tRes, iRes] = await Promise.all([
+      fetch('/api/schedule/templates').then(r => r.json()).catch(() => []),
+      fetch('/api/schedule/instances').then(r => r.json()).catch(() => []),
+    ]);
+    scheduleTemplates = Array.isArray(tRes) ? tRes : [];
+    scheduleInstances = Array.isArray(iRes) ? iRes : [];
+    generateThisMonthInstances();
+    renderSchedule();
+    updateScheduleBadge();
+  } catch(e) {}
+}
+
+// Client-side: generate instances for current month from templates if not already in DB
+function generateThisMonthInstances() {
+  const now = new Date();
+  const yr = now.getFullYear();
+  const mo = now.getMonth(); // 0-indexed
+  const pad = n => String(n).padStart(2,'0');
+
+  scheduleTemplates.forEach(async tpl => {
+    const day = parseInt(tpl.day_of_month);
+    const scheduledDate = `${yr}-${pad(mo+1)}-${pad(Math.min(day, new Date(yr, mo+1, 0).getDate()))}`;
+    const alreadyExists = scheduleInstances.some(
+      i => String(i.template_id) === String(tpl.id) &&
+           i.scheduled_date && i.scheduled_date.slice(0,7) === `${yr}-${pad(mo+1)}`
+    );
+    if (!alreadyExists) {
+      try {
+        const deadlineDays = parseInt(tpl.deadline_days) || 3;
+        const deadlineDate = new Date(yr, mo, day + deadlineDays);
+        const dl = `${deadlineDate.getFullYear()}-${pad(deadlineDate.getMonth()+1)}-${pad(deadlineDate.getDate())}`;
+        const res = await fetch('/api/schedule/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template_id: tpl.id,
+            title: tpl.title,
+            receiver: tpl.receiver,
+            priority: tpl.priority,
+            notes: tpl.notes,
+            scheduled_date: scheduledDate,
+            deadline_date: dl,
+            status: 'pending'
+          })
+        });
+        const data = await res.json();
+        if (data.id) scheduleInstances.push(data);
+      } catch(e) {}
+    }
+  });
+}
+
+function switchSchTab(tab) {
+  schCurrentTab = tab;
+  document.getElementById('sch-tab-instances').style.borderBottomColor = tab === 'instances' ? 'var(--accent)' : 'transparent';
+  document.getElementById('sch-tab-instances').style.color = tab === 'instances' ? 'var(--accent)' : 'var(--ink-3)';
+  document.getElementById('sch-tab-templates').style.borderBottomColor = tab === 'templates' ? 'var(--accent)' : 'transparent';
+  document.getElementById('sch-tab-templates').style.color = tab === 'templates' ? 'var(--accent)' : 'var(--ink-3)';
+  renderSchedule();
+}
+
+function renderSchedule() {
+  const el = document.getElementById('scheduleList');
+  const me = getCurrentUser();
+  const myId = me?.id || me?.user_id;
+  const myName = me?.name;
+  const canAdmin = me?.can_delete === true;
+
+  if (schCurrentTab === 'templates') {
+    if (!scheduleTemplates.length) {
+      el.innerHTML = '<div class="ri-empty">No templates yet.<br><span style="font-size:11px;opacity:0.6;">Click + New Template to create one.</span></div>';
+      return;
+    }
+    el.innerHTML = scheduleTemplates.map(tpl => {
+      const pMeta = getPriorityMeta(tpl.priority);
+      return `
+        <div class="ri-card future" style="border-left:4px solid ${pMeta.border};">
+          <div class="ri-card-top">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span style="padding:2px 8px;border-radius:99px;background:${pMeta.bg};color:${pMeta.color};font-size:9px;font-weight:800;border:1px solid ${pMeta.border};">${pMeta.icon} ${pMeta.label}</span>
+              </div>
+              <div class="ri-card-title">${tpl.title}</div>
+              <div class="ri-card-time">
+                <span>📅 Day ${tpl.day_of_month} every month · ⏰ ${tpl.deadline_days} day deadline</span>
+              </div>
+              <div style="margin-top:4px;font-size:11px;color:var(--ink-2);">
+                To: <b>${tpl.receiver === 'all' ? 'Everyone' : (tpl.receiver_name || tpl.receiver)}</b>
+              </div>
+            </div>
+            ${canAdmin ? `<button class="ri-del-btn" onclick="deleteScheduleTemplate(${tpl.id})">✕</button>` : ''}
+          </div>
+          ${tpl.notes ? `<div style="font-size:11px;color:var(--ink-2);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">${tpl.notes}</div>` : ''}
+        </div>`;
+    }).join('');
+    return;
+  }
+
+  // This Month tab
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const thisMonth = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+
+  const myInstances = scheduleInstances.filter(i => {
+    const inMonth = i.scheduled_date && i.scheduled_date.slice(0,7) === thisMonth;
+    const isForMe = i.receiver === 'all' || i.receiver === myId || i.receiver === myName;
+    return inMonth && (isForMe || canAdmin);
+  });
+
+  if (!myInstances.length) {
+    el.innerHTML = '<div class="ri-empty">No scheduled tasks this month.</div>';
+    return;
+  }
+
+  // Group by status
+  const groups = { pending: [], seen: [], done: [] };
+  myInstances.forEach(i => groups[i.status || 'pending'].push(i));
+
+  const statusColors = { pending: '#e53935', seen: '#b5620a', done: '#2d6a4f' };
+  const statusLabels = { pending: '🔴 Pending', seen: '🟡 In Progress', done: '✅ Done' };
+
+  let html = '';
+  for (const [key, items] of Object.entries(groups)) {
+    if (!items.length) continue;
+    items.sort((a, b) => (a.scheduled_date || '').localeCompare(b.scheduled_date || ''));
+    html += `<div class="rp-section-label" style="color:${statusColors[key]}">${statusLabels[key]} <span style="font-weight:400;opacity:0.6;">(${items.length})</span></div>`;
+    items.forEach(inst => {
+      const pMeta = getPriorityMeta(inst.priority);
+      const now2 = new Date();
+      const dl = inst.deadline_date ? new Date(inst.deadline_date + 'T23:59:59') : null;
+      const isOverdue = dl && dl < now2 && inst.status !== 'done';
+      const urgClass = inst.status === 'done' ? 'future' : isOverdue ? 'overdue' : 'soon';
+      const isAssignee = inst.receiver === 'all' || inst.receiver === myId || inst.receiver === myName;
+
+      let actionBtns = '';
+      if (isAssignee) {
+        if (inst.status === 'pending') {
+          actionBtns = `<button onclick="event.stopPropagation();markScheduleSeen(${inst.id})" style="padding:4px 10px;background:#fef0d6;color:#b5620a;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 Mark Seen</button>`;
+        } else if (inst.status === 'seen') {
+          actionBtns = `<button onclick="event.stopPropagation();markScheduleDone(${inst.id})" style="padding:4px 10px;background:#d8f3dc;color:#2d6a4f;border:none;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Mark Done</button>`;
+        }
+      }
+
+      html += `
+        <div class="ri-card ${urgClass}" style="border-left:4px solid ${isOverdue ? '#e53935' : pMeta.border};${inst.status === 'done' ? 'opacity:0.7;' : ''}">
+          <div class="ri-card-top">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+                <span style="padding:2px 8px;border-radius:99px;background:${pMeta.bg};color:${pMeta.color};font-size:9px;font-weight:800;border:1px solid ${pMeta.border};">${pMeta.icon} ${pMeta.label}</span>
+                ${isOverdue ? `<span style="padding:2px 8px;border-radius:99px;background:#fce8e6;color:#e53935;font-size:9px;font-weight:800;">⚠ Overdue</span>` : ''}
+              </div>
+              <div class="ri-card-title" style="${inst.status === 'done' ? 'text-decoration:line-through;' : ''}">${inst.title}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${actionBtns}</div>
+              <div class="ri-card-time" style="margin-top:4px;">
+                <span>📅 Starts ${inst.scheduled_date ? new Date(inst.scheduled_date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '-'}</span>
+                ${inst.deadline_date ? `· ⏰ Due ${new Date(inst.deadline_date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}` : ''}
+              </div>
+              <div style="margin-top:4px;font-size:11px;color:var(--ink-2);">
+                To: <b>${inst.receiver === 'all' ? 'Everyone' : (inst.receiver_name || inst.receiver)}</b>
+              </div>
+            </div>
+            ${canAdmin ? `<button class="ri-del-btn" onclick="deleteScheduleInstance(${inst.id})">✕</button>` : ''}
+          </div>
+          ${inst.notes ? `<div style="font-size:11px;color:var(--ink-2);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">${inst.notes}</div>` : ''}
+          ${inst.done_at ? `<div style="font-size:10px;color:var(--accent);margin-top:4px;">✓ Done: ${new Date(inst.done_at).toLocaleString('en-GB')}</div>` : ''}
+        </div>`;
+    });
+  }
+  el.innerHTML = html;
+}
+
+function updateScheduleBadge() {
+  const me = getCurrentUser();
+  const myId = me?.id || me?.user_id;
+  const myName = me?.name;
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const thisMonth = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+
+  const pending = scheduleInstances.filter(i => {
+    const inMonth = i.scheduled_date && i.scheduled_date.slice(0,7) === thisMonth;
+    const isForMe = i.receiver === 'all' || i.receiver === myId || i.receiver === myName;
+    return inMonth && isForMe && i.status !== 'done';
+  }).length;
+
+  const badge = document.getElementById('scheduleBadge');
+  badge.textContent = pending;
+  badge.style.display = pending > 0 ? 'flex' : 'none';
+}
+
+window.toggleSchedulePanel = function() {
+  document.getElementById('schedulePanel').classList.toggle('open');
+};
+
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('schedulePanel');
+  const btn = document.getElementById('scheduleBtn');
+  if (panel && panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)) {
+    panel.classList.remove('open');
+  }
+});
+
+function toggleScheduleForm() {
+  document.getElementById('scheduleForm').classList.toggle('show');
+}
+
+async function saveScheduleTemplate() {
+  const title = document.getElementById('sch-title').value.trim();
+  const receiver = document.getElementById('sch-receiver').value;
+  const priority = document.getElementById('sch-priority').value;
+  const day = parseInt(document.getElementById('sch-day').value);
+  const deadlineDays = parseInt(document.getElementById('sch-deadline-days').value);
+  const notes = document.getElementById('sch-notes').value.trim();
+
+  if (!title) { alert('Task name is required'); return; }
+  if (!day || day < 1 || day > 28) { alert('Day must be between 1 and 28'); return; }
+  if (!deadlineDays || deadlineDays < 1) { alert('Deadline days is required'); return; }
+
+  const res = await fetch('/api/schedule/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, receiver, priority, day_of_month: day, deadline_days: deadlineDays, notes })
+  });
+  const data = await res.json();
+  if (data.id || data.status === 'SUCCESS') {
+    document.getElementById('sch-title').value = '';
+    document.getElementById('sch-day').value = '';
+    document.getElementById('sch-deadline-days').value = '';
+    document.getElementById('sch-notes').value = '';
+    document.getElementById('scheduleForm').classList.remove('show');
+    loadSchedule();
+  } else {
+    alert(data.error || 'Failed to save template');
+  }
+}
+
+async function markScheduleSeen(id) {
+  await fetch(`/api/schedule/instances/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'seen' })
+  });
+  loadSchedule();
+}
+
+async function markScheduleDone(id) {
+  await fetch(`/api/schedule/instances/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'done', done_at: new Date().toISOString() })
+  });
+  loadSchedule();
+}
+
+async function deleteScheduleTemplate(id) {
+  if (!confirm('Delete this recurring template? Future instances will not be generated.')) return;
+  await fetch(`/api/schedule/templates/${id}`, { method: 'DELETE' });
+  loadSchedule();
+}
+
+async function deleteScheduleInstance(id) {
+  if (!confirm('Delete this month\'s instance?')) return;
+  await fetch(`/api/schedule/instances/${id}`, { method: 'DELETE' });
+  loadSchedule();
+}
     </script>
   </body>
 </html>
