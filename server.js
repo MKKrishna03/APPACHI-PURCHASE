@@ -566,8 +566,39 @@ app.get("/api/labour/list", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/api/labour/rv-references", async (req, res) => {
+  const { issue_number, profile_id } = req.query;
+  if (!issue_number || !profile_id) return res.json([]);
+  try {
+    const result = await pool.query(
+      `SELECT id, receipt_bill_no, issue_number, date FROM labour
+       WHERE voucher_type = 'Receipt Voucher'
+         AND profile_id = $1
+         AND issue_number IS NOT NULL
+         AND (
+           issue_number = $2
+           OR issue_number LIKE $3
+           OR issue_number LIKE $4
+           OR issue_number LIKE $5
+         )`,
+      [
+        profile_id,
+        issue_number,
+        `${issue_number},%`,
+        `%,${issue_number}`,
+        `%,${issue_number},%`,
+      ],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/labour/:id", async (req, res) => {
   if (req.params.id === "list")
+    return res.status(404).json({ error: "Not found" });
+  if (req.params.id === "rv-references")
     return res.status(404).json({ error: "Not found" });
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
@@ -1418,6 +1449,73 @@ app.get("/api/descriptions", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Update an IV and cascade the issue_number change to all linked RVs
+app.put("/api/labour/:id/with-cascade", async (req, res) => {
+  const {
+    profile_id,
+    company_name,
+    date,
+    issue_number,
+    labour_item_type,
+    items,
+    old_issue_number,
+  } = req.body;
+  const id = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE labour SET profile_id=$1, company_name=$2, date=$3, issue_number=$4, labour_item_type=$5 WHERE id=$6`,
+      [profile_id, company_name, date, issue_number, labour_item_type, id],
+    );
+    if (items && items.length) {
+      await client.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            id,
+            item.sl_no,
+            item.description,
+            item.quantity,
+            item.rate,
+            item.amount,
+          ],
+        );
+      }
+    }
+
+    let updated_rv_count = 0;
+    if (old_issue_number && issue_number && old_issue_number !== issue_number) {
+      const rvs = await client.query(
+        `SELECT id, issue_number FROM labour
+         WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1 AND issue_number IS NOT NULL`,
+        [profile_id],
+      );
+      for (const rv of rvs.rows) {
+        const parts = rv.issue_number.split(",").map((s) => s.trim());
+        const idx = parts.indexOf(old_issue_number);
+        if (idx !== -1) {
+          parts[idx] = issue_number;
+          await client.query(`UPDATE labour SET issue_number=$1 WHERE id=$2`, [
+            parts.join(","),
+            rv.id,
+          ]);
+          updated_rv_count++;
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ status: "SUCCESS", updated_rv_count });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.put("/api/labour/:id", async (req, res) => {
   const {
     profile_id,
