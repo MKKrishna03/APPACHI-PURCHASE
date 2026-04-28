@@ -28,12 +28,22 @@ cloudinary.config({
 const upload = multer({
   storage: new CloudinaryStorage({
     cloudinary,
-    params: {
-      folder: "purchase_bills",
-      allowed_formats: ["jpg", "jpeg", "png", "webp", "heic"],
-      transformation: [
-        { width: 1600, height: 1600, crop: "limit", quality: "auto" },
-      ],
+    params: (req, file) => {
+      const isPdf = file.mimetype === "application/pdf";
+      return {
+        folder: "purchase_bills",
+        resource_type: isPdf ? "raw" : "image",
+        allowed_formats: isPdf
+          ? ["pdf"]
+          : ["jpg", "jpeg", "png", "webp", "heic"],
+        ...(isPdf
+          ? {}
+          : {
+              transformation: [
+                { width: 1600, height: 1600, crop: "limit", quality: "auto" },
+              ],
+            }),
+      };
     },
   }),
   limits: { fileSize: 15 * 1024 * 1024 },
@@ -43,12 +53,22 @@ const upload = multer({
 const uploadChittai = multer({
   storage: new CloudinaryStorage({
     cloudinary,
-    params: {
-      folder: "chittai_bills",
-      allowed_formats: ["jpg", "jpeg", "png", "webp", "heic"],
-      transformation: [
-        { width: 1600, height: 1600, crop: "limit", quality: "auto" },
-      ],
+    params: (req, file) => {
+      const isPdf = file.mimetype === "application/pdf";
+      return {
+        folder: "chittai_bills",
+        resource_type: isPdf ? "raw" : "image",
+        allowed_formats: isPdf
+          ? ["pdf"]
+          : ["jpg", "jpeg", "png", "webp", "heic"],
+        ...(isPdf
+          ? {}
+          : {
+              transformation: [
+                { width: 1600, height: 1600, crop: "limit", quality: "auto" },
+              ],
+            }),
+      };
     },
   }),
   limits: { fileSize: 15 * 1024 * 1024 },
@@ -1222,6 +1242,7 @@ app.get("/purchase", (req, res) =>
   res.sendFile(path.join(__dirname, "purchase.html")),
 );
 app.get("/note", (req, res) => res.sendFile(path.join(__dirname, "note.html")));
+app.get("/hmex", (req, res) => res.sendFile(path.join(__dirname, "hmex.html")));
 app.post("/api/labour", async (req, res) => {
   const {
     profile_id,
