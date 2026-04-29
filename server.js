@@ -171,6 +171,9 @@ async function initDB() {
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
+  );
+  await pool.query(
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
   await pool.query(
@@ -2161,6 +2164,238 @@ app.delete("/api/schedule/instances/:id", async (req, res) => {
     req.params.id,
   ]);
   res.json({ status: "SUCCESS" });
+});
+
+app.get("/api/cloudinary/all-photos", async (req, res) => {
+  try {
+    const folders = ["purchase_bills", "chittai_bills"];
+    let allResources = [];
+
+    for (const folder of folders) {
+      let nextCursor = null;
+      do {
+        const params = new URLSearchParams({
+          type: "upload",
+          prefix: folder,
+          max_results: 500,
+          resource_type: "image",
+        });
+        if (nextCursor) params.append("next_cursor", nextCursor);
+
+        const auth = Buffer.from(
+          `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+        ).toString("base64");
+
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/image?${params}`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const data = await response.json();
+        allResources = allResources.concat(
+          (data.resources || []).map((r) => ({
+            public_id: r.public_id,
+            url: r.secure_url,
+            created_at: r.created_at,
+            folder: folder,
+            bytes: r.bytes,
+            format: r.format,
+          })),
+        );
+        nextCursor = data.next_cursor || null;
+      } while (nextCursor);
+    }
+
+    // Also fetch raw (PDF) resources
+    for (const folder of folders) {
+      let nextCursor = null;
+      do {
+        const params = new URLSearchParams({
+          type: "upload",
+          prefix: folder,
+          max_results: 500,
+          resource_type: "raw",
+        });
+        if (nextCursor) params.append("next_cursor", nextCursor);
+
+        const auth = Buffer.from(
+          `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+        ).toString("base64");
+
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/raw?${params}`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const data = await response.json();
+        allResources = allResources.concat(
+          (data.resources || []).map((r) => ({
+            public_id: r.public_id,
+            url: r.secure_url,
+            created_at: r.created_at,
+            folder: folder,
+            bytes: r.bytes,
+            format: r.format,
+            is_pdf: true,
+          })),
+        );
+        nextCursor = data.next_cursor || null;
+      } while (nextCursor);
+    }
+
+    allResources.sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at),
+    );
+    res.json(allResources);
+  } catch (err) {
+    console.error("CLOUDINARY ALL PHOTOS ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
+  try {
+    const folders = ["purchase_bills", "chittai_bills"];
+    let allResources = [];
+
+    // Fetch all images from Cloudinary
+    for (const folder of folders) {
+      for (const resource_type of ["image", "raw"]) {
+        let nextCursor = null;
+        do {
+          const params = new URLSearchParams({
+            type: "upload",
+            prefix: folder,
+            max_results: 500,
+            resource_type,
+          });
+          if (nextCursor) params.append("next_cursor", nextCursor);
+
+          const auth = Buffer.from(
+            `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+          ).toString("base64");
+
+          const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}?${params}`,
+            { headers: { Authorization: `Basic ${auth}` } },
+          );
+          const data = await response.json();
+          (data.resources || []).forEach((r) => {
+            allResources.push({
+              public_id: r.public_id,
+              url: r.secure_url,
+              resource_type,
+            });
+          });
+          nextCursor = data.next_cursor || null;
+        } while (nextCursor);
+      }
+    }
+
+    // Get all photo_urls stored in DB
+    const [purchasesRes, labourRes, chittaiRes] = await Promise.all([
+      pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
+      pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
+      pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
+    ]);
+
+    const allDbUrls = new Set([
+      ...purchasesRes.rows.map((r) => r.photo_url),
+      ...labourRes.rows.map((r) => r.photo_url),
+      ...chittaiRes.rows.map((r) => r.photo_url),
+    ]);
+
+    // Helper: extract public_id from stored URL for comparison
+    function extractPublicId(url) {
+      if (!url) return null;
+      try {
+        const clean = url.split("?")[0];
+        const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
+        if (match) return match[1].replace(/\.[^/.]+$/, "");
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Build set of linked public_ids from DB
+    const linkedPublicIds = new Set();
+    for (const url of allDbUrls) {
+      const pid = extractPublicId(url);
+      if (pid) linkedPublicIds.add(pid);
+      // Also add with extension variants
+      linkedPublicIds.add(pid + ".jpg");
+      linkedPublicIds.add(pid + ".jpeg");
+      linkedPublicIds.add(pid + ".png");
+      linkedPublicIds.add(pid + ".pdf");
+      linkedPublicIds.add(pid + ".webp");
+    }
+
+    // Find unlinked resources
+    const unlinked = allResources.filter((r) => {
+      const pidClean = r.public_id.replace(/\.[^/.]+$/, "");
+      return (
+        !linkedPublicIds.has(r.public_id) && !linkedPublicIds.has(pidClean)
+      );
+    });
+
+    if (!unlinked.length) {
+      return res.json({
+        status: "SUCCESS",
+        deleted: 0,
+        message: "No unlinked photos found",
+      });
+    }
+
+    // Delete unlinked from Cloudinary in batches of 100
+    const deleted = [];
+    const failed = [];
+    const imageIds = unlinked
+      .filter((r) => r.resource_type === "image")
+      .map((r) => r.public_id);
+    const rawIds = unlinked
+      .filter((r) => r.resource_type === "raw")
+      .map((r) => r.public_id);
+
+    async function deleteBatch(ids, resource_type) {
+      for (let i = 0; i < ids.length; i += 100) {
+        const batch = ids.slice(i, i + 100);
+        const auth = Buffer.from(
+          `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+        ).toString("base64");
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}/upload`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Basic ${auth}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ public_ids: batch }),
+          },
+        );
+        const data = await response.json();
+        if (data.deleted) {
+          Object.keys(data.deleted).forEach((k) => deleted.push(k));
+        }
+        if (data.failed) {
+          Object.keys(data.failed).forEach((k) => failed.push(k));
+        }
+      }
+    }
+
+    await deleteBatch(imageIds, "image");
+    await deleteBatch(rawIds, "raw");
+
+    res.json({
+      status: "SUCCESS",
+      deleted: deleted.length,
+      failed: failed.length,
+      deleted_ids: deleted,
+      failed_ids: failed,
+    });
+  } catch (err) {
+    console.error("DELETE UNLINKED ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

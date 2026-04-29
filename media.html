@@ -500,6 +500,14 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>Folder</label>
+          <select id="filterFolder" onchange="applyFilters()">
+            <option value="">All Folders</option>
+            <option value="purchase_bills">Purchase Bills</option>
+            <option value="chittai_bills">Chittai Bills</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>Accounted</label>
           <select id="filterAccounted" onchange="applyFilters()">
             <option value="">All</option>
@@ -571,6 +579,13 @@
             disabled
           >
             📄 Download Combined PDF
+          </button>
+          <button
+            class="btn btn-danger"
+            onclick="deleteUnlinked()"
+            id="deleteUnlinkedBtn"
+          >
+            🗑 Delete Unlinked from Cloudinary
           </button>
         </div>
       </div>
@@ -685,33 +700,99 @@
 
       async function loadAllPurchases() {
         try {
-          const [purchasesRes, labourRes] = await Promise.all([
+          document.getElementById("galleryContainer").innerHTML =
+            `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
+
+          const [cloudinaryRes, purchasesRes, labourRes] = await Promise.all([
+            fetch("/api/cloudinary/all-photos"),
             fetch("/api/purchases/list"),
             fetch("/api/labour"),
           ]);
-          const purchases = await purchasesRes.json();
-          const labour = await labourRes.json();
 
-          const labourWithPhotos = labour
-            .filter((l) => l.photo_url && l.voucher_type === "Receipt Voucher")
-            .map((l) => ({
-              id: `lab_${l.id}`,
-              profile_id: l.profile_id,
-              bill_no: l.receipt_bill_no || l.issue_number,
-              date: l.date,
-              photo_url: l.photo_url,
-              is_accounted: false,
-              _isLabour: true,
-            }));
+          const cloudinaryPhotos = cloudinaryRes.ok
+            ? await cloudinaryRes.json()
+            : [];
+          const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
+          const labour = labourRes.ok ? await labourRes.json() : [];
 
-          allPurchases = [
-            ...purchases.filter((p) => p.photo_url),
-            ...labourWithPhotos,
-          ];
+          // Extract public_id from a Cloudinary URL
+          function extractPublicId(url) {
+            if (!url) return null;
+            try {
+              // Remove query params
+              const clean = url.split("?")[0];
+              // Match everything after /upload/ and strip version (v1234567/)
+              const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
+              if (match) {
+                // Remove file extension for images
+                return match[1].replace(/\.[^/.]+$/, "");
+              }
+              return null;
+            } catch (e) {
+              return null;
+            }
+          }
+
+          // Build lookup maps by public_id (most reliable) AND by url (fallback)
+          const purchaseByPublicId = {};
+          const purchaseByUrl = {};
+          purchases.forEach((p) => {
+            if (p.photo_url) {
+              purchaseByUrl[p.photo_url] = p;
+              const pid = extractPublicId(p.photo_url);
+              if (pid) purchaseByPublicId[pid] = p;
+            }
+          });
+
+          const labourByPublicId = {};
+          const labourByUrl = {};
+          labour.forEach((l) => {
+            if (l.photo_url) {
+              labourByUrl[l.photo_url] = l;
+              const pid = extractPublicId(l.photo_url);
+              if (pid) labourByPublicId[pid] = l;
+            }
+          });
+
+          allPurchases = cloudinaryPhotos.map((item) => {
+            // Try matching by public_id first, then by full URL
+            const dbPurchase =
+              purchaseByPublicId[item.public_id] ||
+              purchaseByUrl[item.url] ||
+              // Also try without extension (raw PDFs stored with extension in public_id)
+              purchaseByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+
+            const dbLabour =
+              labourByPublicId[item.public_id] ||
+              labourByUrl[item.url] ||
+              labourByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+
+            const dbRecord = dbPurchase || dbLabour;
+
+            return {
+              id: item.public_id,
+              public_id: item.public_id,
+              profile_id: dbRecord ? dbRecord.profile_id : null,
+              bill_no: dbPurchase
+                ? dbPurchase.bill_no
+                : dbLabour
+                  ? dbLabour.receipt_bill_no || dbLabour.issue_number
+                  : item.public_id.split("/").pop(),
+              date: dbRecord ? dbRecord.date : item.created_at,
+              photo_url: item.url,
+              is_accounted: dbPurchase ? dbPurchase.is_accounted : false,
+              folder: item.folder,
+              is_pdf: item.is_pdf || false,
+              bytes: item.bytes,
+              _dbId: dbPurchase ? dbPurchase.id : null,
+              _matched: !!dbRecord,
+            };
+          });
+
           applyFilters();
         } catch (e) {
           document.getElementById("galleryContainer").innerHTML =
-            `<div class="empty-state" style="color:var(--danger);">Error loading photos</div>`;
+            `<div class="empty-state" style="color:var(--danger);">Error loading photos: ${e.message}</div>`;
         }
       }
 
@@ -719,8 +800,10 @@
         const company = document.getElementById("filterCompany").value;
         const from = document.getElementById("filterFrom").value;
         const to = document.getElementById("filterTo").value;
-
         const accounted = document.getElementById("filterAccounted").value;
+        const folder = document.getElementById("filterFolder")
+          ? document.getElementById("filterFolder").value
+          : "";
         filtered = allPurchases.filter((p) => {
           if (company && String(p.profile_id) !== String(company)) return false;
           if (from || to) {
@@ -731,6 +814,7 @@
           }
           if (accounted === "yes" && !p.is_accounted) return false;
           if (accounted === "no" && p.is_accounted) return false;
+          if (folder && p.folder !== folder) return false;
           return true;
         });
 
@@ -784,6 +868,8 @@
         document.getElementById("filterTo").value = "";
         document.getElementById("filterQuick").value = "";
         document.getElementById("filterAccounted").value = "";
+        const ff = document.getElementById("filterFolder");
+        if (ff) ff.value = "";
         applyFilters();
       }
 
@@ -812,14 +898,23 @@
         container.innerHTML = `<div class="gallery">${filtered
           .map((p) => {
             const isSel = selected.has(p.id);
-            return `<div class="photo-card ${isSel ? "selected" : ""}" onclick="openLightbox(${p.id})">
-            <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect(${p.id})">${isSel ? "✓" : ""}</div>
-            <img class="photo-thumb" src="${p.photo_url}" alt="Bill" loading="lazy" onerror="this.outerHTML='<div class=\\'photo-no-img\\'>📷</div>'" />
+            const folderLabel =
+              p.folder === "chittai_bills" ? "🔗 Chittai" : "🧾 Purchase";
+            const folderColor =
+              p.folder === "chittai_bills" ? "var(--amber)" : "var(--accent)";
+            const thumb = p.is_pdf
+              ? `<div class="photo-no-img" style="background:#fef0d6;color:var(--amber);font-size:40px;">📄</div>`
+              : `<img class="photo-thumb" src="${p.photo_url}" alt="Bill" loading="lazy" onerror="this.outerHTML='<div class=\\'photo-no-img\\'>📷</div>'" />`;
+            return `<div class="photo-card ${isSel ? "selected" : ""}" onclick="openLightbox('${p.id}')">
+            <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
+            ${thumb}
             <div class="photo-info">
-              <div class="photo-bill">${p.bill_no || "—"}</div>
-              <div class="photo-company">${getCompanyName(p.profile_id)}</div>
+              <div class="photo-bill" style="color:${folderColor};">${p.bill_no || "—"}</div>
+              <div class="photo-company">${getCompanyName(p.profile_id) || "—"}</div>
               <div class="photo-date">${fmtDate(p.date)}</div>
-              ${p.is_accounted ? `<div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--green);background:var(--green-light);border-radius:4px;padding:2px 6px;display:inline-block;">✓ ACCOUNTED</div>` : ""}
+              <div style="margin-top:4px;font-size:10px;font-weight:700;color:${folderColor};">${folderLabel}</div>
+              ${!p._matched ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--ink-3);background:var(--surface-3);border-radius:4px;padding:2px 6px;display:inline-block;">⚠ No DB record</div>` : ""}
+              ${p.is_accounted ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--green);background:var(--green-light);border-radius:4px;padding:2px 6px;display:inline-block;">✓ ACCOUNTED</div>` : ""}
             </div>
           </div>`;
           })
@@ -827,6 +922,7 @@
       }
 
       function toggleSelect(id) {
+        id = String(id);
         if (selected.has(id)) selected.delete(id);
         else selected.add(id);
         renderGallery();
@@ -836,7 +932,7 @@
         if (selected.size === filtered.length && filtered.length > 0) {
           selected.clear();
         } else {
-          filtered.forEach((p) => selected.add(p.id));
+          filtered.forEach((p) => selected.add(String(p.id)));
         }
         renderGallery();
       }
@@ -864,7 +960,8 @@
 
       // ── LIGHTBOX ──
       function openLightbox(id) {
-        const p = filtered.find((x) => x.id === id);
+        id = String(id);
+        const p = filtered.find((x) => String(x.id) === id);
         if (!p) return;
         currentLightbox = p;
         document.getElementById("lbTitle").textContent =
@@ -942,7 +1039,7 @@
       }
 
       async function downloadSelected(type) {
-        const items = filtered.filter((p) => selected.has(p.id));
+        const items = filtered.filter((p) => selected.has(String(p.id)));
         if (!items.length) return;
 
         if (type === "jpg") {
@@ -1110,6 +1207,51 @@
         retakeToken = null;
         retakePurchaseId = null;
         document.getElementById("qrModal").classList.remove("show");
+      }
+
+      // ── DELETE UNLINKED ──
+      async function deleteUnlinked() {
+        const confirm1 = confirm(
+          "This will permanently delete all Cloudinary photos that have no matching record in the database.\n\nAre you sure?",
+        );
+        if (!confirm1) return;
+
+        const btn = document.getElementById("deleteUnlinkedBtn");
+        btn.disabled = true;
+        btn.textContent = "⏳ Scanning & Deleting...";
+        showToast("Scanning Cloudinary for unlinked photos...");
+
+        try {
+          const res = await fetch("/api/cloudinary/delete-unlinked", {
+            method: "DELETE",
+          });
+          const data = await res.json();
+          if (data.status === "SUCCESS") {
+            if (data.deleted === 0) {
+              showToast(
+                "No unlinked photos found — nothing deleted",
+                "success",
+              );
+            } else {
+              showToast(
+                `Deleted ${data.deleted} unlinked photo(s) from Cloudinary`,
+                "success",
+              );
+            }
+            if (data.failed > 0) {
+              showToast(`${data.failed} photo(s) failed to delete`, "error");
+            }
+            // Reload gallery
+            await loadAllPurchases();
+          } else {
+            showToast("Error: " + (data.error || "Unknown"), "error");
+          }
+        } catch (e) {
+          showToast("Error: " + e.message, "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "🗑 Delete Unlinked from Cloudinary";
+        }
       }
 
       // ── KEYBOARD ──
