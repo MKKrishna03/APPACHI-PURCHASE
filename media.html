@@ -666,6 +666,13 @@
             📄 Download Combined PDF
           </button>
           <button
+            class="btn btn-secondary"
+            onclick="downloadCurrentFolder()"
+            id="dlFolderBtn"
+          >
+            📁 Download Folder (ZIP)
+          </button>
+          <button
             class="btn btn-danger"
             onclick="deleteUnlinked()"
             id="deleteUnlinkedBtn"
@@ -1434,6 +1441,77 @@
         renderGallery(document.getElementById("galleryContainer"));
       }
 
+      async function downloadCurrentFolder() {
+        const items = getFilteredForLevel();
+        if (!items.length) {
+          showToast("No photos in this folder", "error");
+          return;
+        }
+
+        // Build folder label for filename
+        let label = "All";
+        if (navYear !== null) label = String(navYear);
+        if (navMonth !== null) label += "_" + MONTHS[navMonth];
+        if (navType !== null)
+          label +=
+            "_" + (TYPE_META[navType]?.label || navType).replace(/\s+/g, "_");
+
+        showToast(`Preparing ZIP (${items.length} photos)...`);
+        try {
+          await buildZip(items, `${label}.zip`);
+          await markItemsAccounted(items);
+        } catch (e) {
+          showToast("ZIP failed: " + e.message, "error");
+        }
+      }
+
+      async function buildZip(items, filename) {
+        // Dynamically load JSZip
+        if (!window.JSZip) {
+          await new Promise((res, rej) => {
+            const s = document.createElement("script");
+            s.src =
+              "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+            s.onload = res;
+            s.onerror = rej;
+            document.head.appendChild(s);
+          });
+        }
+        const zip = new window.JSZip();
+        for (let i = 0; i < items.length; i++) {
+          const p = items[i];
+          try {
+            const blob = await fetchAsBlob(p.photo_url);
+            const ext = (p.photo_url.match(/\.(\w+)(?:\?|$)/) || [, "jpg"])[1];
+            const company = getCompanyName(p.profile_id).replace(
+              /[^a-z0-9]/gi,
+              "_",
+            );
+            const d = getItemDate(p);
+            const year = d ? String(d.getFullYear()) : "Unknown_Date";
+            const month = d
+              ? MONTHS[d.getMonth()].toUpperCase()
+              : "Unknown_Date";
+            const typeMeta = TYPE_META[detectType(p)] || TYPE_META.other;
+            const typeName = typeMeta.label
+              .replace(/\s+/g, "_")
+              .replace(/[^a-z0-9_]/gi, "");
+            const safeBill = (p.bill_no || p.id)
+              .toString()
+              .replace(/[^a-z0-9_\-]/gi, "_");
+            zip.file(
+              `${year}/${month}/${typeName}/${company}_${safeBill}.${ext}`,
+              blob,
+            );
+          } catch (e) {
+            console.error("ZIP skip", p.id, e);
+          }
+        }
+        const content = await zip.generateAsync({ type: "blob" });
+        downloadBlob(content, filename);
+        showToast(`ZIP downloaded (${items.length} photos)`, "success");
+      }
+
       async function downloadSelected(type) {
         const items = getFilteredForLevel().filter((p) =>
           selected.has(String(p.id)),
@@ -1441,25 +1519,16 @@
         if (!items.length) return;
 
         if (type === "jpg") {
-          showToast(`Downloading ${items.length} photos...`);
-          for (let i = 0; i < items.length; i++) {
-            const p = items[i];
-            try {
-              const blob = await fetchAsBlob(p.photo_url);
-              const ext = (p.photo_url.match(/\.(\w+)(?:\?|$)/) || [
-                ,
-                "jpg",
-              ])[1];
-              const company = getCompanyName(p.profile_id).replace(
-                /[^a-z0-9]/gi,
-                "_",
-              );
-              downloadBlob(blob, `${company}_${p.bill_no || p.id}.${ext}`);
-              await new Promise((r) => setTimeout(r, 200));
-            } catch (e) {}
+          showToast(`Preparing ZIP (${items.length} photos)...`);
+          try {
+            await buildZip(
+              items,
+              `bill_photos_${new Date().toISOString().slice(0, 10)}.zip`,
+            );
+            await markItemsAccounted(items);
+          } catch (e) {
+            showToast("ZIP failed: " + e.message, "error");
           }
-          await markItemsAccounted(items);
-          showToast(`Downloaded ${items.length} photos`, "success");
         } else if (type === "pdf") {
           showToast(`Generating PDF (${items.length} photos)...`);
           try {
