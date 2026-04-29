@@ -815,7 +815,16 @@
           if (company)
             document.getElementById("companySelect").value = company.alias;
           document.getElementById("date").value = l.date
-            ? l.date.toString().slice(0, 10)
+            ? (() => {
+                const s = l.date.toString();
+                if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                  return s.slice(0, 10);
+                const d = new Date(s);
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                return `${y}-${m}-${dd}`;
+              })()
             : "";
           document.getElementById("issueNumber").value = l.issue_number || "";
           await loadLabourItemTypesDropdown();

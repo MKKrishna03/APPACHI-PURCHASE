@@ -1169,12 +1169,18 @@
             document.getElementById("againstVoucherGroup").style.display = "";
             await loadUnmappedPaymentVouchers(linkedAgainst.map((v) => v.id));
           }
-          // Fix date timezone
-          const ist = new Date(
-            new Date(c.date).getTime() + 5.5 * 60 * 60 * 1000,
-          );
-          const dateParts = ist.toISOString().slice(0, 10);
-          document.getElementById("chittaiDate").value = dateParts;
+          document.getElementById("chittaiDate").value = c.date
+            ? (() => {
+                const s = c.date.toString();
+                if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                  return s.slice(0, 10);
+                const d = new Date(s);
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                return `${y}-${m}-${dd}`;
+              })()
+            : "";
           document.getElementById("chittaiNo").value = c.chittai_no || "";
           document.getElementById("chittaiNoBadge").textContent =
             c.chittai_no || "";
@@ -1203,15 +1209,18 @@
               "− Remove Payment";
             document.getElementById("saveChittaiBtn").textContent =
               "Save Chittai & Payment";
-            const istPayDate = payVoucher.date
+            document.getElementById("payDate").value = payVoucher.date
               ? (() => {
-                  const ist = new Date(
-                    new Date(payVoucher.date).getTime() + 5.5 * 60 * 60 * 1000,
-                  );
-                  return ist.toISOString().slice(0, 10);
+                  const s = payVoucher.date.toString();
+                  if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                    return s.slice(0, 10);
+                  const d = new Date(s);
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  return `${y}-${m}-${dd}`;
                 })()
               : "";
-            document.getElementById("payDate").value = istPayDate;
             document.getElementById("payAmount").value =
               payVoucher.total_value || "";
             // Extract MOP from description

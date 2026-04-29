@@ -1579,29 +1579,62 @@
           const labourItemTypeFilter = document.getElementById(
             "labourItemTypeFilter",
           ).value;
-          const filteredRows = rows.filter((row) => {
-            if (rvFilter === "received" && row.billNo === "-") return false;
-            if (rvFilter === "not_received" && row.billNo !== "-") return false;
-            if (payFilter === "paid" && row.status !== "paid") return false;
-            if (payFilter === "unpaid" && row.status !== "unpaid") return false;
-            if (labourItemTypeFilter) {
+          // First pass: figure out which IV issue numbers pass the filters
+          const passingIssueNos = new Set();
+          rows.forEach((row) => {
+            if (row.isSubtotal) return;
+            let ok = true;
+            if (rvFilter === "received" && row.billNo === "-") ok = false;
+            if (rvFilter === "not_received" && row.billNo !== "-") ok = false;
+            if (payFilter === "paid" && row.status !== "paid") ok = false;
+            if (payFilter === "unpaid" && row.status !== "unpaid") ok = false;
+            if (ok && labourItemTypeFilter) {
               const iv = issues.find((iv) => iv.issue_number === row.issueNo);
               if (!iv || (iv.labour_item_type || "") !== labourItemTypeFilter)
-                return false;
+                ok = false;
             }
-            if (metalFilter) {
-              const items =
-                itemsMap[
-                  issues.find((iv) => iv.issue_number === row.issueNo)?.id
-                ] || [];
+            if (ok && metalFilter) {
+              const iv = issues.find((iv) => iv.issue_number === row.issueNo);
+              const items = iv ? itemsMap[iv.id] || [] : [];
               const hasMatch = items.some(
                 (i) =>
                   metalMap[(i.description || "").toUpperCase().trim()] ===
                   metalFilter,
               );
-              if (!hasMatch) return false;
+              if (!hasMatch) ok = false;
             }
-            return true;
+            if (ok) passingIssueNos.add(row.issueNo);
+          });
+
+          // Track which RV groups still have at least one passing child IV
+          const passingRvGroups = new Set();
+          rows.forEach((row) => {
+            if (
+              !row.isSubtotal &&
+              row.rvGroupId &&
+              passingIssueNos.has(row.issueNo)
+            ) {
+              passingRvGroups.add(row.rvGroupId);
+            }
+          });
+
+          const filteredRows = rows.filter((row) => {
+            if (row.isSubtotal) {
+              return passingRvGroups.has(row.rvGroupId);
+            }
+            return (
+              passingIssueNos.has(row.issueNo) &&
+              (row.rvGroupId ? passingRvGroups.has(row.rvGroupId) : true) &&
+              (() => {
+                if (rvFilter === "received" && row.billNo === "-") return false;
+                if (rvFilter === "not_received" && row.billNo !== "-")
+                  return false;
+                if (payFilter === "paid" && row.status !== "paid") return false;
+                if (payFilter === "unpaid" && row.status !== "unpaid")
+                  return false;
+                return true;
+              })()
+            );
           });
           document.getElementById("rowCount").textContent = filteredRows.length;
 
