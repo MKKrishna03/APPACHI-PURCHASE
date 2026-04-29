@@ -685,9 +685,29 @@
 
       async function loadAllPurchases() {
         try {
-          const res = await fetch("/api/purchases/list");
-          const all = await res.json();
-          allPurchases = all.filter((p) => p.photo_url);
+          const [purchasesRes, labourRes] = await Promise.all([
+            fetch("/api/purchases/list"),
+            fetch("/api/labour"),
+          ]);
+          const purchases = await purchasesRes.json();
+          const labour = await labourRes.json();
+
+          const labourWithPhotos = labour
+            .filter((l) => l.photo_url && l.voucher_type === "Receipt Voucher")
+            .map((l) => ({
+              id: `lab_${l.id}`,
+              profile_id: l.profile_id,
+              bill_no: l.receipt_bill_no || l.issue_number,
+              date: l.date,
+              photo_url: l.photo_url,
+              is_accounted: false,
+              _isLabour: true,
+            }));
+
+          allPurchases = [
+            ...purchases.filter((p) => p.photo_url),
+            ...labourWithPhotos,
+          ];
           applyFilters();
         } catch (e) {
           document.getElementById("galleryContainer").innerHTML =

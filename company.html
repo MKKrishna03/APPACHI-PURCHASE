@@ -1109,9 +1109,14 @@
 
         const inRange = (dateStr) => {
           if (!drpStart || !drpEnd || !dateStr) return true;
-          const s = dateStr.toString();
-const d = s.length > 10 ? new Date(new Date(s).toLocaleDateString('en-CA') + 'T00:00:00') : new Date(s + 'T00:00:00');
-return d >= drpStart && d <= drpEnd;
+          // Get IST-correct date by shifting +5:30
+          const utc = new Date(dateStr);
+          const ist = new Date(utc.getTime() + 5.5 * 3600 * 1000);
+          const y = ist.getUTCFullYear();
+          const m = ist.getUTCMonth();
+          const dd = ist.getUTCDate();
+          const d = new Date(y, m, dd);
+          return d >= drpStart && d <= drpEnd;
         };
 
         // Labour
@@ -1148,7 +1153,7 @@ return d >= drpStart && d <= drpEnd;
               .map(
                 (b) => `<tr>
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('issue',${b.id},'${b.issue_number}')">${b.issue_number || "-"}</span></td>
-              <td>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
+              <td>${b.date ? new Date(b.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
               <td>${b.labour_item_type || "-"}</td>
               <td><span class="tag ${closedSet.has(b.issue_number) ? "tag-done" : "tag-pending"}">${closedSet.has(b.issue_number) ? "Closed" : "Pending"}</span></td>
               <td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || "—"}</td>
@@ -1163,7 +1168,7 @@ return d >= drpStart && d <= drpEnd;
                 (b) => `<tr>
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('receipt',${b.id},'${b.issue_number}')">${b.issue_number || "-"}</span></td>
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('receipt',${b.id},'${b.receipt_bill_no}')">${b.receipt_bill_no || "-"}</span></td>
-              <td>${b.date ?new Date(b.date).toLocaleDateString("en-GB") : "-"}</td>
+              <td>${b.date ? new Date(b.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
               <td>₹${parseFloat(b.total || 0).toLocaleString("en-IN")}</td>
               <td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || "—"}</td>
             </tr>`,
@@ -1181,7 +1186,7 @@ return d >= drpStart && d <= drpEnd;
                 (v) => `<tr>
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('txn',${v.id},'${v.bill_no}')">${v.bill_no || "-"}</span></td>
               <td>${v.voucher_type || "-"}</td>
-              <td>${v.date ? new Date(v.date).toLocaleDateString("en-IN") : "-"}</td>
+              <td>${v.date ? new Date(v.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
               <td>₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</td>
               <td style="font-size:11px;color:var(--ink-3);">${v.created_by_name || "—"}</td>
             </tr>`,
@@ -1280,7 +1285,7 @@ return d >= drpStart && d <= drpEnd;
               .map(
                 (c) => `<tr>
               <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('chittai',${c.id},'${c.chittai_no}')">${c.chittai_no || "-"}</span></td>
-              <td>${c.date ? new Date(c.date).toLocaleDateString("en-IN") : "-"}</td>
+              <td>${c.date ? new Date(c.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
               <td>${parseFloat(c.weight || 0).toLocaleString("en-IN")} g</td>
               <td>₹${parseFloat(c.rtgs_amount || 0).toLocaleString("en-IN")}</td>
               <td style="font-size:11px;color:var(--ink-3);">${c.created_by_name || "—"}</td>
@@ -1408,12 +1413,12 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             head.innerHTML = bvHead(
               isReceipt ? 'Receipt Voucher' : 'Issue Voucher',
               isReceipt ? (l.receipt_bill_no || '—') : (l.issue_number || '—'),
-              `${l.company_name||'-'} · ${l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-'}`
+              `${l.company_name||'-'} · ${l.date?new Date(l.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-'}`
             );
             let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
               ${bvField('Issue No', l.issue_number, '#2d6a4f')}
               ${isReceipt?bvField('Receipt Bill No', l.receipt_bill_no, '#2d6a4f'):''}
-              ${bvField('Date', l.date?l.date.toString().slice(0,10).split('-').reverse().join('/'):'-')}
+              ${bvField('Date', l.date?new Date(l.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
               ${bvField('Item Type', l.labour_item_type)}
               ${bvField('Company', l.company_name)}
             </div>`;
@@ -1431,6 +1436,7 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
               if (l.bill_value_after_deduction) html += bvTotalsRow('Net Payable', fmtAmt(l.bill_value_after_deduction), {bold:true,accent:'#2d6a4f'});
               html += '</div>';
             }
+            if (l.photo_url) html += bvSectionTitle('Bill Photo') + `<img src="${l.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${l.photo_url}','_blank')" />`;
             el.innerHTML = html;
             enteredBy.textContent = l.created_by_name ? 'Entered by: ' + l.created_by_name : '';
           } else if (type === 'txn') {
@@ -1438,11 +1444,11 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             const all = await res.json();
             const v = all.find(x => x.id == id);
             if (!v) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
-            head.innerHTML = bvHead(v.voucher_type || 'Transaction', v.bill_no || '—', `${v.date?new Date(v.date).toLocaleDateString('en-GB'):'-'} · ${v.entry_type||''}`);
+            head.innerHTML = bvHead(v.voucher_type || 'Transaction', v.bill_no || '—', `${v.date?new Date(v.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-'} · ${v.entry_type||''}`);
             el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
               ${bvField('Bill No', v.bill_no, '#2d6a4f')}
               ${bvField('Voucher Type', v.voucher_type)}
-              ${bvField('Date', v.date?new Date(v.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Date', v.date?new Date(v.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
               ${bvField('Entry Type', v.entry_type)}
               ${bvField('Amount', fmtAmt(v.total_value), '#2d6a4f')}
               ${v.description?bvField('Description', v.description):''}
@@ -1453,10 +1459,10 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             const all = await res.json();
             const c = all.find(x => x.id == id);
             if (!c) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
-            head.innerHTML = bvHead('Chittai', c.chittai_no || '—', `${c.date?new Date(c.date).toLocaleDateString('en-GB'):'-'} · ${c.is_paid?'Paid':'Unpaid'}`);
+            head.innerHTML = bvHead('Chittai', c.chittai_no || '—', `${c.date?new Date(c.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-'} · ${c.is_paid?'Paid':'Unpaid'}`);
             let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
               ${bvField('Chittai No', c.chittai_no, '#2d6a4f')}
-              ${bvField('Date', c.date?new Date(c.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Date', c.date?new Date(c.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
               ${bvField('Weight', parseFloat(c.weight||0).toLocaleString('en-IN')+' g')}
               ${bvField('Rate', fmtAmt(c.rate))}
               ${bvField('Value', fmtAmt(c.value))}
@@ -1482,10 +1488,10 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             const cgst = sum('cgst'), sgst = sum('sgst'), igst = sum('igst');
             const round = sum('round_off'), total = sum('total_value');
             const tds = sum('tds'), net = sum('net_value');
-            head.innerHTML = bvHead('Purchase Voucher', target.bill_no || '—', `${target.date?new Date(target.date).toLocaleDateString('en-GB'):'-'} ${group.length>1?' · '+group.length+' linked entries':''}`);
+            head.innerHTML = bvHead('Purchase Voucher', target.bill_no || '—', `${target.date?new Date(target.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-'} ${group.length>1?' · '+group.length+' linked entries':''}`);
             let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
               ${bvField('Bill No', target.bill_no, '#2d6a4f')}
-              ${bvField('Date', target.date?new Date(target.date).toLocaleDateString('en-GB'):'-')}
+              ${bvField('Date', target.date?new Date(target.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
               ${bvField('Linked Entries', group.length)}
               ${bvField('Net Payable', fmtAmt(net), '#2d6a4f')}
             </div>`;

@@ -784,27 +784,33 @@
                 else againstVoucherType.value = v.voucher_type;
                 await populateBillNumbers();
                 againstBillNo.value = v.bill_no || "";
-                const istDate = v.date
+                document.getElementById("againstDate").value = v.date
                   ? (() => {
-                      const ist = new Date(
-                        new Date(v.date).getTime() + 5.5 * 60 * 60 * 1000,
-                      );
-                      return ist.toISOString().slice(0, 10);
+                      const s = v.date.toString();
+                      if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                        return s.slice(0, 10);
+                      const d = new Date(s);
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, "0");
+                      const dd = String(d.getDate()).padStart(2, "0");
+                      return `${y}-${m}-${dd}`;
                     })()
                   : "";
-                document.getElementById("againstDate").value = istDate;
                 document.getElementById("againstAmount").value =
                   v.total_value || "";
               } else {
-                const istDate = v.date
+                document.getElementById("newDate").value = v.date
                   ? (() => {
-                      const ist = new Date(
-                        new Date(v.date).getTime() + 5.5 * 60 * 60 * 1000,
-                      );
-                      return ist.toISOString().slice(0, 10);
+                      const s = v.date.toString();
+                      if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                        return s.slice(0, 10);
+                      const d = new Date(s);
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, "0");
+                      const dd = String(d.getDate()).padStart(2, "0");
+                      return `${y}-${m}-${dd}`;
                     })()
                   : "";
-                document.getElementById("newDate").value = istDate;
                 document.getElementById("newAmount").value =
                   v.total_value || "";
               }

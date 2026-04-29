@@ -3296,9 +3296,10 @@ function doLogout() {
       window.sendTodoReply = async function(id) {
         const input = document.getElementById(`td-reply-input-${id}`);
         const fileInput = document.getElementById(`td-reply-photo-${id}`);
+        if (!input) { alert("Reply input not found"); return; }
         const text = input.value.trim();
         let photo = null;
-        if (fileInput.files[0]) {
+        if (fileInput && fileInput.files && fileInput.files[0]) {
           if (fileInput.files[0].size > 5 * 1024 * 1024) { alert("Photo must be under 5MB"); return; }
           photo = await new Promise((res) => {
             const r = new FileReader();
@@ -3309,18 +3310,50 @@ function doLogout() {
         if (!text && !photo) { alert("Type a reply or attach a photo"); return; }
         const me = getCurrentUser();
         const sender = me?.name || me?.user_id || "User";
-        const res = await fetch(`/api/todos/${id}/reply`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sender, text, photo })
-        });
-        const data = await res.json();
-        if (data.status === 'SUCCESS') {
+
+        // Optimistic update — push reply locally so UI updates instantly
+        const todoIdx = todos.findIndex(t => t.id === id);
+        if (todoIdx !== -1) {
+          if (!Array.isArray(todos[todoIdx].replies)) todos[todoIdx].replies = [];
+          todos[todoIdx].replies.push({
+            sender,
+            text,
+            photo,
+            created_at: new Date().toISOString(),
+            seen_by: [sender],
+            _pending: true
+          });
+          renderTodos();
+          setTimeout(() => {
+            const body = document.getElementById(`td_body_${id}`);
+            if (body) body.classList.add('show');
+          }, 50);
+        }
+
+        try {
+          const res = await fetch(`/api/todos/${id}/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender, text, photo })
+          });
+          const raw = await res.text();
+          let data = {};
+          try { data = raw ? JSON.parse(raw) : {}; } catch(_) {}
+
+          if (!res.ok) {
+            alert("Server error " + res.status + ": " + (data.error || raw || "unknown"));
+            return;
+          }
+
           input.value = "";
-          fileInput.value = "";
-          loadTodos();
-        } else {
-          alert("Failed to send reply");
+          if (fileInput) fileInput.value = "";
+          await loadTodos();
+          setTimeout(() => {
+            const body = document.getElementById(`td_body_${id}`);
+            if (body) body.classList.add('show');
+          }, 100);
+        } catch(e) {
+          alert("Network error: " + e.message);
         }
       };
 
@@ -3523,7 +3556,7 @@ function doLogout() {
                     ${isAssigner ? `<button class="ri-del-btn" onclick="event.stopPropagation();deleteTodo(${t.id})">✕</button>` : ''}
                   </div>
                 </div>
-                <div class="ri-card-body" id="td_body_${t.id}" onclick="event.stopPropagation();if(${unseenForMe}>0)markRepliesSeen(${t.id})">
+                <div class="ri-card-body${(window._openTodoBodies && window._openTodoBodies.has(t.id)) ? ' show' : ''}" id="td_body_${t.id}" onclick="event.stopPropagation();if(${unseenForMe}>0)markRepliesSeen(${t.id})">
                   
                   ${t.photo ? `<div style="margin-bottom:8px;display:flex;flex-direction:column;align-items:${(t.giver === myName || t.giver === myId) ? 'flex-end' : 'flex-start'};">
   <div style="max-width:85%;background:${(t.giver === myName || t.giver === myId) ? '#d8f3dc' : 'var(--surface-2)'};border:1px solid var(--border);border-radius:${(t.giver === myName || t.giver === myId) ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};padding:8px;">
@@ -3570,11 +3603,11 @@ function doLogout() {
                   ${t.status !== 'done' ? `
                     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);" onclick="event.stopPropagation();">
                       <div style="display:flex;gap:6px;align-items:center;">
-                        <input type="text" id="td-reply-input-${t.id}" placeholder="Type a reply..." style="flex:1;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:11px;font-family:inherit;background:var(--surface);color:var(--ink);" onkeypress="if(event.key==='Enter')sendTodoReply(${t.id})" />
+                        <input type="text" id="td-reply-input-${t.id}" placeholder="Type a reply..." style="flex:1;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:11px;font-family:inherit;background:var(--surface);color:var(--ink);" onkeypress="if(event.key==='Enter'){event.stopPropagation();sendTodoReply(${t.id});}" onclick="event.stopPropagation();" />
                         <label style="cursor:pointer;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;font-size:13px;" title="Attach photo" onclick="event.stopPropagation();">
                           📎<input type="file" id="td-reply-photo-${t.id}" accept="image/*" style="display:none;" onclick="event.stopPropagation();" />
                         </label>
-                        <button onclick="sendTodoReply(${t.id})" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Send</button>
+                        <button onclick="event.stopPropagation();event.preventDefault();sendTodoReply(${t.id});return false;" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Send</button>
                       </div>
                     </div>
                   ` : ''}
@@ -3596,20 +3629,22 @@ function doLogout() {
         if (arrow) arrow.style.transform = isOpen ? "" : "rotate(180deg)";
       };
 
+      window._openTodoBodies = window._openTodoBodies || new Set();
       window.toggleTodoCard = function(id) {
         const body = document.getElementById(`td_body_${id}`);
         if (body) {
           const wasHidden = !body.classList.contains('show');
           body.classList.toggle('show');
           if (wasHidden) {
+            window._openTodoBodies.add(id);
             markRepliesSeen(id);
+          } else {
+            window._openTodoBodies.delete(id);
           }
         }
       };
 
-      document.addEventListener("click", function(e) {
-        if (e.target.closest('.ri-card-body')) e.stopPropagation();
-      }, true);
+      
 
       window.toggleCompletedPanel = function() {
         document.getElementById("completedPanel").classList.toggle("open");

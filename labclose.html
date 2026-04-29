@@ -1740,13 +1740,16 @@
               l.company_name || "";
             selectedLabourId = issueBill ? issueBill.id : null;
           }
-          // Fix timezone shift: parse date parts directly
           document.getElementById("closingDate").value = l.date
             ? (() => {
-                const d = new Date(l.date);
-                return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-                  .toISOString()
-                  .slice(0, 10);
+                const s = l.date.toString();
+                if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.includes("T"))
+                  return s.slice(0, 10);
+                const d = new Date(s);
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                return `${y}-${m}-${dd}`;
               })()
             : "";
           document.getElementById("receiptBillNo").value =

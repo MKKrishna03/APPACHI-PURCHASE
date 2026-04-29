@@ -1,12 +1,6 @@
+require("dotenv").config();
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
-const net = require("net");
-const originalConnect = net.Socket.prototype.connect;
-net.Socket.prototype.connect = function (options, ...args) {
-  if (options && typeof options === "object") options.family = 4;
-  return originalConnect.call(this, options, ...args);
-};
-require("dotenv").config();
 process.env.TZ = "Asia/Kolkata";
 const express = require("express");
 const { Pool } = require("pg");
@@ -85,14 +79,22 @@ setInterval(() => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const dbUrl = new URL(process.env.DATABASE_URL);
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: dbUrl.hostname,
+  port: dbUrl.port || 5432,
+  user: decodeURIComponent(dbUrl.username),
+  password: decodeURIComponent(dbUrl.password),
+  database: dbUrl.pathname.slice(1),
   ssl: { rejectUnauthorized: false },
   max: 5,
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 30000,
+  connectionTimeoutMillis: 90000,
   keepAlive: true,
   allowExitOnIdle: false,
+  lookup: (hostname, options, callback) => {
+    dns.lookup(hostname, { family: 4 }, callback);
+  },
 });
 
 pool.on("error", (err) => {
@@ -164,6 +166,9 @@ async function initDB() {
   );
   await pool.query(
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS created_by TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS created_by TEXT`,
@@ -325,7 +330,8 @@ alias TEXT UNIQUE NOT NULL,
 }
 
 initDB().catch((err) => {
-  console.error("INITDB FAILED:", err.message);
+  console.error("INITDB FAILED:");
+  console.error(err);
   process.exit(1);
 });
 
@@ -1600,7 +1606,7 @@ app.put("/api/labour/:id", async (req, res) => {
       );
     } else {
       await pool.query(
-        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10 WHERE id=$11`,
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url) WHERE id=$12`,
         [
           date,
           receipt_bill_no,
@@ -1612,6 +1618,7 @@ app.put("/api/labour/:id", async (req, res) => {
           total || null,
           tds || null,
           bill_value_after_deduction || null,
+          req.body.photo_url || null,
           req.params.id,
         ],
       );
