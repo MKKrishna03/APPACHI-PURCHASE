@@ -918,9 +918,35 @@
               />
             </div>
             <div style="display: flex; gap: 12px; align-items: center">
-              <span style="color: var(--ink-3); width: 200px; text-align: right"
-                >TDS</span
-              ><input
+              <span
+                style="color: var(--ink-3); width: 200px; text-align: right"
+              >
+                <label
+                  style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    justify-content: flex-end;
+                    width: 100%;
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="autoTdsToggle"
+                    onchange="applyAutoTds()"
+                    style="
+                      width: 13px;
+                      height: 13px;
+                      cursor: pointer;
+                      accent-color: var(--accent);
+                    "
+                  />
+                  Auto TDS (194C)
+                </label>
+              </span>
+              <input
                 type="number"
                 id="billTds"
                 step="0.01"
@@ -1127,6 +1153,8 @@
       let uploadToken = null;
       let uploadedPhotoUrl = null;
       let uploadPollInterval = null;
+      let tdsRates = {}; // { letter: percentage } loaded from DB for section 194C
+      let tdsDefaultRate = 20; // fallback when PAN missing/invalid (for 194C)
 
       function toggleSection(name) {
         document.getElementById(`body_${name}`).classList.toggle("show");
@@ -1494,6 +1522,25 @@
         taxFormats = await res.json();
       }
 
+      async function loadTdsRates() {
+        try {
+          const res = await fetch("/api/tds?section=194C");
+          const rows = await res.json();
+          tdsRates = {};
+          rows.forEach((r) => {
+            const letter = (r.pan_4th_letter || "").toUpperCase();
+            const pct = parseFloat(r.tds_percentage) || 0;
+            if (letter === "X") {
+              tdsDefaultRate = pct;
+            } else if (letter) {
+              tdsRates[letter] = pct;
+            }
+          });
+        } catch (e) {
+          console.error("Failed to load TDS rates:", e);
+        }
+      }
+
       function taxOptions(selected = 0) {
         return (
           `<option value="0">0%</option>` +
@@ -1505,6 +1552,41 @@
             .join("")
         );
       }
+      function applyAutoTds() {
+        const checkbox = document.getElementById("autoTdsToggle");
+        const tdsInput = document.getElementById("billTds");
+        if (!checkbox.checked) {
+          tdsInput.value = 0;
+          updateBillTotals();
+          return;
+        }
+        const companyId = document.getElementById("companySelect").value;
+        const company = companies.find(
+          (c) => String(c.id) === String(companyId),
+        );
+        if (!company) {
+          showMessage("Select a company first", "error");
+          checkbox.checked = false;
+          return;
+        }
+        const pan = (company.pan_number || "").toUpperCase().trim();
+        console.log("DEBUG TDS:", { company, pan, tdsRates, tdsDefaultRate });
+        const taxable =
+          parseFloat(document.getElementById("billTaxable").value) || 0;
+        let rate;
+        if (!pan || pan.length < 4) {
+          rate = tdsDefaultRate;
+        } else {
+          const letter = pan.charAt(3);
+          console.log("PAN 4th letter:", letter, "→ rate:", tdsRates[letter]);
+          rate =
+            tdsRates[letter] !== undefined ? tdsRates[letter] : tdsDefaultRate;
+        }
+        const tdsAmount = Math.ceil((taxable * rate) / 100);
+        tdsInput.value = tdsAmount;
+        updateBillTotals();
+      }
+
       function updateBillTotals() {
         let taxable = 0;
         document.querySelectorAll("#itemsTable tr").forEach((row) => {
@@ -1545,6 +1627,31 @@
           parseFloat(document.getElementById("billRoundOff").value) || 0;
         const total = taxable + cgst + sgst + igst + roundOff;
         document.getElementById("billTotal").value = total.toFixed(2);
+
+        const tdsCheckbox = document.getElementById("autoTdsToggle");
+        if (tdsCheckbox && tdsCheckbox.checked) {
+          const companyId = document.getElementById("companySelect").value;
+          const company = companies.find(
+            (c) => String(c.id) === String(companyId),
+          );
+          if (company) {
+            const pan = (company.pan_number || "").toUpperCase().trim();
+            let rate;
+            if (!pan || pan.length < 4) {
+              rate = tdsDefaultRate;
+            } else {
+              const letter = pan.charAt(3);
+              rate =
+                tdsRates[letter] !== undefined
+                  ? tdsRates[letter]
+                  : tdsDefaultRate;
+            }
+            document.getElementById("billTds").value = Math.ceil(
+              (taxable * rate) / 100,
+            );
+          }
+        }
+
         const tds = parseFloat(document.getElementById("billTds").value) || 0;
         document.getElementById("billValueAfterDeduction").value = (
           total - tds
@@ -1702,6 +1809,7 @@
         await loadCompanies();
         loadDescriptions();
         await loadTaxFormats();
+        await loadTdsRates();
         await loadRecentReceipts();
         await loadExistingBillNos();
         loadRecentPayments();

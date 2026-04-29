@@ -1322,33 +1322,76 @@
               (p) => String(p.profile_id) === String(companyId),
             );
 
-          allRows = rows.map((p) => {
+          const isHallmark = (x) =>
+            (x.description || "").toLowerCase().includes("hallmark") ||
+            (x.voucher_type || "").toLowerCase().includes("hallmark");
+
+          const mergedMap = {};
+          rows.forEach((p) => {
+            const key = `${p.profile_id}__${p.bill_no || "__id_" + p.id}`;
+            if (!mergedMap[key]) {
+              mergedMap[key] = {
+                ids: [],
+                main: null,
+                profile_id: p.profile_id,
+                bill_no: p.bill_no,
+                date: p.date,
+                taxable: 0,
+                cgst: 0,
+                sgst: 0,
+                igst: 0,
+                tds: 0,
+                net: 0,
+                created_by_name: "",
+                created_by: "",
+              };
+            }
+            const m = mergedMap[key];
+            m.ids.push(p.id);
+            if (!isHallmark(p) && !m.main) m.main = p;
+            m.taxable += parseFloat(p.taxable_value || 0);
+            m.cgst += parseFloat(p.cgst || 0);
+            m.sgst += parseFloat(p.sgst || 0);
+            m.igst += parseFloat(p.igst || 0);
+            m.tds += parseFloat(p.tds || 0);
+            // net_value: only from main (don't sum hallmark)
+            if (!isHallmark(p)) {
+              m.net += parseFloat(p.net_value || p.total_value || 0);
+            }
+            if (!m.created_by_name && p.created_by_name)
+              m.created_by_name = p.created_by_name;
+            if (!m.created_by && p.created_by) m.created_by = p.created_by;
+          });
+          // fallback main if all entries were hallmark
+          Object.values(mergedMap).forEach((m) => {
+            if (!m.main && m.ids.length) {
+              const first = rows.find((r) => r.id === m.ids[0]);
+              m.main = first;
+              m.net = parseFloat(first.net_value || first.total_value || 0);
+            }
+          });
+
+          allRows = Object.values(mergedMap).map((m) => {
             const prof = profileRes.find(
-              (c) => String(c.id) === String(p.profile_id),
+              (c) => String(c.id) === String(m.profile_id),
             );
             const company = prof ? prof.company || prof.alias : "-";
-            const taxable = parseFloat(p.taxable_value || 0);
-            const cgst = parseFloat(p.cgst || 0);
-            const sgst = parseFloat(p.sgst || 0);
-            const igst = parseFloat(p.igst || 0);
-            const gst = cgst + sgst + igst;
-            const tds = parseFloat(p.tds || 0);
-            const net = parseFloat(p.net_value || p.total_value || 0);
-            const paid = paidMap[p.id] || 0;
-            const isPaid = net > 0 && paid >= net - 0.01;
+            const gst = m.cgst + m.sgst + m.igst;
+            const paid = m.ids.reduce((s, id) => s + (paidMap[id] || 0), 0);
+            const isPaid = m.net > 0 && paid >= m.net - 0.01;
             return {
-              profile_id: p.profile_id,
+              profile_id: m.profile_id,
               company,
-              dateRaw: p.date || "",
-              dateStr: fmtDate(p.date),
-              bill_no: p.bill_no,
-              taxable,
+              dateRaw: m.date || "",
+              dateStr: fmtDate(m.date),
+              bill_no: m.bill_no,
+              taxable: m.taxable,
               gst,
-              tds,
-              net,
+              tds: m.tds,
+              net: m.net,
               paid,
               isPaid,
-              enteredBy: p.created_by_name || p.created_by || "—",
+              enteredBy: m.created_by_name || m.created_by || "—",
             };
           });
 

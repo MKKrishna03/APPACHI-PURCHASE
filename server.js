@@ -368,7 +368,7 @@ app.get("/api/profile/headers", (req, res) => {
 app.get("/api/profile/all", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, alias, company_name AS company, state_code, ledger_types FROM profiles ORDER BY company_name",
+      "SELECT id, alias, company_name AS company, state_code, ledger_types, pan_number FROM profiles ORDER BY company_name",
     );
     res.json(result.rows);
   } catch (err) {
@@ -1492,6 +1492,27 @@ app.get("/api/tax-formats", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get("/api/tds", async (req, res) => {
+  const { section } = req.query;
+  try {
+    let result;
+    if (section) {
+      result = await pool.query(
+        "SELECT id, pan_4th_letter, section, entity_type, tds_percentage, remarks FROM tds WHERE section = $1 ORDER BY pan_4th_letter",
+        [section],
+      );
+    } else {
+      result = await pool.query(
+        "SELECT id, pan_4th_letter, section, entity_type, tds_percentage, remarks FROM tds ORDER BY section, pan_4th_letter",
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error("TDS LIST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get("/api/descriptions/metal", async (req, res) => {
   try {
     const result = await pool.query(
@@ -1789,6 +1810,19 @@ app.get("/api/linked-data/:type/:id", async (req, res) => {
     if (type === "txn") {
       // no deep links for vouchers
     }
+    if (type === "purchase") {
+      const vs = await pool.query(
+        `SELECT id, bill_no, total_value FROM vouchers WHERE linked_purchase_id=$1`,
+        [id],
+      );
+      vs.rows.forEach((v) =>
+        linked.push({
+          type: "voucher",
+          id: v.id,
+          label: `Payment Voucher: ${v.bill_no || "ID-" + v.id} ₹${v.total_value}`,
+        }),
+      );
+    }
     if (type === "chittai") {
       const vs = await pool.query(
         `SELECT id, bill_no, total_value FROM vouchers WHERE linked_chittai_id=$1`,
@@ -1819,6 +1853,23 @@ app.get("/api/linked-data/:type/:id", async (req, res) => {
   }
 });
 
+async function deleteCloudinaryPhoto(photo_url) {
+  if (!photo_url) return;
+  try {
+    const clean = photo_url.split("?")[0];
+    const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
+    if (!match) return;
+    const public_id = match[1].replace(/\.[^/.]+$/, "");
+    const isPdf = /\.pdf$/i.test(clean);
+    await cloudinary.uploader.destroy(public_id, {
+      resource_type: isPdf ? "raw" : "image",
+      invalidate: true,
+    });
+  } catch (e) {
+    console.error("CLOUDINARY DELETE FAIL:", e.message);
+  }
+}
+
 app.delete("/api/delete-entry", async (req, res) => {
   const { type, id, linked } = req.body;
   try {
@@ -1828,24 +1879,72 @@ app.delete("/api/delete-entry", async (req, res) => {
         if (l.type === "voucher")
           await pool.query(`DELETE FROM vouchers WHERE id=$1`, [l.id]);
         if (l.type === "receipt") {
+          const ph = await pool.query(
+            `SELECT photo_url FROM labour WHERE id=$1`,
+            [l.id],
+          );
+          if (ph.rows[0]?.photo_url)
+            await deleteCloudinaryPhoto(ph.rows[0].photo_url);
           await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [
             l.id,
           ]);
           await pool.query(`DELETE FROM labour WHERE id=$1`, [l.id]);
         }
         if (l.type === "purchase") {
+          const ph = await pool.query(
+            `SELECT photo_url FROM purchases WHERE id=$1`,
+            [l.id],
+          );
+          if (ph.rows[0]?.photo_url)
+            await deleteCloudinaryPhoto(ph.rows[0].photo_url);
+          await pool.query(
+            `UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
+            [l.id],
+          );
+          await pool.query(
+            `UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
+            [l.id],
+          );
           await pool.query(`DELETE FROM purchases WHERE id=$1`, [l.id]);
         }
       }
     }
     // Delete main entry
     if (type === "issue" || type === "receipt") {
+      const ph = await pool.query(`SELECT photo_url FROM labour WHERE id=$1`, [
+        id,
+      ]);
+      if (ph.rows[0]?.photo_url)
+        await deleteCloudinaryPhoto(ph.rows[0].photo_url);
       await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
       await pool.query(`DELETE FROM labour WHERE id=$1`, [id]);
     }
     if (type === "txn")
       await pool.query(`DELETE FROM vouchers WHERE id=$1`, [id]);
+    if (type === "purchase") {
+      const group = await pool.query(
+        `SELECT id, photo_url FROM purchases WHERE bill_no=(SELECT bill_no FROM purchases WHERE id=$1) AND profile_id=(SELECT profile_id FROM purchases WHERE id=$1)`,
+        [id],
+      );
+      for (const row of group.rows) {
+        if (row.photo_url) await deleteCloudinaryPhoto(row.photo_url);
+        await pool.query(
+          `UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
+          [row.id],
+        );
+        await pool.query(
+          `UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
+          [row.id],
+        );
+        await pool.query(`DELETE FROM purchases WHERE id=$1`, [row.id]);
+      }
+    }
     if (type === "chittai") {
+      const ph = await pool.query(`SELECT photo_url FROM chittai WHERE id=$1`, [
+        id,
+      ]);
+      if (ph.rows[0]?.photo_url)
+        await deleteCloudinaryPhoto(ph.rows[0].photo_url);
       await pool.query(
         `UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`,
         [id],
