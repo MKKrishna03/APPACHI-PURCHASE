@@ -451,6 +451,91 @@
       .toast.error {
         background: var(--danger);
       }
+
+      .folder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 16px;
+      }
+      .folder-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 20px 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+      .folder-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        border-color: var(--accent);
+      }
+      .folder-icon {
+        font-size: 44px;
+        line-height: 1;
+      }
+      .folder-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .folder-count {
+        font-size: 11px;
+        color: var(--ink-3);
+        font-weight: 500;
+      }
+      .folder-card.type-purchase {
+        border-top: 3px solid var(--accent);
+      }
+      .folder-card.type-labour {
+        border-top: 3px solid var(--green);
+      }
+      .folder-card.type-hallmark {
+        border-top: 3px solid var(--amber);
+      }
+      .folder-card.type-chittai {
+        border-top: 3px solid #9b59b6;
+      }
+      .folder-card.type-expense {
+        border-top: 3px solid var(--danger);
+      }
+      .folder-card.type-other {
+        border-top: 3px solid var(--ink-3);
+      }
+
+      .nav-crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .nav-crumb:hover {
+        background: var(--accent-light);
+      }
+      .nav-crumb.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+        cursor: default;
+      }
+      .nav-sep {
+        color: var(--ink-3);
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
@@ -590,6 +675,18 @@
         </div>
       </div>
 
+      <!-- Breadcrumb Nav -->
+      <div
+        id="folderNav"
+        style="
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        "
+      ></div>
+
       <!-- Gallery -->
       <div id="galleryContainer">
         <div class="empty-state">
@@ -678,6 +775,13 @@
       let retakeToken = null;
       let retakePurchaseId = null;
 
+      // ── FOLDER NAV STATE ──
+      // level: 'year' | 'month' | 'type' | 'photos'
+      let navYear = null;
+      let navMonth = null;
+      let navType = null;
+      let currentLevel = "year";
+
       function showToast(msg, type = "success") {
         const t = document.getElementById("toast");
         t.textContent = msg;
@@ -759,7 +863,6 @@
             const dbPurchase =
               purchaseByPublicId[item.public_id] ||
               purchaseByUrl[item.url] ||
-              // Also try without extension (raw PDFs stored with extension in public_id)
               purchaseByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
 
             const dbLabour =
@@ -769,22 +872,31 @@
 
             const dbRecord = dbPurchase || dbLabour;
 
+            // If matched to labour, use labour bill_no
+            let bill_no = item.public_id.split("/").pop();
+            if (dbPurchase) bill_no = dbPurchase.bill_no;
+            else if (dbLabour)
+              bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
+
             return {
               id: item.public_id,
               public_id: item.public_id,
               profile_id: dbRecord ? dbRecord.profile_id : null,
-              bill_no: dbPurchase
-                ? dbPurchase.bill_no
-                : dbLabour
-                  ? dbLabour.receipt_bill_no || dbLabour.issue_number
-                  : item.public_id.split("/").pop(),
+              bill_no,
               date: dbRecord ? dbRecord.date : item.created_at,
               photo_url: item.url,
-              is_accounted: dbPurchase ? dbPurchase.is_accounted : false,
+              is_accounted: dbPurchase
+                ? dbPurchase.is_accounted
+                : dbLabour
+                  ? dbLabour.is_accounted
+                  : false,
               folder: item.folder,
               is_pdf: item.is_pdf || false,
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
+              _labourDbId: dbLabour ? dbLabour.id : null,
+              _isLabour: !!dbLabour && !dbPurchase,
+              _labourRecord: dbLabour || null,
               _matched: !!dbRecord,
             };
           });
@@ -796,14 +908,75 @@
         }
       }
 
+      // ── TYPE DETECTION ──
+      // ── TYPE DETECTION ──
+      function detectType(item) {
+        // Chittai folder = always chittai
+        if (item.folder === "chittai_bills") return "chittai";
+
+        // Labour matched from DB (receipt voucher)
+        if (item._isLabour) return "labour";
+
+        // Check if matched DB record is a labour receipt
+        if (item._labourRecord) {
+          const vtype = (item._labourRecord.voucher_type || "").toLowerCase();
+          if (vtype.includes("receipt")) return "labour";
+        }
+
+        // Hallmark: check bill_no or public_id
+        const pid = (item.public_id || "").toLowerCase();
+        const bill = (item.bill_no || "").toLowerCase();
+        if (pid.includes("hallmark") || bill.includes("hallmark"))
+          return "hallmark";
+
+        // Has a DB purchase record = purchase
+        if (item._dbId) return "purchase";
+
+        // In purchase_bills folder but no DB match = unlinked, still show as purchase
+        if (item.folder === "purchase_bills") return "purchase";
+
+        return "other";
+      }
+
+      const TYPE_META = {
+        purchase: { label: "Purchase Bills", icon: "🧾", cls: "type-purchase" },
+        labour: { label: "Labour / Receipt", icon: "👷", cls: "type-labour" },
+        hallmark: { label: "Hallmark", icon: "🔖", cls: "type-hallmark" },
+        chittai: { label: "Chittai", icon: "🔗", cls: "type-chittai" },
+        expense: { label: "Expenses", icon: "💸", cls: "type-expense" },
+        other: { label: "Other", icon: "📁", cls: "type-other" },
+      };
+
+      const MONTHS = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+
+      function getItemDate(p) {
+        const raw = p.date || p.created_at;
+        if (!raw) return null;
+        return new Date(raw);
+      }
+
       function applyFilters() {
         const company = document.getElementById("filterCompany").value;
         const from = document.getElementById("filterFrom").value;
         const to = document.getElementById("filterTo").value;
         const accounted = document.getElementById("filterAccounted").value;
-        const folder = document.getElementById("filterFolder")
+        const folderFilter = document.getElementById("filterFolder")
           ? document.getElementById("filterFolder").value
           : "";
+
         filtered = allPurchases.filter((p) => {
           if (company && String(p.profile_id) !== String(company)) return false;
           if (from || to) {
@@ -814,14 +987,18 @@
           }
           if (accounted === "yes" && !p.is_accounted) return false;
           if (accounted === "no" && p.is_accounted) return false;
-          if (folder && p.folder !== folder) return false;
+          if (folderFilter && p.folder !== folderFilter) return false;
           return true;
         });
 
-        // Sort newest first
         filtered.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-        renderGallery();
+        // Reset nav to top level when filters change
+        navYear = null;
+        navMonth = null;
+        navType = null;
+        currentLevel = "year";
+        renderFolderView();
       }
 
       function applyQuickRange(val) {
@@ -884,24 +1061,141 @@
         return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
       }
 
-      function renderGallery() {
+      // ── FOLDER VIEW RENDERER ──
+      function renderFolderView() {
+        updateBreadcrumb();
         const container = document.getElementById("galleryContainer");
+
+        if (currentLevel === "year") {
+          renderYearFolders(container);
+        } else if (currentLevel === "month") {
+          renderMonthFolders(container);
+        } else if (currentLevel === "type") {
+          renderTypeFolders(container);
+        } else {
+          renderGallery(container);
+        }
+      }
+
+      function getFilteredForLevel() {
+        return filtered.filter((p) => {
+          const d = getItemDate(p);
+          if (navYear !== null && (!d || d.getFullYear() !== navYear))
+            return false;
+          if (navMonth !== null && (!d || d.getMonth() !== navMonth))
+            return false;
+          if (navType !== null && detectType(p) !== navType) return false;
+          return true;
+        });
+      }
+
+      function renderYearFolders(container) {
+        const yearMap = {};
+        filtered.forEach((p) => {
+          const d = getItemDate(p);
+          const y = d ? d.getFullYear() : 0;
+          yearMap[y] = (yearMap[y] || 0) + 1;
+        });
+
+        const years = Object.keys(yearMap).sort((a, b) => b - a);
         document.getElementById("countPill").textContent =
-          `${filtered.length} photo${filtered.length !== 1 ? "s" : ""}`;
+          `${years.length} year${years.length !== 1 ? "s" : ""}`;
         updateSelectedPill();
 
-        if (!filtered.length) {
+        if (!years.length) {
           container.innerHTML = `<div class="empty-state"><div class="empty-icon">🤷</div><div>No photos match your filters</div></div>`;
           return;
         }
 
-        container.innerHTML = `<div class="gallery">${filtered
+        container.innerHTML = `<div class="folder-grid">${years
+          .map(
+            (y) => `
+          <div class="folder-card" onclick="drillYear(${y})">
+            <div class="folder-icon">📅</div>
+            <div class="folder-name">${y == 0 ? "Unknown Date" : y}</div>
+            <div class="folder-count">${yearMap[y]} photo${yearMap[y] !== 1 ? "s" : ""}</div>
+          </div>`,
+          )
+          .join("")}</div>`;
+      }
+
+      function renderMonthFolders(container) {
+        const monthMap = {};
+        filtered
+          .filter((p) => {
+            const d = getItemDate(p);
+            return d && d.getFullYear() === navYear;
+          })
+          .forEach((p) => {
+            const d = getItemDate(p);
+            const m = d.getMonth();
+            monthMap[m] = (monthMap[m] || 0) + 1;
+          });
+
+        const months = Object.keys(monthMap).sort((a, b) => b - a);
+        document.getElementById("countPill").textContent =
+          `${months.length} month${months.length !== 1 ? "s" : ""}`;
+        updateSelectedPill();
+
+        container.innerHTML = `<div class="folder-grid">${months
+          .map(
+            (m) => `
+          <div class="folder-card" onclick="drillMonth(${m})">
+            <div class="folder-icon">🗓</div>
+            <div class="folder-name">${MONTHS[m]}</div>
+            <div class="folder-count">${monthMap[m]} photo${monthMap[m] !== 1 ? "s" : ""}</div>
+          </div>`,
+          )
+          .join("")}</div>`;
+      }
+
+      function renderTypeFolders(container) {
+        const typeMap = {};
+        filtered
+          .filter((p) => {
+            const d = getItemDate(p);
+            return (
+              d && d.getFullYear() === navYear && d.getMonth() === navMonth
+            );
+          })
+          .forEach((p) => {
+            const t = detectType(p);
+            typeMap[t] = (typeMap[t] || 0) + 1;
+          });
+
+        const types = Object.keys(typeMap);
+        document.getElementById("countPill").textContent =
+          `${types.length} type${types.length !== 1 ? "s" : ""}`;
+        updateSelectedPill();
+
+        container.innerHTML = `<div class="folder-grid">${types
+          .map((t) => {
+            const meta = TYPE_META[t] || TYPE_META.other;
+            return `<div class="folder-card ${meta.cls}" onclick="drillType('${t}')">
+            <div class="folder-icon">${meta.icon}</div>
+            <div class="folder-name">${meta.label}</div>
+            <div class="folder-count">${typeMap[t]} photo${typeMap[t] !== 1 ? "s" : ""}</div>
+          </div>`;
+          })
+          .join("")}</div>`;
+      }
+
+      function renderGallery(container) {
+        const items = getFilteredForLevel();
+        document.getElementById("countPill").textContent =
+          `${items.length} photo${items.length !== 1 ? "s" : ""}`;
+        updateSelectedPill();
+
+        if (!items.length) {
+          container.innerHTML = `<div class="empty-state"><div class="empty-icon">🤷</div><div>No photos here</div></div>`;
+          return;
+        }
+
+        container.innerHTML = `<div class="gallery">${items
           .map((p) => {
-            const isSel = selected.has(p.id);
-            const folderLabel =
-              p.folder === "chittai_bills" ? "🔗 Chittai" : "🧾 Purchase";
-            const folderColor =
-              p.folder === "chittai_bills" ? "var(--amber)" : "var(--accent)";
+            const isSel = selected.has(String(p.id));
+            const t = detectType(p);
+            const meta = TYPE_META[t] || TYPE_META.other;
             const thumb = p.is_pdf
               ? `<div class="photo-no-img" style="background:#fef0d6;color:var(--amber);font-size:40px;">📄</div>`
               : `<img class="photo-thumb" src="${p.photo_url}" alt="Bill" loading="lazy" onerror="this.outerHTML='<div class=\\'photo-no-img\\'>📷</div>'" />`;
@@ -909,10 +1203,10 @@
             <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
             ${thumb}
             <div class="photo-info">
-              <div class="photo-bill" style="color:${folderColor};">${p.bill_no || "—"}</div>
+              <div class="photo-bill">${p.bill_no || "—"}</div>
               <div class="photo-company">${getCompanyName(p.profile_id) || "—"}</div>
               <div class="photo-date">${fmtDate(p.date)}</div>
-              <div style="margin-top:4px;font-size:10px;font-weight:700;color:${folderColor};">${folderLabel}</div>
+              <div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--ink-3);">${meta.icon} ${meta.label}</div>
               ${!p._matched ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--ink-3);background:var(--surface-3);border-radius:4px;padding:2px 6px;display:inline-block;">⚠ No DB record</div>` : ""}
               ${p.is_accounted ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--green);background:var(--green-light);border-radius:4px;padding:2px 6px;display:inline-block;">✓ ACCOUNTED</div>` : ""}
             </div>
@@ -921,20 +1215,101 @@
           .join("")}</div>`;
       }
 
+      // ── DRILL DOWN ──
+      function drillYear(y) {
+        navYear = parseInt(y);
+        navMonth = null;
+        navType = null;
+        currentLevel = "month";
+        renderFolderView();
+      }
+
+      function drillMonth(m) {
+        navMonth = parseInt(m);
+        navType = null;
+        currentLevel = "type";
+        renderFolderView();
+      }
+
+      function drillType(t) {
+        navType = t;
+        currentLevel = "photos";
+        renderFolderView();
+      }
+
+      function navTo(level) {
+        if (level === "year") {
+          navYear = null;
+          navMonth = null;
+          navType = null;
+          currentLevel = "year";
+        } else if (level === "month") {
+          navMonth = null;
+          navType = null;
+          currentLevel = "month";
+        } else if (level === "type") {
+          navType = null;
+          currentLevel = "type";
+        }
+        renderFolderView();
+      }
+
+      // ── BREADCRUMB ──
+      function updateBreadcrumb() {
+        const nav = document.getElementById("folderNav");
+        const crumbs = [];
+
+        crumbs.push({
+          label: "📁 All Years",
+          level: "year",
+          active: currentLevel === "year",
+        });
+        if (navYear !== null)
+          crumbs.push({
+            label: `📅 ${navYear}`,
+            level: "month",
+            active: currentLevel === "month",
+          });
+        if (navMonth !== null)
+          crumbs.push({
+            label: `🗓 ${MONTHS[navMonth]}`,
+            level: "type",
+            active: currentLevel === "type",
+          });
+        if (navType !== null) {
+          const meta = TYPE_META[navType] || TYPE_META.other;
+          crumbs.push({
+            label: `${meta.icon} ${meta.label}`,
+            level: "photos",
+            active: currentLevel === "photos",
+          });
+        }
+
+        nav.innerHTML = crumbs
+          .map(
+            (c, i) => `
+          ${i > 0 ? `<span class="nav-sep">›</span>` : ""}
+          <span class="nav-crumb ${c.active ? "active" : ""}" onclick="${c.active ? "" : `navTo('${c.level}')`}">${c.label}</span>
+        `,
+          )
+          .join("");
+      }
+
       function toggleSelect(id) {
         id = String(id);
         if (selected.has(id)) selected.delete(id);
         else selected.add(id);
-        renderGallery();
+        renderGallery(document.getElementById("galleryContainer"));
       }
 
       function toggleSelectAll() {
-        if (selected.size === filtered.length && filtered.length > 0) {
+        const items = getFilteredForLevel();
+        if (selected.size === items.length && items.length > 0) {
           selected.clear();
         } else {
-          filtered.forEach((p) => selected.add(String(p.id)));
+          items.forEach((p) => selected.add(String(p.id)));
         }
-        renderGallery();
+        renderGallery(document.getElementById("galleryContainer"));
       }
 
       function updateSelectedPill() {
@@ -1027,19 +1402,42 @@
         if (!chk.checked) return;
         for (const p of items) {
           try {
-            await fetch(`/api/purchases/${p.id}/accounted`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ is_accounted: true }),
-            });
-            p.is_accounted = true;
-          } catch (e) {}
+            let success = false;
+            if (p._dbId) {
+              const res = await fetch(`/api/purchases/${p._dbId}/accounted`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_accounted: true }),
+              });
+              success = res.ok;
+            } else if (p._labourDbId) {
+              const res = await fetch(
+                `/api/labour/${p._labourDbId}/accounted`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ is_accounted: true }),
+                },
+              );
+              success = res.ok;
+            }
+            if (success) {
+              // Update both the item reference AND the allPurchases master array
+              p.is_accounted = true;
+              const masterItem = allPurchases.find((x) => x.id === p.id);
+              if (masterItem) masterItem.is_accounted = true;
+            }
+          } catch (e) {
+            console.error("markAccounted error:", e);
+          }
         }
-        renderGallery();
+        renderGallery(document.getElementById("galleryContainer"));
       }
 
       async function downloadSelected(type) {
-        const items = filtered.filter((p) => selected.has(String(p.id)));
+        const items = getFilteredForLevel().filter((p) =>
+          selected.has(String(p.id)),
+        );
         if (!items.length) return;
 
         if (type === "jpg") {
@@ -1064,10 +1462,14 @@
           showToast(`Downloaded ${items.length} photos`, "success");
         } else if (type === "pdf") {
           showToast(`Generating PDF (${items.length} photos)...`);
-          await generatePdf(
-            items,
-            `bill_photos_${new Date().toISOString().slice(0, 10)}.pdf`,
-          );
+          try {
+            await generatePdf(
+              items,
+              `bill_photos_${new Date().toISOString().slice(0, 10)}.pdf`,
+            );
+          } catch (e) {
+            showToast("PDF generation failed: " + e.message, "error");
+          }
           await markItemsAccounted(items);
         }
       }
@@ -1271,6 +1673,9 @@
         await loadCompanies();
         await loadAllPurchases();
       })();
+
+      // Override applyFilters to reset folder nav
+      const _origApplyFilters = applyFilters;
     </script>
   </body>
 </html>

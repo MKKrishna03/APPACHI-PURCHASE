@@ -174,6 +174,9 @@ async function initDB() {
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
   await pool.query(
@@ -2164,6 +2167,18 @@ app.delete("/api/schedule/instances/:id", async (req, res) => {
     req.params.id,
   ]);
   res.json({ status: "SUCCESS" });
+});
+
+app.patch("/api/labour/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(`UPDATE labour SET is_accounted = $1 WHERE id = $2`, [
+      req.body.is_accounted,
+      req.params.id,
+    ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/api/cloudinary/all-photos", async (req, res) => {
