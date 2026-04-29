@@ -3442,19 +3442,16 @@ function doLogout() {
           return;
         }
 
-        // Group: pending, seen, done
+        // Sort flat by priority (Critical → Low), then deadline (earliest first)
+        visibleTodos.sort((a,b) => {
+          const pa = getPriorityMeta(a.priority).rank;
+          const pb = getPriorityMeta(b.priority).rank;
+          if (pa !== pb) return pa - pb;
+          return (a.date+' '+a.time).localeCompare(b.date+' '+b.time);
+        });
+        // Keep done at the bottom
         const groups = { pending: [], seen: [], done: [] };
         visibleTodos.forEach(t => groups[t.status].push(t));
-
-        // Sort ALL groups by priority rank (Critical → Low), then by deadline
-        ['pending','seen','done'].forEach(k => {
-          groups[k].sort((a,b) => {
-            const pa = getPriorityMeta(a.priority).rank;
-            const pb = getPriorityMeta(b.priority).rank;
-            if (pa !== pb) return pa - pb;
-            return (a.date+' '+a.time).localeCompare(b.date+' '+b.time);
-          });
-        });
 
         const statusLabels = {
           pending: { label: '🔴 Pending', color: '#e53935' },
