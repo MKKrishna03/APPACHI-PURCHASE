@@ -1272,15 +1272,34 @@
             );
           }
 
+          console.log(
+            "Missing co rows:",
+            receipts
+              .filter((r) => !r.linked_chittai_id && !r.linked_labour_id)
+              .map((r) => ({
+                profile_id: r.profile_id,
+                bill_no: r.bill_no,
+                date: r.date,
+                total: r.total_value,
+              })),
+          );
+          console.log(
+            "Profile IDs available:",
+            profileRes.map((p) => p.id),
+          );
           receipts.forEach((b) => {
-            const p = profileRes.find(
-              (c) => String(c.id) === String(b.profile_id),
-            );
-            b._companyName = p ? p.company || p.alias : "-";
             const labour = labourRes.find((l) => l.id === b.linked_labour_id);
             const chittai = chittaiRes.find(
               (c) => c.id === b.linked_chittai_id,
             );
+            const pid =
+              b.profile_id ||
+              (chittai && chittai.profile_id) ||
+              (labour && labour.profile_id);
+            const p = profileRes.find((c) => String(c.id) === String(pid));
+            b._companyName = p
+              ? p.company || p.alias
+              : `[no match: pid=${pid}]`;
             b._issueNo = chittai
               ? chittai.chittai_no
               : labour

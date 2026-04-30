@@ -707,8 +707,21 @@
         <div class="sidebar-title">Credit / Debit Note</div>
       </div>
       <div class="sidebar-body">
+        <!-- Recent 5 Bills -->
+        <button class="section-toggle" onclick="toggleSection('recentBills')">
+          <span>Recent 5 Bills</span>
+          <span class="section-icon open" id="arrow_recentBills">▾</span>
+        </button>
+        <div class="section-body show" id="body_recentBills">
+          <div id="recentBillsList"><div class="no-data">Loading…</div></div>
+        </div>
+
         <!-- Unlinked Payments -->
-        <button class="section-toggle" onclick="toggleSection('payments')">
+        <button
+          class="section-toggle"
+          onclick="toggleSection('payments')"
+          style="margin-top: 8px"
+        >
           <span>Unlinked Payments</span>
           <span class="section-icon open" id="arrow_payments">▾</span>
         </button>
@@ -757,6 +770,31 @@
       </div>
 
       <div id="message" class="message"></div>
+
+      <!-- Source Type Selector -->
+      <div class="card" id="sourceTypeCard">
+        <div class="card-title">Note Against</div>
+        <div class="note-type-selector">
+          <div
+            class="note-type-card"
+            id="sourcePurchase"
+            onclick="selectSourceType('purchase')"
+          >
+            <div class="note-type-icon">🧾</div>
+            <div class="note-type-label">Purchase Bill</div>
+            <div class="note-type-desc">Against a purchase invoice</div>
+          </div>
+          <div
+            class="note-type-card"
+            id="sourceLabour"
+            onclick="selectSourceType('labour')"
+          >
+            <div class="note-type-icon">⚒️</div>
+            <div class="note-type-label">Labour Bill</div>
+            <div class="note-type-desc">Against a receipt voucher</div>
+          </div>
+        </div>
+      </div>
 
       <!-- Note Type Selector -->
       <div class="card">
@@ -1424,10 +1462,45 @@
       let selectedVoucherData = null;
       let selectedVoucherIds = [];
       let selectedChittaiIds = [];
+      let selectedPurchaseIds = [];
       let uploadToken = null;
       let uploadedPhotoUrl = null;
       let uploadPollInterval = null;
       let noteType = null; // 'credit' or 'debit'
+      let sourceType = "purchase"; // 'purchase' or 'labour'
+
+      function selectSourceType(type) {
+        sourceType = type;
+        document
+          .getElementById("sourcePurchase")
+          .classList.remove("selected", "credit");
+        document
+          .getElementById("sourceLabour")
+          .classList.remove("selected", "credit");
+        const activeId =
+          type === "purchase" ? "sourcePurchase" : "sourceLabour";
+        document.getElementById(activeId).classList.add("selected", "credit");
+
+        // Update sidebar section header
+        const headerBtn = document.querySelector(
+          `button[onclick="toggleSection('recentBills')"]`,
+        );
+        if (headerBtn) {
+          const labelSpan = headerBtn.querySelector("span:not(.section-icon)");
+          if (labelSpan) {
+            labelSpan.textContent =
+              type === "purchase"
+                ? "Recent 5 Purchase Bills"
+                : "Recent 5 Labour Bills";
+          }
+        }
+
+        // Reset selections and reload sidebar list
+        selectedPurchaseIds = [];
+        const companyId = document.getElementById("companySelect").value;
+        if (companyId) loadRecentBills(companyId);
+        else loadRecentBillsAll();
+      }
 
       // ── NOTE TYPE SELECT ──
       function selectNoteType(type) {
@@ -1537,9 +1610,230 @@
 
       // ── SIDEBAR DATA ──
       async function loadSidebarData(filterCompany = "") {
+        await loadRecentBills(filterCompany);
         await loadUnlinkedPayments(filterCompany);
         await loadUnlinkedChittai(filterCompany);
         await loadRecentPurchases(filterCompany);
+      }
+
+      async function loadRecentBillsAll() {
+        const list = document.getElementById("recentBillsList");
+        list.innerHTML = '<div class="no-data">Loading…</div>';
+        try {
+          let bills = [];
+          if (sourceType === "purchase") {
+            const res = await fetch(`/api/purchases/list`);
+            let purchases = res.ok ? await res.json() : [];
+            purchases = purchases.filter(
+              (p) =>
+                p.voucher_type !== "Credit Note" &&
+                p.voucher_type !== "Debit Note" &&
+                !(p.voucher_type || "").toLowerCase().includes("hallmark"),
+            );
+            bills = purchases.slice(0, 5).map((p) => ({
+              id: p.id,
+              bill_no: p.bill_no || "PUR-" + p.id,
+              date: p.date,
+              profile_id: p.profile_id,
+              net: parseFloat(p.net_value || p.total_value || 0),
+              remaining:
+                p.remaining_value != null
+                  ? parseFloat(p.remaining_value)
+                  : parseFloat(p.net_value || p.total_value || 0),
+            }));
+          } else {
+            const res = await fetch(`/api/labour`);
+            let recs = res.ok ? await res.json() : [];
+            recs = recs
+              .filter((l) => l.voucher_type === "Receipt Voucher")
+              .slice(0, 5);
+            bills = recs.map((l) => {
+              const net = parseFloat(
+                l.bill_value_after_deduction || l.total || 0,
+              );
+              return {
+                id: l.id,
+                bill_no: l.receipt_bill_no || "RV-" + l.id,
+                date: l.date,
+                profile_id: l.profile_id,
+                net,
+                remaining:
+                  l.remaining_value != null
+                    ? parseFloat(l.remaining_value)
+                    : net,
+              };
+            });
+          }
+          if (!bills.length) {
+            list.innerHTML = '<div class="no-data">No bills yet</div>';
+            return;
+          }
+          list.innerHTML = bills
+            .map((b) => {
+              const company = companies.find(
+                (c) => String(c.id) === String(b.profile_id),
+              );
+              const companyName = company
+                ? company.alias || company.company
+                : "—";
+              const settled = b.remaining <= 0.01;
+              const color = settled ? "var(--green)" : "var(--accent)";
+              const bg = settled
+                ? "rgba(45,106,79,0.08)"
+                : "rgba(29,111,164,0.08)";
+              return `<div class="pay-card" id="bill_${b.id}" onclick="selectRecentBill(${b.id}, ${b.net}, ${b.remaining}, ${b.profile_id})" data-net="${b.net}" data-remaining="${b.remaining}">
+              <div class="pay-card-id">${b.bill_no}</div>
+              <div class="pay-card-company">${companyName}</div>
+              <div class="pay-card-row"><span>Date</span><span>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—"}</span></div>
+              <div class="pay-card-row"><span>Bill</span><span>₹${fmt(b.net)}</span></div>
+              <div class="pay-card-balance" style="background:${bg};color:${color};">
+                <span>${settled ? "Settled" : "Remaining"}</span>
+                <span style="font-weight:700;">₹${fmt(b.remaining)}</span>
+              </div>
+            </div>`;
+            })
+            .join("");
+        } catch (e) {
+          list.innerHTML = '<div class="no-data">Error loading</div>';
+        }
+      }
+
+      async function loadRecentBills(filterCompany = "") {
+        const list = document.getElementById("recentBillsList");
+        if (!filterCompany) {
+          list.innerHTML = '<div class="no-data">Select a company first</div>';
+          return;
+        }
+        list.innerHTML = '<div class="no-data">Loading…</div>';
+        try {
+          let bills = [];
+          if (sourceType === "purchase") {
+            const res = await fetch(
+              `/api/purchases/list?profile_id=${filterCompany}`,
+            );
+            let purchases = res.ok ? await res.json() : [];
+            purchases = purchases.filter(
+              (p) =>
+                p.voucher_type !== "Credit Note" &&
+                p.voucher_type !== "Debit Note" &&
+                !(p.voucher_type || "").toLowerCase().includes("hallmark"),
+            );
+            bills = purchases.slice(0, 5).map((p) => ({
+              id: p.id,
+              bill_no: p.bill_no || "PUR-" + p.id,
+              date: p.date,
+              net: parseFloat(p.net_value || p.total_value || 0),
+              remaining:
+                p.remaining_value != null
+                  ? parseFloat(p.remaining_value)
+                  : parseFloat(p.net_value || p.total_value || 0),
+              source: "purchase",
+            }));
+          } else {
+            const res = await fetch(
+              `/api/labour/list?profile_id=${filterCompany}&voucher_type=Receipt Voucher`,
+            );
+            let recs = res.ok ? await res.json() : [];
+            // fetch full labour records to get bill_value_after_deduction & remaining
+            const all = await fetch("/api/labour")
+              .then((r) => r.json())
+              .catch(() => []);
+            const allMap = {};
+            all.forEach((l) => (allMap[l.id] = l));
+            recs = recs.slice(0, 5);
+            bills = recs.map((l) => {
+              const full = allMap[l.id] || {};
+              const net = parseFloat(
+                full.bill_value_after_deduction ||
+                  full.total ||
+                  l.total_value ||
+                  0,
+              );
+              const remaining =
+                full.remaining_value != null
+                  ? parseFloat(full.remaining_value)
+                  : net;
+              return {
+                id: l.id,
+                bill_no: l.receipt_bill_no || "RV-" + l.id,
+                date: l.date,
+                net,
+                remaining,
+                source: "labour",
+              };
+            });
+          }
+          if (!bills.length) {
+            list.innerHTML = '<div class="no-data">No bills yet</div>';
+            return;
+          }
+          list.innerHTML = bills
+            .map((b) => {
+              const isFullySettled = b.remaining <= 0.01;
+              const remainingColor = isFullySettled
+                ? "var(--green)"
+                : "var(--accent)";
+              const remainingBg = isFullySettled
+                ? "rgba(45,106,79,0.08)"
+                : "rgba(29,111,164,0.08)";
+              return `<div class="pay-card" id="bill_${b.id}" onclick="selectRecentBill(${b.id}, ${b.net}, ${b.remaining})" data-net="${b.net}" data-remaining="${b.remaining}">
+                <div class="pay-card-id">${b.bill_no}</div>
+                <div class="pay-card-row"><span>Date</span><span>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—"}</span></div>
+                <div class="pay-card-row"><span>Bill Value</span><span>₹${fmt(b.net)}</span></div>
+                <div class="pay-card-balance" style="background:${remainingBg};color:${remainingColor};">
+                  <span>${isFullySettled ? "Settled" : "Remaining"}</span>
+                  <span style="font-weight:700;">₹${fmt(b.remaining)}</span>
+                </div>
+              </div>`;
+            })
+            .join("");
+        } catch (e) {
+          list.innerHTML = '<div class="no-data">Error loading</div>';
+        }
+      }
+
+      function selectRecentBill(billId, billNet, billRemaining, profileId) {
+        if (profileId) {
+          const sel = document.getElementById("companySelect");
+          if (String(sel.value) !== String(profileId)) {
+            sel.value = profileId;
+            onCompanyChange(true);
+          }
+        }
+        if (!noteType) {
+          showMessage("Please select Credit Note or Debit Note first", "error");
+          return;
+        }
+        // Single-select within the recent bills list
+        document
+          .querySelectorAll('[id^="bill_"]')
+          .forEach((c) => c.classList.remove("selected"));
+        const card = document.getElementById(`bill_${billId}`);
+        const wasSelected = selectedPurchaseIds.includes(billId);
+        selectedPurchaseIds = [];
+        if (!wasSelected) {
+          selectedPurchaseIds.push(billId);
+          card?.classList.add("selected");
+          showPurchaseDetails();
+          if (!document.getElementById("billDate").value) {
+            document.getElementById("billDate").value = new Date()
+              .toISOString()
+              .split("T")[0];
+          }
+          // Show banner with bill info & remaining
+          const banner = document.getElementById("linkBanner");
+          banner.classList.add("show");
+          document.getElementById("bannerPayment").textContent =
+            (sourceType === "purchase" ? "Purchase " : "Labour ") +
+            (card?.querySelector(".pay-card-id")?.textContent || billId);
+          document.getElementById("bannerAmount").textContent =
+            "₹" + fmt(billNet);
+          document.getElementById("bannerBalance").textContent =
+            "Remaining: ₹" + fmt(billRemaining);
+        } else {
+          hidePurchaseDetails();
+          document.getElementById("linkBanner").classList.remove("show");
+        }
       }
 
       async function loadUnlinkedPayments(filterCompany = "") {
@@ -2195,6 +2489,10 @@
           description: voucherTypeLabel,
           linked_voucher_ids: selectedVoucherIds,
           linked_chittai_ids: selectedChittaiIds,
+          linked_purchase_ids:
+            sourceType === "purchase" ? selectedPurchaseIds : [],
+          linked_labour_ids: sourceType === "labour" ? selectedPurchaseIds : [],
+          source_type: sourceType,
           taxable_value:
             parseFloat(document.getElementById("billTaxable").value) || 0,
           tax_percent: 0,
@@ -2617,6 +2915,9 @@
 
       // ── INIT ──
       window.onload = async () => {
+        document
+          .getElementById("sourcePurchase")
+          .classList.add("selected", "credit");
         await loadCompanies();
         await loadTaxFormats();
         loadDescriptions();
@@ -2626,6 +2927,7 @@
           '<div class="no-data">Select a company first</div>';
         document.getElementById("recentList").innerHTML =
           '<div class="no-data">Select a company first</div>';
+        await loadRecentBillsAll();
         await loadExistingPurchaseBillNos();
         addRow();
         document.getElementById("billDate").value = new Date()

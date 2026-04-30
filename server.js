@@ -189,6 +189,15 @@ async function initDB() {
     `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`,
   );
   await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_purchase_ids INTEGER[]`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`,
+  );
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`,
+  );
+  await pool.query(
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS created_by TEXT`,
   );
   await pool.query(
@@ -612,7 +621,7 @@ app.get("/api/labour/list", async (req, res) => {
     }
     const result = await pool.query(
       `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.receipt_bill_no,
-              l.voucher_type, l.receipt_bill_no,
+              l.voucher_type, l.receipt_bill_no, l.bill_value_after_deduction, l.total, l.remaining_value,
               COALESCE(SUM(li.amount::numeric), 0) AS total_value
        FROM labour l
        LEFT JOIN labour_items li ON li.labour_id = l.id
@@ -1227,12 +1236,13 @@ app.post("/api/purchases", async (req, res) => {
     net_value,
     linked_voucher_ids,
     linked_chittai_ids,
+    linked_purchase_ids,
   } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
-        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url, linked_purchase_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [
         profile_id,
         date,
@@ -1254,6 +1264,9 @@ app.post("/api/purchases", async (req, res) => {
           : null,
         req.body.created_by || null,
         req.body.photo_url || null,
+        linked_purchase_ids && linked_purchase_ids.length
+          ? linked_purchase_ids
+          : null,
       ],
     );
     const purchaseId = result.rows[0].id;
@@ -1274,6 +1287,49 @@ app.post("/api/purchases", async (req, res) => {
         );
       }
     }
+
+    // Deduct the note's net_value from the linked source bill's remaining
+    const isNote =
+      description === "Credit Note" || description === "Debit Note";
+    if (
+      isNote &&
+      req.body.source_type === "purchase" &&
+      linked_purchase_ids &&
+      linked_purchase_ids.length
+    ) {
+      for (const pid of linked_purchase_ids) {
+        const cur = await pool.query(
+          `SELECT COALESCE(remaining_value, net_value, total_value) AS rem FROM purchases WHERE id=$1`,
+          [pid],
+        );
+        const currentRem = parseFloat(cur.rows[0]?.rem || 0);
+        const newRem = currentRem - parseFloat(net_value || 0);
+        await pool.query(
+          `UPDATE purchases SET remaining_value=$1 WHERE id=$2`,
+          [newRem, pid],
+        );
+      }
+    }
+    if (
+      isNote &&
+      req.body.source_type === "labour" &&
+      req.body.linked_labour_ids &&
+      req.body.linked_labour_ids.length
+    ) {
+      for (const lid of req.body.linked_labour_ids) {
+        const cur = await pool.query(
+          `SELECT COALESCE(remaining_value, bill_value_after_deduction, total) AS rem FROM labour WHERE id=$1`,
+          [lid],
+        );
+        const currentRem = parseFloat(cur.rows[0]?.rem || 0);
+        const newRem = currentRem - parseFloat(net_value || 0);
+        await pool.query(`UPDATE labour SET remaining_value=$1 WHERE id=$2`, [
+          newRem,
+          lid,
+        ]);
+      }
+    }
+
     res.json({ status: "SUCCESS", id: purchaseId });
   } catch (err) {
     res.status(500).json({ error: err.message });
