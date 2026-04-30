@@ -1312,7 +1312,7 @@
                 ? parseFloat(
                     labour.bill_value_after_deduction || labour.total || 0,
                   )
-                : 0;
+                : parseFloat(b.total_value || 0);
           });
 
           document.getElementById("rowCount").textContent = receipts.length;
