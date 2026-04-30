@@ -1307,7 +1307,7 @@
                 : "-";
             b._billNo = b.bill_no || "-";
             b._billValue = chittai
-              ? parseFloat(chittai.rtgs_amount || 0)
+              ? parseFloat(chittai.total || 0) - parseFloat(chittai.tds || 0)
               : labour
                 ? parseFloat(
                     labour.bill_value_after_deduction || labour.total || 0,

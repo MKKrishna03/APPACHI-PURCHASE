@@ -301,7 +301,7 @@
               id="againstVoucherGroup"
               style="margin-bottom: 0; display: none"
             >
-              <label>Payment Vouchers * (sum must equal Total)</label>
+              <label>Payment Vouchers *</label>
               <div
                 id="chittaiAgainstVoucherBox"
                 style="
@@ -789,7 +789,7 @@
           parseFloat(document.getElementById("chittaiTotal").value) || 0;
         const el = document.getElementById("chittaiAgainstSum");
         const matches = Math.abs(sum - total) < 0.01;
-        el.innerHTML = `Selected sum: ₹${sum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / Total: ₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${checked.length ? (matches ? '<span style="color:var(--accent);">✓ matches</span>' : '<span style="color:var(--danger);">✗ does not match</span>') : ""}`;
+        el.innerHTML = `Selected sum: ₹${sum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / Total: ₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${checked.length ? (matches ? '<span style="color:var(--accent);">✓ matches</span>' : "") : ""}`;
       }
       const debouncedCalc = debounce(calcChittai, 300);
       const debouncedRefresh = debounce(refreshChittaiNo, 400);
@@ -1006,11 +1006,6 @@
           document
             .querySelectorAll(".chittai-pay-chk:checked")
             .forEach((c) => (sum += parseFloat(c.dataset.amount) || 0));
-          if (Math.abs(sum - parseFloat(total)) >= 0.01) {
-            msg.textContent = `Sum of selected vouchers (₹${sum.toFixed(2)}) must equal Total (₹${parseFloat(total).toFixed(2)}).`;
-            msg.className = "message error";
-            return;
-          }
         }
         try {
           const res = await fetch("/api/chittai", {
