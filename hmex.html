@@ -2341,7 +2341,12 @@
         const res = await fetch("/api/upload-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bill_no: billNo, company }),
+          body: JSON.stringify({
+            bill_no: billNo,
+            company,
+            folder:
+              noteType === "hallmark" ? "hallmark_bills" : "expense_bills",
+          }),
         });
         const data = await res.json();
         uploadToken = data.token;
@@ -2406,16 +2411,23 @@
 
         try {
           showMessage("Uploading...", "success");
+          const folderName =
+            noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
           const sessRes = await fetch("/api/upload-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bill_no: billNo, company }),
+            body: JSON.stringify({
+              bill_no: billNo,
+              company,
+              folder: folderName,
+            }),
           });
           const sessData = await sessRes.json();
           const token = sessData.token;
 
           const fd = new FormData();
           fd.append("photo", file);
+          fd.append("folder", folderName);
           const upRes = await fetch(`/api/upload-session/${token}/upload`, {
             method: "POST",
             body: fd,
