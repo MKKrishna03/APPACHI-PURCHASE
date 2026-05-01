@@ -1179,7 +1179,7 @@
         container.innerHTML = `<div class="folder-grid">${types
           .map((t) => {
             const meta = TYPE_META[t] || TYPE_META.other;
-            return `<div class="folder-card ${meta.cls}" onclick="drillType('${t}')">
+            return `<div class="folder-card ${meta.cls}" onclick="drillType('${t}')" ondragover="event.preventDefault()" ondrop="handleDropOnType(event, '${t}')">
             <div class="folder-icon">${meta.icon}</div>
             <div class="folder-name">${meta.label}</div>
             <div class="folder-count">${typeMap[t]} photo${typeMap[t] !== 1 ? "s" : ""}</div>
@@ -1207,7 +1207,7 @@
             const thumb = p.is_pdf
               ? `<div class="photo-no-img" style="background:#fef0d6;color:var(--amber);font-size:40px;">📄</div>`
               : `<img class="photo-thumb" src="${p.photo_url}" alt="Bill" loading="lazy" onerror="this.outerHTML='<div class=\\'photo-no-img\\'>📷</div>'" />`;
-            return `<div class="photo-card ${isSel ? "selected" : ""}" onclick="openLightbox('${p.id}')">
+            return `<div class="photo-card ${isSel ? "selected" : ""}" onclick="openLightbox('${p.id}')" draggable="true" ondragstart="handleDragStart(event, '${p.id}')">
             <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
             ${thumb}
             <div class="photo-info">
@@ -1741,6 +1741,53 @@
             closeLightbox();
         }
       });
+      function handleDragStart(event, id) {
+        event.dataTransfer.setData("photoId", String(id));
+      }
+
+      async function handleDropOnType(event, targetType) {
+        event.preventDefault();
+        const id = event.dataTransfer.getData("photoId");
+        const p = allPurchases.find((x) => String(x.id) === id);
+        if (!p) return;
+
+        const folderMap = {
+          purchase: "purchase_bills",
+          labour: "labour_receipts",
+          hallmark: "hallmark_bills",
+          expense: "expense_bills",
+          credit_note: "credit_notes",
+          debit_note: "debit_notes",
+          refinery: "refinery_bills",
+          chittai: "chittai_bills",
+        };
+
+        const newFolder = folderMap[targetType];
+        if (!newFolder || p.folder === newFolder) {
+          showToast("Already in this folder", "error");
+          return;
+        }
+
+        try {
+          showToast("Moving photo...");
+          const res = await fetch(`/api/cloudinary/move-photo`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              public_id: p.public_id,
+              target_folder: newFolder,
+            }),
+          });
+          if (!res.ok) throw new Error("Server error");
+          p.folder = newFolder;
+          const master = allPurchases.find((x) => x.id === p.id);
+          if (master) master.folder = newFolder;
+          showToast("Photo moved successfully", "success");
+          renderFolderView();
+        } catch (e) {
+          showToast("Move failed: " + e.message, "error");
+        }
+      }
 
       // ── INIT ──
       (async () => {

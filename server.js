@@ -2778,4 +2778,62 @@ app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
   }
 });
 
+app.patch("/api/cloudinary/move-photo", async (req, res) => {
+  const { public_id, target_folder } = req.body;
+  if (!public_id || !target_folder) {
+    return res
+      .status(400)
+      .json({ error: "public_id and target_folder required" });
+  }
+  if (!ALLOWED_FOLDERS.has(target_folder)) {
+    return res.status(400).json({ error: "Invalid target folder" });
+  }
+
+  try {
+    const filename = public_id.split("/").pop();
+    const new_public_id = `${target_folder}/${filename}`;
+
+    const isPdf = /\.pdf$/i.test(filename);
+    const resource_type = isPdf ? "raw" : "image";
+
+    const result = await cloudinary.uploader.rename(public_id, new_public_id, {
+      resource_type,
+      invalidate: true,
+      overwrite: false,
+    });
+
+    // Update DB photo_url to new URL
+    const newUrl = result.secure_url;
+    const oldUrlPatterns = [
+      `%/${public_id}%`,
+      `%/${public_id.replace(/\.[^/.]+$/, "")}%`,
+    ];
+
+    for (const pattern of oldUrlPatterns) {
+      await pool.query(
+        `UPDATE purchases SET photo_url=$1 WHERE photo_url LIKE $2`,
+        [newUrl, pattern],
+      );
+      await pool.query(
+        `UPDATE labour SET photo_url=$1 WHERE photo_url LIKE $2`,
+        [newUrl, pattern],
+      );
+      await pool.query(
+        `UPDATE chittai SET photo_url=$1 WHERE photo_url LIKE $2`,
+        [newUrl, pattern],
+      );
+      await pool
+        .query(
+          `UPDATE hallmark_expenses SET photo_url=$1 WHERE photo_url LIKE $2`,
+          [newUrl, pattern],
+        )
+        .catch(() => {});
+    }
+
+    res.json({ status: "SUCCESS", new_public_id, new_url: newUrl });
+  } catch (err) {
+    console.error("MOVE PHOTO ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
