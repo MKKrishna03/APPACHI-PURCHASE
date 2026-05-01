@@ -26,11 +26,24 @@ function extractPublicId(url) {
   return match[1].replace(/\.[^/.]+$/, "");
 }
 
-async function getNewFolder(record, sourceTable) {
+async function getColumns(tableName) {
+  const r = await pool.query(
+    `SELECT column_name FROM information_schema.columns WHERE table_name=$1`,
+    [tableName],
+  );
+  return new Set(r.rows.map((x) => x.column_name));
+}
+
+function getNewFolder(record, sourceTable) {
   if (sourceTable === "labour") return "labour_receipts";
   if (sourceTable === "chittai") return "chittai_bills";
+  if (sourceTable === "hallmark_expenses") {
+    const vt = (record.voucher_type || "").toLowerCase();
+    if (vt.includes("expense")) return "expense_bills";
+    return "hallmark_bills";
+  }
 
-  // For purchases / hallmark_expenses
+  // purchases table
   const vt = (record.voucher_type || "").toLowerCase();
   const desc = (record.description || "").toLowerCase();
   const bill = (record.bill_no || "").toLowerCase();
@@ -45,11 +58,10 @@ async function getNewFolder(record, sourceTable) {
   return "purchase_bills";
 }
 
-async function moveOne(oldPublicId, newFolder, isPdf, photoUrl) {
+async function moveOne(oldPublicId, newFolder, isPdf) {
   const filename = oldPublicId.split("/").pop();
   const newPublicId = `${newFolder}/${filename}`;
-
-  if (oldPublicId === newPublicId) return null; // already in right place
+  if (oldPublicId === newPublicId) return null;
 
   try {
     const result = await cloudinary.uploader.rename(oldPublicId, newPublicId, {
@@ -59,16 +71,30 @@ async function moveOne(oldPublicId, newFolder, isPdf, photoUrl) {
     });
     return result.secure_url;
   } catch (e) {
-    console.error(`  FAIL move ${oldPublicId} → ${newPublicId}:`, e.message);
+    console.error(`  FAIL ${oldPublicId} → ${newPublicId}: ${e.message}`);
     return null;
   }
 }
 
 async function migrateTable(tableName) {
   console.log(`\n=== Migrating ${tableName} ===`);
+
+  const cols = await getColumns(tableName);
+  if (!cols.has("photo_url")) {
+    console.log(`  ${tableName}: no photo_url column, skipping`);
+    return;
+  }
+
+  const selectCols = ["id", "photo_url"];
+  if (cols.has("voucher_type")) selectCols.push("voucher_type");
+  if (cols.has("description")) selectCols.push("description");
+  if (cols.has("bill_no")) selectCols.push("bill_no");
+
   const result = await pool.query(
-    `SELECT id, photo_url, voucher_type, description, bill_no FROM ${tableName} WHERE photo_url IS NOT NULL`,
+    `SELECT ${selectCols.join(", ")} FROM ${tableName} WHERE photo_url IS NOT NULL`,
   );
+
+  console.log(`  Found ${result.rows.length} rows with photos`);
 
   let moved = 0,
     skipped = 0,
@@ -81,7 +107,7 @@ async function migrateTable(tableName) {
       continue;
     }
 
-    const newFolder = await getNewFolder(row, tableName);
+    const newFolder = getNewFolder(row, tableName);
     const currentFolder = oldPid.split("/").slice(0, -1).join("/");
 
     if (currentFolder === newFolder) {
@@ -91,7 +117,7 @@ async function migrateTable(tableName) {
 
     const isPdf = /\.pdf$/i.test(row.photo_url);
     console.log(`  Moving ${oldPid} → ${newFolder}/`);
-    const newUrl = await moveOne(oldPid, newFolder, isPdf, row.photo_url);
+    const newUrl = await moveOne(oldPid, newFolder, isPdf);
 
     if (newUrl) {
       await pool.query(`UPDATE ${tableName} SET photo_url=$1 WHERE id=$2`, [
@@ -105,7 +131,7 @@ async function migrateTable(tableName) {
   }
 
   console.log(
-    `${tableName}: moved=${moved}, skipped=${skipped}, failed=${failed}`,
+    `  ${tableName}: moved=${moved}, skipped=${skipped}, failed=${failed}`,
   );
 }
 
@@ -114,7 +140,6 @@ async function migrateTable(tableName) {
     await migrateTable("purchases");
     await migrateTable("labour");
     await migrateTable("chittai");
-    // hallmark_expenses table if it exists
     try {
       await migrateTable("hallmark_expenses");
     } catch (e) {
