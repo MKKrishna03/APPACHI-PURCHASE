@@ -2207,7 +2207,7 @@
         };
 
         try {
-          const res = await fetch("/api/purchases", {
+          await fetch("/api/hallmark-expenses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),

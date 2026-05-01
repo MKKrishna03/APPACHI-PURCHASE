@@ -505,8 +505,14 @@
       .folder-card.type-expense {
         border-top: 3px solid var(--danger);
       }
-      .folder-card.type-other {
-        border-top: 3px solid var(--ink-3);
+      .folder-card.type-refinery {
+        border-top: 3px solid #16a085;
+      }
+      .folder-card.type-credit {
+        border-top: 3px solid var(--green);
+      }
+      .folder-card.type-debit {
+        border-top: 3px solid var(--danger);
       }
 
       .nav-crumb {
@@ -590,6 +596,12 @@
             <option value="">All Folders</option>
             <option value="purchase_bills">Purchase Bills</option>
             <option value="chittai_bills">Chittai Bills</option>
+            <option value="labour_receipts">Labour Receipts</option>
+            <option value="hallmark_bills">Hallmark Bills</option>
+            <option value="expense_bills">Expense Bills</option>
+            <option value="credit_notes">Credit Notes</option>
+            <option value="debit_notes">Debit Notes</option>
+            <option value="refinery_bills">Refinery Bills</option>
           </select>
         </div>
         <div class="filter-group">
@@ -904,6 +916,7 @@
               _labourDbId: dbLabour ? dbLabour.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
               _labourRecord: dbLabour || null,
+              _purchaseRecord: dbPurchase || null,
               _matched: !!dbRecord,
             };
           });
@@ -918,30 +931,15 @@
       // ── TYPE DETECTION ──
       // ── TYPE DETECTION ──
       function detectType(item) {
-        // Chittai folder = always chittai
-        if (item.folder === "chittai_bills") return "chittai";
-
-        // Labour matched from DB (receipt voucher)
-        if (item._isLabour) return "labour";
-
-        // Check if matched DB record is a labour receipt
-        if (item._labourRecord) {
-          const vtype = (item._labourRecord.voucher_type || "").toLowerCase();
-          if (vtype.includes("receipt")) return "labour";
-        }
-
-        // Hallmark: check bill_no or public_id
-        const pid = (item.public_id || "").toLowerCase();
-        const bill = (item.bill_no || "").toLowerCase();
-        if (pid.includes("hallmark") || bill.includes("hallmark"))
-          return "hallmark";
-
-        // Has a DB purchase record = purchase
-        if (item._dbId) return "purchase";
-
-        // In purchase_bills folder but no DB match = unlinked, still show as purchase
-        if (item.folder === "purchase_bills") return "purchase";
-
+        const f = item.folder || "";
+        if (f === "chittai_bills") return "chittai";
+        if (f === "labour_receipts") return "labour";
+        if (f === "hallmark_bills") return "hallmark";
+        if (f === "expense_bills") return "expense";
+        if (f === "credit_notes") return "credit_note";
+        if (f === "debit_notes") return "debit_note";
+        if (f === "refinery_bills") return "refinery";
+        if (f === "purchase_bills") return "purchase";
         return "other";
       }
 
@@ -949,8 +947,11 @@
         purchase: { label: "Purchase Bills", icon: "🧾", cls: "type-purchase" },
         labour: { label: "Labour / Receipt", icon: "👷", cls: "type-labour" },
         hallmark: { label: "Hallmark", icon: "🔖", cls: "type-hallmark" },
+        refinery: { label: "Refinery", icon: "⚗️", cls: "type-refinery" },
         chittai: { label: "Chittai", icon: "🔗", cls: "type-chittai" },
         expense: { label: "Expenses", icon: "💸", cls: "type-expense" },
+        credit_note: { label: "Credit Notes", icon: "📥", cls: "type-credit" },
+        debit_note: { label: "Debit Notes", icon: "📤", cls: "type-debit" },
         other: { label: "Other", icon: "📁", cls: "type-other" },
       };
 
@@ -1625,7 +1626,11 @@
         const res = await fetch("/api/upload-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bill_no: currentLightbox.bill_no, company }),
+          body: JSON.stringify({
+            bill_no: currentLightbox.bill_no,
+            company,
+            folder: currentLightbox.folder || "purchase_bills",
+          }),
         });
         const data = await res.json();
         retakeToken = data.token;

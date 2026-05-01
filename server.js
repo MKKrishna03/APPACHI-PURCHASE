@@ -18,55 +18,60 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer + Cloudinary storage (purchase bills)
-const upload = multer({
-  storage: new CloudinaryStorage({
-    cloudinary,
-    params: (req, file) => {
-      const isPdf = file.mimetype === "application/pdf";
-      return {
-        folder: "purchase_bills",
-        resource_type: isPdf ? "raw" : "image",
-        allowed_formats: isPdf
-          ? ["pdf"]
-          : ["jpg", "jpeg", "png", "webp", "heic"],
-        ...(isPdf
-          ? {}
-          : {
-              transformation: [
-                { width: 1600, height: 1600, crop: "limit", quality: "auto" },
-              ],
-            }),
-      };
-    },
-  }),
-  limits: { fileSize: 15 * 1024 * 1024 },
-});
+// Allowed folder names
+const ALLOWED_FOLDERS = new Set([
+  "purchase_bills",
+  "chittai_bills",
+  "labour_receipts",
+  "hallmark_bills",
+  "expense_bills",
+  "credit_notes",
+  "debit_notes",
+  "refinery_bills",
+]);
 
-// Multer + Cloudinary storage (chittai bills)
-const uploadChittai = multer({
-  storage: new CloudinaryStorage({
-    cloudinary,
-    params: (req, file) => {
-      const isPdf = file.mimetype === "application/pdf";
-      return {
-        folder: "chittai_bills",
-        resource_type: isPdf ? "raw" : "image",
-        allowed_formats: isPdf
-          ? ["pdf"]
-          : ["jpg", "jpeg", "png", "webp", "heic"],
-        ...(isPdf
-          ? {}
-          : {
-              transformation: [
-                { width: 1600, height: 1600, crop: "limit", quality: "auto" },
-              ],
-            }),
-      };
-    },
-  }),
-  limits: { fileSize: 15 * 1024 * 1024 },
-});
+function resolveFolder(req, defaultFolder) {
+  const token = req.params && req.params.token;
+  const session = token ? uploadSessions.get(token) : null;
+  if (session && ALLOWED_FOLDERS.has(session.folder)) return session.folder;
+  if (req.body && ALLOWED_FOLDERS.has(req.body.folder)) return req.body.folder;
+  if (req.query && ALLOWED_FOLDERS.has(req.query.folder))
+    return req.query.folder;
+  return defaultFolder;
+}
+
+function makeUploader(defaultFolder) {
+  return multer({
+    storage: new CloudinaryStorage({
+      cloudinary,
+      params: (req, file) => {
+        const isPdf = file.mimetype === "application/pdf";
+        const folder = resolveFolder(req, defaultFolder);
+        console.log(
+          `[CLOUDINARY UPLOAD] folder=${folder} token=${req.params?.token || "none"} sessionFolder=${uploadSessions.get(req.params?.token)?.folder || "none"} bodyFolder=${req.body?.folder || "none"}`,
+        );
+        return {
+          folder,
+          resource_type: isPdf ? "raw" : "image",
+          allowed_formats: isPdf
+            ? ["pdf"]
+            : ["jpg", "jpeg", "png", "webp", "heic"],
+          ...(isPdf
+            ? {}
+            : {
+                transformation: [
+                  { width: 1600, height: 1600, crop: "limit", quality: "auto" },
+                ],
+              }),
+        };
+      },
+    }),
+    limits: { fileSize: 15 * 1024 * 1024 },
+  });
+}
+
+const upload = makeUploader("purchase_bills");
+const uploadChittai = makeUploader("chittai_bills");
 
 // In-memory upload sessions (token -> { bill_no, company, photo_url, expires })
 const uploadSessions = new Map();
@@ -204,6 +209,19 @@ async function initDB() {
     `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS remarks TEXT`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id SERIAL PRIMARY KEY,
+      purchase_id INTEGER REFERENCES purchases(id) ON DELETE CASCADE,
+      sl_no INTEGER,
+      description TEXT,
+      quantity NUMERIC,
+      rate NUMERIC,
+      tax_percent NUMERIC,
+      amount NUMERIC,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id SERIAL PRIMARY KEY,
@@ -1241,8 +1259,9 @@ app.post("/api/purchases", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
-        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url, linked_purchase_ids)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+        round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url, linked_purchase_ids,
+        linked_voucher_ids, linked_chittai_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         profile_id,
         date,
@@ -1262,6 +1281,12 @@ app.post("/api/purchases", async (req, res) => {
         linked_chittai_ids && linked_chittai_ids.length
           ? linked_chittai_ids[0]
           : null,
+        linked_voucher_ids && linked_voucher_ids.length
+          ? linked_voucher_ids
+          : null,
+        linked_chittai_ids && linked_chittai_ids.length
+          ? linked_chittai_ids
+          : null,
         req.body.created_by || null,
         req.body.photo_url || null,
         linked_purchase_ids && linked_purchase_ids.length
@@ -1270,6 +1295,24 @@ app.post("/api/purchases", async (req, res) => {
       ],
     );
     const purchaseId = result.rows[0].id;
+    // Save line items
+    if (req.body.items && req.body.items.length) {
+      for (const item of req.body.items) {
+        await pool.query(
+          `INSERT INTO purchase_items (purchase_id, sl_no, description, quantity, rate, tax_percent, amount)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [
+            purchaseId,
+            item.sl_no,
+            item.description,
+            item.quantity,
+            item.rate,
+            item.tax_percent,
+            item.amount,
+          ],
+        );
+      }
+    }
     // Link all vouchers back to this purchase
     if (linked_voucher_ids && linked_voucher_ids.length) {
       for (const vid of linked_voucher_ids) {
@@ -1341,6 +1384,148 @@ app.get("/purchase", (req, res) =>
 );
 app.get("/note", (req, res) => res.sendFile(path.join(__dirname, "note.html")));
 app.get("/hmex", (req, res) => res.sendFile(path.join(__dirname, "hmex.html")));
+
+app.post("/api/hallmark-expenses", async (req, res) => {
+  const {
+    profile_id,
+    date,
+    bill_no,
+    voucher_type,
+    description,
+    taxable_value,
+    tax_percent,
+    cgst,
+    sgst,
+    igst,
+    round_off,
+    total_value,
+    tds,
+    net_value,
+    linked_voucher_id,
+    linked_voucher_ids,
+    linked_chittai_id,
+    linked_chittai_ids,
+    items,
+    created_by,
+    photo_url,
+  } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO hallmark_expenses
+        (profile_id, date, bill_no, voucher_type, description,
+         taxable_value, tax_percent, cgst, sgst, igst,
+         round_off, total_value, tds, net_value,
+         linked_voucher_id, linked_voucher_ids,
+         linked_chittai_id, linked_chittai_ids,
+         photo_url, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [
+        profile_id,
+        date,
+        bill_no,
+        voucher_type,
+        description,
+        taxable_value,
+        cgst,
+        sgst,
+        igst,
+        tax_percent || 0,
+        round_off,
+        total_value,
+        tds,
+        net_value,
+        linked_voucher_id || null,
+        linked_voucher_ids?.length ? linked_voucher_ids : null,
+        linked_chittai_id || null,
+        linked_chittai_ids?.length ? linked_chittai_ids : null,
+        photo_url || null,
+        created_by || null,
+      ],
+    );
+    const entryId = result.rows[0].id;
+
+    if (items?.length) {
+      for (const item of items) {
+        await pool.query(
+          `INSERT INTO hallmark_expense_items
+            (hallmark_expense_id, sl_no, description, quantity, rate, tax_percent, amount)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [
+            entryId,
+            item.sl_no,
+            item.description,
+            item.quantity,
+            item.rate,
+            item.tax_percent,
+            item.amount,
+          ],
+        );
+      }
+    }
+
+    // Back-link vouchers and chittai
+    if (linked_voucher_ids?.length) {
+      for (const vid of linked_voucher_ids) {
+        await pool.query(
+          `UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`,
+          [entryId, vid],
+        );
+      }
+    }
+    if (linked_chittai_ids?.length) {
+      for (const cid of linked_chittai_ids) {
+        await pool.query(
+          `UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`,
+          [entryId, cid],
+        );
+      }
+    }
+
+    res.json({ status: "SUCCESS", id: entryId });
+  } catch (err) {
+    console.error("HALLMARK-EXPENSES POST ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/hallmark-expenses/list", async (req, res) => {
+  const { profile_id } = req.query;
+  try {
+    const params = [];
+    let where = "";
+    if (profile_id) {
+      params.push(profile_id);
+      where = `WHERE he.profile_id=$1`;
+    }
+    const result = await pool.query(
+      `SELECT he.*, u.name AS created_by_name
+       FROM hallmark_expenses he
+       LEFT JOIN auth_users u ON u.user_id::text = he.created_by
+       ${where} ORDER BY he.created_at DESC`,
+      params,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/hallmark-expenses/:id", async (req, res) => {
+  try {
+    const p = await pool.query("SELECT * FROM hallmark_expenses WHERE id=$1", [
+      req.params.id,
+    ]);
+    if (!p.rows[0]) return res.status(404).json({ error: "Not found" });
+    const items = await pool.query(
+      "SELECT * FROM hallmark_expense_items WHERE hallmark_expense_id=$1 ORDER BY sl_no",
+      [req.params.id],
+    );
+    res.json({ entry: p.rows[0], items: items.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.post("/api/labour", async (req, res) => {
   const {
     profile_id,
@@ -1992,6 +2177,9 @@ app.delete("/api/delete-entry", async (req, res) => {
           `UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
           [row.id],
         );
+        await pool.query(`DELETE FROM purchase_items WHERE purchase_id=$1`, [
+          row.id,
+        ]);
         await pool.query(`DELETE FROM purchases WHERE id=$1`, [row.id]);
       }
     }
@@ -2155,10 +2343,11 @@ app.get("/api/auth/users-list", async (req, res) => {
 app.post("/api/upload-session", (req, res) => {
   const { bill_no, company, folder } = req.body;
   const token = crypto.randomBytes(8).toString("hex");
+  const finalFolder = ALLOWED_FOLDERS.has(folder) ? folder : "purchase_bills";
   uploadSessions.set(token, {
     bill_no: bill_no || "",
     company: company || "",
-    folder: folder || "purchase",
+    folder: finalFolder,
     photo_url: null,
     expires: Date.now() + 30 * 60 * 1000, // 30 min
   });
@@ -2178,12 +2367,9 @@ app.get("/api/upload-session/:token/status", (req, res) => {
 });
 
 // Phone uploads the photo
-// Custom middleware to pick the right uploader based on session.folder
+// The uploader reads session.folder dynamically inside makeUploader
 function pickUploader(req, res, next) {
-  const session = uploadSessions.get(req.params.token);
-  const uploader =
-    session && session.folder === "chittai" ? uploadChittai : upload;
-  uploader.single("photo")(req, res, next);
+  upload.single("photo")(req, res, next);
 }
 
 app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
@@ -2338,7 +2524,16 @@ app.patch("/api/labour/:id/accounted", async (req, res) => {
 
 app.get("/api/cloudinary/all-photos", async (req, res) => {
   try {
-    const folders = ["purchase_bills", "chittai_bills"];
+    const folders = [
+      "purchase_bills",
+      "chittai_bills",
+      "labour_receipts",
+      "hallmark_bills",
+      "expense_bills",
+      "credit_notes",
+      "debit_notes",
+      "refinery_bills",
+    ];
     let allResources = [];
 
     for (const folder of folders) {
@@ -2423,7 +2618,16 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
 
 app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
   try {
-    const folders = ["purchase_bills", "chittai_bills"];
+    const folders = [
+      "purchase_bills",
+      "chittai_bills",
+      "labour_receipts",
+      "hallmark_bills",
+      "expense_bills",
+      "credit_notes",
+      "debit_notes",
+      "refinery_bills",
+    ];
     let allResources = [];
 
     // Fetch all images from Cloudinary
@@ -2461,16 +2665,22 @@ app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
     }
 
     // Get all photo_urls stored in DB
-    const [purchasesRes, labourRes, chittaiRes] = await Promise.all([
+    const [purchasesRes, labourRes, chittaiRes, hmexRes] = await Promise.all([
       pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
       pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
       pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
+      pool
+        .query(
+          "SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
     ]);
 
     const allDbUrls = new Set([
       ...purchasesRes.rows.map((r) => r.photo_url),
       ...labourRes.rows.map((r) => r.photo_url),
       ...chittaiRes.rows.map((r) => r.photo_url),
+      ...hmexRes.rows.map((r) => r.photo_url),
     ]);
 
     // Helper: extract public_id from stored URL for comparison

@@ -1184,7 +1184,7 @@
           ? txns
               .map(
                 (v) => `<tr>
-              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('txn',${v.id},'${v.bill_no}')">${v.bill_no || "-"}</span></td>
+              <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('txn',${v.id},'${v.bill_no || v.voucher_no || ''}')">${v.bill_no || v.voucher_no || ('PV-' + v.id)}</span></td>
               <td>${v.voucher_type || "-"}</td>
               <td>${v.date ? new Date(v.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
               <td>₹${parseFloat(v.total_value || 0).toLocaleString("en-IN")}</td>
@@ -1207,15 +1207,26 @@
             const r = await fetch(`/api/purchases/${p.id}`);
             if (r.ok) {
               const d = await r.json();
-              const items = d.items || [];
-              qtyMap[p.id] = items.reduce((s,i) => s + parseFloat(i.quantity||0), 0);
+              const items = d.items || d.purchase_items || [];
+              qtyMap[p.id] = items.reduce((s,i) => s + parseFloat(i.quantity || i.qty || 0), 0);
             }
           } catch(e) { qtyMap[p.id] = 0; }
         }));
+        console.log('qtyMap:', qtyMap);
+        console.log('sample purchase items:', myPurchases[0] ? await fetch(`/api/purchases/${myPurchases[0].id}`).then(r=>r.json()) : null);
 
         const isHallmark = (x) => (x.description || '').toLowerCase().includes('hallmark') || (x.voucher_type || '').toLowerCase().includes('hallmark');
 
         const mergedMap = {};
+        // Build reverse lookup: purchase_id -> [voucher ids that link to it]
+        const purchaseToVouchers = {};
+        vouchers.forEach(v => {
+          if (v.linked_purchase_id) {
+            if (!purchaseToVouchers[v.linked_purchase_id]) purchaseToVouchers[v.linked_purchase_id] = [];
+            purchaseToVouchers[v.linked_purchase_id].push(v.id);
+          }
+        });
+
         myPurchases.forEach(p => {
           const key = p.bill_no || `__id_${p.id}`;
           if (!mergedMap[key]) {
@@ -1238,6 +1249,10 @@
           if (!isHallmark(p) && !m.main_id) m.main_id = p.id;
           if (p.linked_chittai_id && m.chittai_ids.indexOf(p.linked_chittai_id) === -1) m.chittai_ids.push(p.linked_chittai_id);
           if (p.linked_voucher_id && m.voucher_ids.indexOf(p.linked_voucher_id) === -1) m.voucher_ids.push(p.linked_voucher_id);
+          // Reverse lookup: vouchers that point at this purchase
+          (purchaseToVouchers[p.id] || []).forEach(vid => {
+            if (m.voucher_ids.indexOf(vid) === -1) m.voucher_ids.push(vid);
+          });
           // qty + taxable + tax: sum across hallmark + main
           m.qty += parseFloat(qtyMap[p.id] || 0);
           m.taxable_value += parseFloat(p.taxable_value || 0);
@@ -1259,7 +1274,10 @@
                 ? p.chittai_ids.map(id => chittai.find(c => c.id == id)?.chittai_no || '-').join(', ')
                 : '-';
               const paymentNo = p.voucher_ids.length
-                ? p.voucher_ids.map(id => vouchers.find(v => v.id == id)?.bill_no || '-').join(', ')
+                ? p.voucher_ids.map(id => {
+                    const v = vouchers.find(x => x.id == id);
+                    return v ? (v.bill_no || v.voucher_no || ('PV-' + v.id)) : '-';
+                  }).join(', ')
                 : '-';
               return `<tr>
                 <td>${chittaiNo}</td>
