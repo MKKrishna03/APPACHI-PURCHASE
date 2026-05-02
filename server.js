@@ -10,6 +10,8 @@ const multer = require("multer");
 const crypto = require("crypto");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Cloudinary config
 cloudinary.config({
@@ -50,12 +52,15 @@ function makeUploader(defaultFolder) {
         console.log(
           `[CLOUDINARY UPLOAD] folder=${folder} token=${req.params?.token || "none"} sessionFolder=${uploadSessions.get(req.params?.token)?.folder || "none"} bodyFolder=${req.body?.folder || "none"}`,
         );
+        const session = req.params?.token ? uploadSessions.get(req.params.token) : null;
+        const bill_date = session?.bill_date || req.body?.bill_date || null;
         return {
           folder,
           resource_type: isPdf ? "raw" : "image",
           allowed_formats: isPdf
             ? ["pdf"]
             : ["jpg", "jpeg", "png", "webp", "heic"],
+          ...(bill_date ? { context: `bill_date=${bill_date}` } : {}),
           ...(isPdf
             ? {}
             : {
@@ -171,9 +176,6 @@ async function initDB() {
   );
   await pool.query(
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS created_by TEXT`,
-  );
-  await pool.query(
-    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
   );
   await pool.query(
     `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_url TEXT`,
@@ -359,6 +361,162 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(
     `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE`,
   );
+
+  // ── Base tables that may not exist on a fresh setup ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS purchases (
+      id SERIAL PRIMARY KEY,
+      profile_id INTEGER REFERENCES profiles(id),
+      date DATE,
+      bill_no TEXT,
+      description TEXT,
+      taxable_value NUMERIC,
+      cgst NUMERIC,
+      sgst NUMERIC,
+      igst NUMERIC,
+      round_off NUMERIC,
+      total_value NUMERIC,
+      tds NUMERIC,
+      net_value NUMERIC,
+      linked_voucher_id INTEGER,
+      linked_chittai_id INTEGER,
+      created_by TEXT,
+      photo_url TEXT,
+      linked_purchase_ids INTEGER[],
+      linked_voucher_ids INTEGER[],
+      linked_chittai_ids INTEGER[],
+      is_accounted BOOLEAN DEFAULT false,
+      remaining_value NUMERIC,
+      voucher_type TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chittai (
+      id SERIAL PRIMARY KEY,
+      profile_id INTEGER REFERENCES profiles(id),
+      chittai_no TEXT,
+      date DATE,
+      weight NUMERIC,
+      rate NUMERIC,
+      value NUMERIC,
+      others NUMERIC DEFAULT 0,
+      total NUMERIC,
+      tds NUMERIC DEFAULT 0,
+      rtgs_amount NUMERIC,
+      is_paid BOOLEAN DEFAULT false,
+      linked_purchase_id INTEGER,
+      linked_voucher_id INTEGER,
+      created_by TEXT,
+      photo_url TEXT,
+      remarks TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reminders (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      date DATE,
+      time TIME,
+      notes TEXT,
+      company TEXT,
+      alerted_day_before BOOLEAN DEFAULT false,
+      alerted_on_day BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS labour_item_types (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tax_format (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      percent NUMERIC NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tds (
+      id SERIAL PRIMARY KEY,
+      pan_4th_letter TEXT,
+      section TEXT,
+      entity_type TEXT,
+      tds_percentage NUMERIC,
+      remarks TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS descriptions (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      metal_type TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hallmark_expenses (
+      id SERIAL PRIMARY KEY,
+      profile_id INTEGER REFERENCES profiles(id),
+      date DATE,
+      bill_no TEXT,
+      voucher_type TEXT,
+      description TEXT,
+      taxable_value NUMERIC,
+      tax_percent NUMERIC DEFAULT 0,
+      cgst NUMERIC,
+      sgst NUMERIC,
+      igst NUMERIC,
+      round_off NUMERIC,
+      total_value NUMERIC,
+      tds NUMERIC,
+      net_value NUMERIC,
+      linked_voucher_id INTEGER,
+      linked_voucher_ids INTEGER[],
+      linked_chittai_id INTEGER,
+      linked_chittai_ids INTEGER[],
+      photo_url TEXT,
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hallmark_expense_items (
+      id SERIAL PRIMARY KEY,
+      hallmark_expense_id INTEGER REFERENCES hallmark_expenses(id) ON DELETE CASCADE,
+      sl_no INTEGER,
+      description TEXT,
+      quantity NUMERIC,
+      rate NUMERIC,
+      tax_percent NUMERIC,
+      amount NUMERIC,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  // ── Sequences for voucher numbering ──
+  await pool.query(`CREATE SEQUENCE IF NOT EXISTS payment_voucher_seq START 1`);
+  await pool.query(`CREATE SEQUENCE IF NOT EXISTS receipt_voucher_seq START 1`);
+
+  // ── Missing columns on existing tables ──
+  await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS ledger_types TEXT[] DEFAULT '{}'`);
+  await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS voucher_no TEXT`);
+  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_voucher_ids INTEGER[]`);
+  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_chittai_ids INTEGER[]`);
+  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS voucher_type TEXT`);
+
+  // ── Multiple photos per bill ──
+  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+  await pool.query(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+  await pool.query(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+
   console.log("DB ready");
 }
 
@@ -753,8 +911,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
         ["Receipt Voucher"],
       );
       const result = await pool.query(
-        `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
         [
           labour.profile_id,
           labour.company_name,
@@ -781,6 +939,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
           tds || null,
           bill_value_after_deduction || null,
           req.body.created_by || null,
+          req.body.photo_url || null,
+          req.body.photo_urls?.length ? req.body.photo_urls : null,
         ],
       );
       const close_labour_id = result.rows[0].id;
@@ -831,8 +991,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
     );
 
     const result = await pool.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
       [
         labour.profile_id,
         labour.company_name,
@@ -849,6 +1009,8 @@ app.post("/api/close-issue-voucher", async (req, res) => {
         tds || null,
         bill_value_after_deduction || null,
         req.body.created_by || null,
+        req.body.photo_url || null,
+        req.body.photo_urls?.length ? req.body.photo_urls : null,
       ],
     );
 
@@ -1260,8 +1422,8 @@ app.post("/api/purchases", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
         round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url, linked_purchase_ids,
-        linked_voucher_ids, linked_chittai_ids)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        linked_voucher_ids, linked_chittai_ids, photo_urls)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [
         profile_id,
         date,
@@ -1281,17 +1443,18 @@ app.post("/api/purchases", async (req, res) => {
         linked_chittai_ids && linked_chittai_ids.length
           ? linked_chittai_ids[0]
           : null,
+        req.body.created_by || null,
+        req.body.photo_url || null,
+        linked_purchase_ids && linked_purchase_ids.length
+          ? linked_purchase_ids
+          : null,
         linked_voucher_ids && linked_voucher_ids.length
           ? linked_voucher_ids
           : null,
         linked_chittai_ids && linked_chittai_ids.length
           ? linked_chittai_ids
           : null,
-        req.body.created_by || null,
-        req.body.photo_url || null,
-        linked_purchase_ids && linked_purchase_ids.length
-          ? linked_purchase_ids
-          : null,
+        req.body.photo_urls?.length ? req.body.photo_urls : null,
       ],
     );
     const purchaseId = result.rows[0].id;
@@ -1417,8 +1580,8 @@ app.post("/api/hallmark-expenses", async (req, res) => {
          round_off, total_value, tds, net_value,
          linked_voucher_id, linked_voucher_ids,
          linked_chittai_id, linked_chittai_ids,
-         photo_url, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         photo_url, created_by, photo_urls)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING *`,
       [
         profile_id,
@@ -1427,10 +1590,10 @@ app.post("/api/hallmark-expenses", async (req, res) => {
         voucher_type,
         description,
         taxable_value,
+        tax_percent || 0,
         cgst,
         sgst,
         igst,
-        tax_percent || 0,
         round_off,
         total_value,
         tds,
@@ -1441,6 +1604,7 @@ app.post("/api/hallmark-expenses", async (req, res) => {
         linked_chittai_ids?.length ? linked_chittai_ids : null,
         photo_url || null,
         created_by || null,
+        req.body.photo_urls?.length ? req.body.photo_urls : null,
       ],
     );
     const entryId = result.rows[0].id;
@@ -1613,7 +1777,7 @@ app.patch("/api/chittai/:id", async (req, res) => {
     let result;
     if (profile_id !== undefined) {
       result = await pool.query(
-        `UPDATE chittai SET profile_id=$1, chittai_no=$2, date=$3, weight=$4, rate=$5, value=$6, others=$7, total=$8, tds=$9, rtgs_amount=$10, photo_url=COALESCE($11, photo_url), remarks=COALESCE($12, remarks) WHERE id=$13 RETURNING *`,
+        `UPDATE chittai SET profile_id=$1, chittai_no=$2, date=$3, weight=$4, rate=$5, value=$6, others=$7, total=$8, tds=$9, rtgs_amount=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls), remarks=COALESCE($13, remarks) WHERE id=$14 RETURNING *`,
         [
           profile_id,
           chittai_no,
@@ -1626,6 +1790,7 @@ app.patch("/api/chittai/:id", async (req, res) => {
           tds || 0,
           rtgs_amount,
           req.body.photo_url !== undefined ? req.body.photo_url || null : null,
+          req.body.photo_urls?.length ? req.body.photo_urls : null,
           req.body.remarks !== undefined ? req.body.remarks || null : null,
           req.params.id,
         ],
@@ -1681,8 +1846,8 @@ app.post("/api/chittai", async (req, res) => {
   } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount, created_by, photo_url, remarks)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      `INSERT INTO chittai (profile_id, chittai_no, date, weight, rate, value, others, total, tds, rtgs_amount, created_by, photo_url, remarks, photo_urls)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
         profile_id,
         chittai_no,
@@ -1697,6 +1862,7 @@ app.post("/api/chittai", async (req, res) => {
         req.body.created_by || null,
         photo_url || null,
         remarks || null,
+        req.body.photo_urls?.length ? req.body.photo_urls : null,
       ],
     );
     const chittai_id = result.rows[0].id;
@@ -1874,7 +2040,7 @@ app.put("/api/labour/:id", async (req, res) => {
       );
     } else {
       await pool.query(
-        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url) WHERE id=$12`,
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls) WHERE id=$13`,
         [
           date,
           receipt_bill_no,
@@ -1887,6 +2053,7 @@ app.put("/api/labour/:id", async (req, res) => {
           tds || null,
           bill_value_after_deduction || null,
           req.body.photo_url || null,
+          req.body.photo_urls?.length ? req.body.photo_urls : null,
           req.params.id,
         ],
       );
@@ -2004,20 +2171,7 @@ app.get("/dashboard", (req, res) =>
   res.sendFile(path.join(__dirname, "dashboard.html")),
 );
 
-app.get("/api/auth/can-delete", async (req, res) => {
-  const { user_id } = req.query;
-  if (!user_id) return res.json({ can_delete: false });
-  try {
-    const result = await pool.query(
-      "SELECT can_delete FROM auth_users WHERE user_id=$1",
-      [user_id],
-    );
-    res.json({ can_delete: result.rows[0]?.can_delete || false });
-  } catch (err) {
-    res.json({ can_delete: false });
-  }
-});
-
+// ── LINKED DATA ──
 app.get("/api/linked-data/:type/:id", async (req, res) => {
   const { type, id } = req.params;
   try {
@@ -2111,6 +2265,13 @@ async function deleteCloudinaryPhoto(photo_url) {
   }
 }
 
+async function deleteAllPhotos(row) {
+  if (row.photo_url) await deleteCloudinaryPhoto(row.photo_url);
+  if (row.photo_urls?.length) {
+    for (const u of row.photo_urls) await deleteCloudinaryPhoto(u);
+  }
+}
+
 app.delete("/api/delete-entry", async (req, res) => {
   const { type, id, linked } = req.body;
   try {
@@ -2121,11 +2282,10 @@ app.delete("/api/delete-entry", async (req, res) => {
           await pool.query(`DELETE FROM vouchers WHERE id=$1`, [l.id]);
         if (l.type === "receipt") {
           const ph = await pool.query(
-            `SELECT photo_url FROM labour WHERE id=$1`,
+            `SELECT photo_url, photo_urls FROM labour WHERE id=$1`,
             [l.id],
           );
-          if (ph.rows[0]?.photo_url)
-            await deleteCloudinaryPhoto(ph.rows[0].photo_url);
+          if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
           await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [
             l.id,
           ]);
@@ -2133,11 +2293,10 @@ app.delete("/api/delete-entry", async (req, res) => {
         }
         if (l.type === "purchase") {
           const ph = await pool.query(
-            `SELECT photo_url FROM purchases WHERE id=$1`,
+            `SELECT photo_url, photo_urls FROM purchases WHERE id=$1`,
             [l.id],
           );
-          if (ph.rows[0]?.photo_url)
-            await deleteCloudinaryPhoto(ph.rows[0].photo_url);
+          if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
           await pool.query(
             `UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
             [l.id],
@@ -2152,11 +2311,10 @@ app.delete("/api/delete-entry", async (req, res) => {
     }
     // Delete main entry
     if (type === "issue" || type === "receipt") {
-      const ph = await pool.query(`SELECT photo_url FROM labour WHERE id=$1`, [
+      const ph = await pool.query(`SELECT photo_url, photo_urls FROM labour WHERE id=$1`, [
         id,
       ]);
-      if (ph.rows[0]?.photo_url)
-        await deleteCloudinaryPhoto(ph.rows[0].photo_url);
+      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
       await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
       await pool.query(`DELETE FROM labour WHERE id=$1`, [id]);
     }
@@ -2164,11 +2322,11 @@ app.delete("/api/delete-entry", async (req, res) => {
       await pool.query(`DELETE FROM vouchers WHERE id=$1`, [id]);
     if (type === "purchase") {
       const group = await pool.query(
-        `SELECT id, photo_url FROM purchases WHERE bill_no=(SELECT bill_no FROM purchases WHERE id=$1) AND profile_id=(SELECT profile_id FROM purchases WHERE id=$1)`,
+        `SELECT id, photo_url, photo_urls FROM purchases WHERE bill_no=(SELECT bill_no FROM purchases WHERE id=$1) AND profile_id=(SELECT profile_id FROM purchases WHERE id=$1)`,
         [id],
       );
       for (const row of group.rows) {
-        if (row.photo_url) await deleteCloudinaryPhoto(row.photo_url);
+        await deleteAllPhotos(row);
         await pool.query(
           `UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
           [row.id],
@@ -2184,11 +2342,10 @@ app.delete("/api/delete-entry", async (req, res) => {
       }
     }
     if (type === "chittai") {
-      const ph = await pool.query(`SELECT photo_url FROM chittai WHERE id=$1`, [
+      const ph = await pool.query(`SELECT photo_url, photo_urls FROM chittai WHERE id=$1`, [
         id,
       ]);
-      if (ph.rows[0]?.photo_url)
-        await deleteCloudinaryPhoto(ph.rows[0].photo_url);
+      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
       await pool.query(
         `UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`,
         [id],
@@ -2341,13 +2498,14 @@ app.get("/api/auth/users-list", async (req, res) => {
 
 // PC creates an upload session
 app.post("/api/upload-session", (req, res) => {
-  const { bill_no, company, folder } = req.body;
+  const { bill_no, company, folder, bill_date } = req.body;
   const token = crypto.randomBytes(8).toString("hex");
   const finalFolder = ALLOWED_FOLDERS.has(folder) ? folder : "purchase_bills";
   uploadSessions.set(token, {
     bill_no: bill_no || "",
     company: company || "",
     folder: finalFolder,
+    bill_date: bill_date || null,
     photo_url: null,
     expires: Date.now() + 30 * 60 * 1000, // 30 min
   });
@@ -2522,6 +2680,91 @@ app.patch("/api/labour/:id/accounted", async (req, res) => {
   }
 });
 
+// ── Shared helpers ──
+const CLOUDINARY_FOLDERS = [
+  "purchase_bills","chittai_bills","labour_receipts","hallmark_bills",
+  "expense_bills","credit_notes","debit_notes","refinery_bills",
+];
+
+async function fetchAllCloudinaryResources() {
+  const auth = Buffer.from(
+    `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+  ).toString("base64");
+  let all = [];
+  for (const folder of CLOUDINARY_FOLDERS) {
+    for (const resource_type of ["image", "raw"]) {
+      let nextCursor = null;
+      do {
+        const params = new URLSearchParams({ type: "upload", prefix: folder, max_results: 500, resource_type });
+        if (nextCursor) params.append("next_cursor", nextCursor);
+        const r = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}?${params}`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const d = await r.json();
+        (d.resources || []).forEach((res) =>
+          all.push({ public_id: res.public_id, url: res.secure_url, created_at: res.created_at, folder, bytes: res.bytes, format: res.format, resource_type, is_pdf: resource_type === "raw" }),
+        );
+        nextCursor = d.next_cursor || null;
+      } while (nextCursor);
+    }
+  }
+  return all;
+}
+
+function extractPublicIdFromUrl(url) {
+  if (!url) return null;
+  const clean = url.split("?")[0];
+  const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
+  return match ? match[1].replace(/\.[^/.]+$/, "") : null;
+}
+
+async function getLinkedPublicIds() {
+  const [pRes, lRes, cRes, hRes, puRes, luRes, cuRes, huRes] = await Promise.all([
+    pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
+    pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
+    pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
+    pool.query("SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT unnest(photo_urls) AS u FROM purchases WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT unnest(photo_urls) AS u FROM labour WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT unnest(photo_urls) AS u FROM chittai WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT unnest(photo_urls) AS u FROM hallmark_expenses WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
+  ]);
+  const linked = new Set();
+  function addUrl(url) {
+    const pid = extractPublicIdFromUrl(url);
+    if (pid) {
+      linked.add(pid);
+      linked.add(pid + ".pdf");
+      linked.add(pid + ".jpg");
+      linked.add(pid + ".jpeg");
+      linked.add(pid + ".png");
+      linked.add(pid + ".webp");
+    }
+  }
+  for (const row of [...pRes.rows, ...lRes.rows, ...cRes.rows, ...hRes.rows]) addUrl(row.photo_url);
+  for (const row of [...puRes.rows, ...luRes.rows, ...cuRes.rows, ...huRes.rows]) addUrl(row.u);
+  return linked;
+}
+
+async function findUnlinkedResources() {
+  const [all, linked] = await Promise.all([fetchAllCloudinaryResources(), getLinkedPublicIds()]);
+  return all.filter((r) => {
+    const clean = r.public_id.replace(/\.[^/.]+$/, "");
+    return !linked.has(r.public_id) && !linked.has(clean);
+  });
+}
+
+app.get("/api/cloudinary/unlinked", async (req, res) => {
+  try {
+    const unlinked = await findUnlinkedResources();
+    res.json(unlinked);
+  } catch (err) {
+    console.error("CLOUDINARY UNLINKED ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/cloudinary/all-photos", async (req, res) => {
   try {
     const folders = [
@@ -2618,160 +2861,40 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
 
 app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
   try {
-    const folders = [
-      "purchase_bills",
-      "chittai_bills",
-      "labour_receipts",
-      "hallmark_bills",
-      "expense_bills",
-      "credit_notes",
-      "debit_notes",
-      "refinery_bills",
-    ];
-    let allResources = [];
+    const { public_ids } = req.body; // array of { public_id, resource_type }
+    if (!public_ids || !public_ids.length)
+      return res.json({ status: "SUCCESS", deleted: 0, failed: 0 });
 
-    // Fetch all images from Cloudinary
-    for (const folder of folders) {
-      for (const resource_type of ["image", "raw"]) {
-        let nextCursor = null;
-        do {
-          const params = new URLSearchParams({
-            type: "upload",
-            prefix: folder,
-            max_results: 500,
-            resource_type,
-          });
-          if (nextCursor) params.append("next_cursor", nextCursor);
+    const auth = Buffer.from(
+      `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
+    ).toString("base64");
 
-          const auth = Buffer.from(
-            `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
-          ).toString("base64");
-
-          const response = await fetch(
-            `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}?${params}`,
-            { headers: { Authorization: `Basic ${auth}` } },
-          );
-          const data = await response.json();
-          (data.resources || []).forEach((r) => {
-            allResources.push({
-              public_id: r.public_id,
-              url: r.secure_url,
-              resource_type,
-            });
-          });
-          nextCursor = data.next_cursor || null;
-        } while (nextCursor);
-      }
-    }
-
-    // Get all photo_urls stored in DB
-    const [purchasesRes, labourRes, chittaiRes, hmexRes] = await Promise.all([
-      pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
-      pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
-      pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
-      pool
-        .query(
-          "SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL",
-        )
-        .catch(() => ({ rows: [] })),
-    ]);
-
-    const allDbUrls = new Set([
-      ...purchasesRes.rows.map((r) => r.photo_url),
-      ...labourRes.rows.map((r) => r.photo_url),
-      ...chittaiRes.rows.map((r) => r.photo_url),
-      ...hmexRes.rows.map((r) => r.photo_url),
-    ]);
-
-    // Helper: extract public_id from stored URL for comparison
-    function extractPublicId(url) {
-      if (!url) return null;
-      try {
-        const clean = url.split("?")[0];
-        const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
-        if (match) return match[1].replace(/\.[^/.]+$/, "");
-        return null;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    // Build set of linked public_ids from DB
-    const linkedPublicIds = new Set();
-    for (const url of allDbUrls) {
-      const pid = extractPublicId(url);
-      if (pid) linkedPublicIds.add(pid);
-      // Also add with extension variants
-      linkedPublicIds.add(pid + ".jpg");
-      linkedPublicIds.add(pid + ".jpeg");
-      linkedPublicIds.add(pid + ".png");
-      linkedPublicIds.add(pid + ".pdf");
-      linkedPublicIds.add(pid + ".webp");
-    }
-
-    // Find unlinked resources
-    const unlinked = allResources.filter((r) => {
-      const pidClean = r.public_id.replace(/\.[^/.]+$/, "");
-      return (
-        !linkedPublicIds.has(r.public_id) && !linkedPublicIds.has(pidClean)
-      );
-    });
-
-    if (!unlinked.length) {
-      return res.json({
-        status: "SUCCESS",
-        deleted: 0,
-        message: "No unlinked photos found",
-      });
-    }
-
-    // Delete unlinked from Cloudinary in batches of 100
     const deleted = [];
     const failed = [];
-    const imageIds = unlinked
-      .filter((r) => r.resource_type === "image")
-      .map((r) => r.public_id);
-    const rawIds = unlinked
-      .filter((r) => r.resource_type === "raw")
-      .map((r) => r.public_id);
 
     async function deleteBatch(ids, resource_type) {
       for (let i = 0; i < ids.length; i += 100) {
         const batch = ids.slice(i, i + 100);
-        const auth = Buffer.from(
-          `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`,
-        ).toString("base64");
         const response = await fetch(
           `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}/upload`,
           {
             method: "DELETE",
-            headers: {
-              Authorization: `Basic ${auth}`,
-              "Content-Type": "application/json",
-            },
+            headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
             body: JSON.stringify({ public_ids: batch }),
           },
         );
         const data = await response.json();
-        if (data.deleted) {
-          Object.keys(data.deleted).forEach((k) => deleted.push(k));
-        }
-        if (data.failed) {
-          Object.keys(data.failed).forEach((k) => failed.push(k));
-        }
+        if (data.deleted) Object.keys(data.deleted).forEach((k) => deleted.push(k));
+        if (data.failed) Object.keys(data.failed).forEach((k) => failed.push(k));
       }
     }
 
+    const imageIds = public_ids.filter((r) => r.resource_type !== "raw").map((r) => r.public_id);
+    const rawIds = public_ids.filter((r) => r.resource_type === "raw").map((r) => r.public_id);
     await deleteBatch(imageIds, "image");
     await deleteBatch(rawIds, "raw");
 
-    res.json({
-      status: "SUCCESS",
-      deleted: deleted.length,
-      failed: failed.length,
-      deleted_ids: deleted,
-      failed_ids: failed,
-    });
+    res.json({ status: "SUCCESS", deleted: deleted.length, failed: failed.length, deleted_ids: deleted, failed_ids: failed });
   } catch (err) {
     console.error("DELETE UNLINKED ERROR:", err.message);
     res.status(500).json({ error: err.message });
@@ -2836,4 +2959,131 @@ app.patch("/api/cloudinary/move-photo", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ── AI Scan ──────────────────────────────────────────────────────────────────
+const AI_SCAN_PROMPTS = {
+  purchase: `You are a bill/invoice OCR assistant. Extract fields from this bill image and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "YYYY-MM-DD or empty",
+  "supplier_name": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "round_off": null,
+  "total_value": null,
+  "tds": null,
+  "net_value": null,
+  "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers. Extract all jewellery line items you can see.`,
+
+  labclose: `You are a labour receipt OCR assistant. Extract fields from this receipt image and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "receipt_bill_no": "",
+  "date": "YYYY-MM-DD or empty",
+  "party_name": "",
+  "taxable_total": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "round_off": null,
+  "total": null,
+  "tds": null,
+  "bill_value_after_deduction": null,
+  "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"labour_charge":null,"amount":null}]
+}
+Use null for missing numbers.`,
+
+  chittai: `You are a chittai/advance slip OCR assistant. Extract fields from this slip image and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "chittai_no": "",
+  "date": "YYYY-MM-DD or empty",
+  "party_name": "",
+  "weight": null,
+  "rate": null,
+  "value": null,
+  "others": null,
+  "rnd": null,
+  "total": null,
+  "tds": null,
+  "rtgs_amount": null
+}
+Use null for missing numbers. "rnd" is round-off/rounding amount if present.`,
+
+  hallmark: `You are a hallmark expense bill OCR assistant. Extract fields from this bill image and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "YYYY-MM-DD or empty",
+  "party_name": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "round_off": null,
+  "total_value": null,
+  "tds": null,
+  "net_value": null,
+  "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers.`,
+
+  note: `You are a credit/debit note OCR assistant. Extract fields from this note image and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "YYYY-MM-DD or empty",
+  "party_name": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "round_off": null,
+  "total_value": null,
+  "tds": null,
+  "net_value": null,
+  "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers.`,
+};
+
+app.post("/api/ai-scan", async (req, res) => {
+  try {
+    const { image_url, form_type } = req.body;
+    if (!image_url) return res.status(400).json({ error: "image_url required" });
+    const prompt = AI_SCAN_PROMPTS[form_type] || AI_SCAN_PROMPTS.purchase;
+
+    // Fetch image as base64
+    const imgResp = await fetch(image_url);
+    if (!imgResp.ok) return res.status(400).json({ error: "Could not fetch image" });
+    const contentType = imgResp.headers.get("content-type") || "image/jpeg";
+    const mimeType = contentType.startsWith("image/png") ? "image/png"
+      : contentType.startsWith("image/webp") ? "image/webp"
+      : contentType.startsWith("image/gif") ? "image/gif"
+      : "image/jpeg";
+    const buf = Buffer.from(await imgResp.arrayBuffer());
+    const b64 = buf.toString("base64");
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { mimeType, data: b64 } }
+    ]);
+
+    const raw = result.response.text() || "{}";
+    // Strip any accidental markdown code fences
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
+    let fields;
+    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
+    res.json({ fields });
+  } catch (err) {
+    console.error("AI SCAN ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));

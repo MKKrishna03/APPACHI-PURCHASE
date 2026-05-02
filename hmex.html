@@ -1247,8 +1247,13 @@
             >
               📸 Bill Photo (Optional)
             </div>
+            <div id="photoSlotsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
+            <div id="aiScanArea" style="display:none;margin-bottom:8px;">
+              <button type="button" id="aiScanBtn" onclick="runAIScan()" style="padding:7px 14px;background:var(--accent,#1a6b3a);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🤖 AI Scan</button>
+              <span id="aiScanStatus" style="font-size:12px;color:var(--ink-3);margin-left:8px;"></span>
+            </div>
             <div
-              id="photoArea"
+              id="photoAddArea"
               style="
                 display: flex;
                 gap: 8px;
@@ -1296,7 +1301,7 @@
                 />
               </label>
               <span style="font-size: 12px; color: var(--ink-3)"
-                >Scan QR or upload directly</span
+                >Up to 3 photos · Scan QR or upload directly</span
               >
             </div>
             <div
@@ -1345,39 +1350,6 @@
                 Cancel
               </button>
             </div>
-            <div id="photoPreview" style="display: none; margin-top: 10px">
-              <img
-                id="photoImg"
-                style="
-                  max-width: 200px;
-                  border-radius: 8px;
-                  border: 1px solid var(--border);
-                "
-              />
-              <div style="margin-top: 6px">
-                <span
-                  style="font-size: 12px; color: var(--green); font-weight: 600"
-                  >✓ Photo attached</span
-                >
-                <button
-                  type="button"
-                  onclick="removePhoto()"
-                  style="
-                    margin-left: 10px;
-                    padding: 4px 10px;
-                    background: var(--danger-light);
-                    color: var(--danger);
-                    border: 1px solid #f09898;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 11px;
-                    font-weight: 600;
-                  "
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
           </div>
 
           <div class="action-bar" style="margin-top: 20px">
@@ -1425,7 +1397,7 @@
       let selectedVoucherIds = [];
       let selectedChittaiIds = [];
       let uploadToken = null;
-      let uploadedPhotoUrl = null;
+      let uploadedPhotoUrls = [];
       let uploadPollInterval = null;
       let noteType = null; // 'hallmark' or 'expenses'
 
@@ -2155,7 +2127,7 @@
           showMessage("Please enter bill date", "error");
           return;
         }
-        if (!uploadedPhotoUrl) {
+        if (!uploadedPhotoUrls.length) {
           showMessage("Please attach a bill photo before saving", "error");
           return;
         }
@@ -2203,7 +2175,8 @@
           linked_chittai_id: selectedChittaiId || null,
           items,
           created_by: getCurrentUser()?.id || null,
-          photo_url: uploadedPhotoUrl || null,
+          photo_url: uploadedPhotoUrls[0] || null,
+          photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
         };
 
         try {
@@ -2264,7 +2237,8 @@
                     parseFloat(document.getElementById("hmPayable").value) || 0,
                   items: hmItems,
                   created_by: getCurrentUser()?.id || null,
-                  photo_url: uploadedPhotoUrl || null,
+                  photo_url: uploadedPhotoUrls[0] || null,
+          photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
                 };
                 await fetch("/api/purchases", {
                   method: "POST",
@@ -2331,22 +2305,35 @@
         }
       }
 
-      // ── PHONE PHOTO UPLOAD ──
+      // ── MULTI-PHOTO UPLOAD ──
+      function renderPhotoSlots() {
+        const row = document.getElementById("photoSlotsRow");
+        row.innerHTML = uploadedPhotoUrls.map((url, i) =>
+          `<div style="position:relative;display:inline-block">
+             <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i+1}" />
+             <button type="button" onclick="removePhotoSlot(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger,#c0392b);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
+           </div>`
+        ).join("");
+        document.getElementById("photoAddArea").style.display = uploadedPhotoUrls.length >= 3 ? "none" : "flex";
+        document.getElementById("aiScanArea").style.display = uploadedPhotoUrls.length ? "block" : "none";
+      }
+
+      function removePhotoSlot(i) {
+        uploadedPhotoUrls.splice(i, 1);
+        renderPhotoSlots();
+      }
+
       async function startPhoneUpload() {
         const billNo = document.getElementById("billNo").value.trim();
         const companySel = document.getElementById("companySelect");
-        const company =
-          companySel.options[companySel.selectedIndex]?.text || "";
+        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const bill_date = document.getElementById("billDate")?.value || null;
+        const folder = noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
 
         const res = await fetch("/api/upload-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bill_no: billNo,
-            company,
-            folder:
-              noteType === "hallmark" ? "hallmark_bills" : "expense_bills",
-          }),
+          body: JSON.stringify({ bill_no: billNo, company, folder, bill_date }),
         });
         const data = await res.json();
         uploadToken = data.token;
@@ -2354,13 +2341,9 @@
         const url = `${window.location.origin}/upload/${uploadToken}`;
         const qrDiv = document.getElementById("qrCode");
         qrDiv.innerHTML = "";
-        new QRCode(qrDiv, {
-          text: url,
-          width: 180,
-          height: 180,
-        });
+        new QRCode(qrDiv, { text: url, width: 180, height: 180 });
 
-        document.getElementById("photoArea").style.display = "none";
+        document.getElementById("photoAddArea").style.display = "none";
         document.getElementById("qrArea").style.display = "block";
 
         uploadPollInterval = setInterval(checkUploadStatus, 2000);
@@ -2372,11 +2355,11 @@
           const res = await fetch(`/api/upload-session/${uploadToken}/status`);
           const data = await res.json();
           if (data.uploaded && data.photo_url) {
-            uploadedPhotoUrl = data.photo_url;
+            uploadedPhotoUrls.push(data.photo_url);
+            uploadToken = null;
             clearInterval(uploadPollInterval);
             document.getElementById("qrArea").style.display = "none";
-            document.getElementById("photoImg").src = data.photo_url;
-            document.getElementById("photoPreview").style.display = "block";
+            renderPhotoSlots();
           }
         } catch (e) {}
       }
@@ -2385,13 +2368,7 @@
         if (uploadPollInterval) clearInterval(uploadPollInterval);
         uploadToken = null;
         document.getElementById("qrArea").style.display = "none";
-        document.getElementById("photoArea").style.display = "block";
-      }
-
-      function removePhoto() {
-        uploadedPhotoUrl = null;
-        document.getElementById("photoPreview").style.display = "none";
-        document.getElementById("photoArea").style.display = "flex";
+        renderPhotoSlots();
       }
 
       // ── PC FILE UPLOAD ──
@@ -2406,21 +2383,16 @@
 
         const billNo = document.getElementById("billNo").value.trim();
         const companySel = document.getElementById("companySelect");
-        const company =
-          companySel.options[companySel.selectedIndex]?.text || "";
+        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const bill_date = document.getElementById("billDate")?.value || null;
+        const folderName = noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
 
         try {
           showMessage("Uploading...", "success");
-          const folderName =
-            noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
           const sessRes = await fetch("/api/upload-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              bill_no: billNo,
-              company,
-              folder: folderName,
-            }),
+            body: JSON.stringify({ bill_no: billNo, company, folder: folderName, bill_date }),
           });
           const sessData = await sessRes.json();
           const token = sessData.token;
@@ -2435,25 +2407,85 @@
           const upData = await upRes.json();
 
           if (upData.status === "SUCCESS") {
-            uploadedPhotoUrl = upData.photo_url;
-            document.getElementById("photoArea").style.display = "none";
-            document.getElementById("photoImg").src = upData.photo_url;
-            document.getElementById("photoPreview").style.display = "block";
+            uploadedPhotoUrls.push(upData.photo_url);
+            renderPhotoSlots();
             showMessage("Photo uploaded ✓", "success");
-            setTimeout(() => {
-              const m = document.getElementById("message");
-              m.style.display = "none";
-            }, 1500);
+            setTimeout(() => { const m = document.getElementById("message"); m.style.display = "none"; }, 1500);
           } else {
-            showMessage(
-              "Upload failed: " + (upData.error || "unknown"),
-              "error",
-            );
+            showMessage("Upload failed: " + (upData.error || "unknown"), "error");
           }
         } catch (e) {
           showMessage("Upload error: " + e.message, "error");
         }
         event.target.value = "";
+      }
+
+      // ── AI SCAN ──
+      async function runAIScan() {
+        if (!uploadedPhotoUrls.length) return;
+        const btn = document.getElementById("aiScanBtn");
+        const status = document.getElementById("aiScanStatus");
+        btn.disabled = true;
+        btn.textContent = "⏳ Scanning...";
+        status.textContent = "";
+        try {
+          const formType = noteType === "hallmark" ? "hallmark" : "purchase";
+          const res = await fetch("/api/ai-scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_url: uploadedPhotoUrls[0], form_type: formType })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Scan failed");
+          applyAIScanFields(data.fields || {});
+          status.textContent = "✓ Fields filled";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        } catch (e) {
+          status.textContent = "⚠ " + e.message;
+        }
+        btn.disabled = false;
+        btn.textContent = "🤖 AI Scan";
+      }
+
+      function applyAIScanFields(f) {
+        if (f.bill_no) document.getElementById("billNo").value = f.bill_no;
+        if (f.date) document.getElementById("billDate").value = f.date;
+
+        if (f.items?.length) {
+          document.getElementById("itemsTable").innerHTML = "";
+          rowCount = 0;
+          let inferredTaxPct = 0;
+          if (f.taxable_value && f.cgst) {
+            const pct = (f.cgst / f.taxable_value) * 200;
+            const rates = [0, 1.5, 3, 5, 12, 18, 28];
+            inferredTaxPct = rates.reduce((a, b) => Math.abs(b - pct) < Math.abs(a - pct) ? b : a);
+          }
+          f.items.forEach(item => {
+            rowCount++;
+            const tbody = document.getElementById("itemsTable");
+            const row = document.createElement("tr");
+            row.id = `row_${rowCount}`;
+            const qty = item.net_wt ?? item.gross_wt ?? item.pcs ?? "";
+            const rate = item.rate ?? "";
+            row.innerHTML = `
+              <td><input type="number" value="${rowCount}" readonly style="width:44px;"></td>
+              <td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList" value="${(item.description||"").replace(/"/g,"&quot;")}"></td>
+              <td><input type="number" class="quantity" step="0.001" placeholder="0.00" oninput="calcRow(${rowCount})" style="width:90px;" value="${qty}"></td>
+              <td><input type="number" class="rate" step="0.01" placeholder="0.00" oninput="calcRow(${rowCount})" style="width:90px;" value="${rate}"></td>
+              <td><select class="tax-percent" onchange="calcRow(${rowCount})" style="width:80px;">${taxOptions(inferredTaxPct)}</select></td>
+              <td><input type="number" class="taxable" step="0.01" placeholder="0.00" readonly style="width:90px;"></td>
+              <td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
+            tbody.appendChild(row);
+            row._taxPct = inferredTaxPct;
+            if (qty !== "" && rate !== "") {
+              row.querySelector(".taxable").value = (parseFloat(qty) * parseFloat(rate)).toFixed(2);
+            }
+          });
+        }
+
+        if (f.round_off != null) document.getElementById("billRoundOff").value = f.round_off;
+        if (f.tds != null) document.getElementById("billTds").value = f.tds;
+        updateTotals();
       }
 
       // ── HELPERS ──
@@ -2609,10 +2641,12 @@
           accent: "#2d6a4f",
         });
         html += "</div>";
-        if (mainEntry.photo_url)
-          html +=
-            bvSectionTitle("Bill Photo") +
-            `<img src="${mainEntry.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${mainEntry.photo_url}','_blank')" />`;
+        const photos = mainEntry.photo_urls?.length ? mainEntry.photo_urls : (mainEntry.photo_url ? [mainEntry.photo_url] : []);
+        if (photos.length)
+          html += bvSectionTitle("Bill Photo") +
+            `<div style="display:flex;gap:8px;flex-wrap:wrap;">` +
+            photos.map(u => `<img src="${u}" style="max-width:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("") +
+            `</div>`;
         el.innerHTML = html;
         enteredBy.textContent = mainEntry.created_by_name
           ? "Entered by: " + mainEntry.created_by_name

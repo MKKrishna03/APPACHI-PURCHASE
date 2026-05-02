@@ -770,6 +770,34 @@
       </div>
     </div>
 
+    <!-- Unlinked Photos Modal -->
+    <div class="qr-modal" id="unlinkedModal" onclick="if(event.target===this)closeUnlinkedModal()">
+      <div class="qr-box" style="max-width:560px;width:100%;text-align:left;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h3 style="margin:0;font-size:15px;">🗑 Unlinked Photos in Cloudinary</h3>
+          <button class="lightbox-close" onclick="closeUnlinkedModal()">✕</button>
+        </div>
+        <div id="unlinkedLoading" style="text-align:center;padding:24px 0;color:var(--ink-3);font-size:13px;">
+          ⏳ Scanning Cloudinary...
+        </div>
+        <div id="unlinkedEmpty" style="display:none;text-align:center;padding:24px 0;color:var(--green);font-size:13px;font-weight:600;">
+          ✓ No unlinked photos found — everything is linked!
+        </div>
+        <div id="unlinkedList" style="display:none;">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+            <span id="unlinkedCount" style="font-size:12px;font-weight:700;color:var(--danger);"></span>
+            <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="selectAllUnlinked(true)">Select All</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="selectAllUnlinked(false)">Deselect All</button>
+          </div>
+          <div id="unlinkedItems" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+          <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="closeUnlinkedModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDeleteUnlinked()">🗑 Delete Selected</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast"></div>
 
     <script>
@@ -1687,54 +1715,119 @@
       }
 
       // ── DELETE UNLINKED ──
+      let unlinkedData = [];
+
       async function deleteUnlinked() {
-        const confirm1 = confirm(
-          "This will permanently delete all Cloudinary photos that have no matching record in the database.\n\nAre you sure?",
-        );
-        if (!confirm1) return;
+        unlinkedData = [];
+        document.getElementById("unlinkedLoading").style.display = "block";
+        document.getElementById("unlinkedEmpty").style.display = "none";
+        document.getElementById("unlinkedList").style.display = "none";
+        document.getElementById("unlinkedModal").classList.add("show");
 
         const btn = document.getElementById("deleteUnlinkedBtn");
         btn.disabled = true;
-        btn.textContent = "⏳ Scanning & Deleting...";
-        showToast("Scanning Cloudinary for unlinked photos...");
+        btn.textContent = "⏳ Scanning...";
+
+        try {
+          const res = await fetch("/api/cloudinary/unlinked");
+          const data = await res.json();
+          unlinkedData = Array.isArray(data) ? data : [];
+        } catch (e) {
+          showToast("Error scanning: " + e.message, "error");
+          closeUnlinkedModal();
+          return;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "🗑 Delete Unlinked from Cloudinary";
+        }
+
+        document.getElementById("unlinkedLoading").style.display = "none";
+
+        if (!unlinkedData.length) {
+          document.getElementById("unlinkedEmpty").style.display = "block";
+          return;
+        }
+
+        const FOLDER_LABELS = {
+          purchase_bills: "Purchase", chittai_bills: "Chittai",
+          labour_receipts: "Labour", hallmark_bills: "Hallmark",
+          expense_bills: "Expense", credit_notes: "Credit Note",
+          debit_notes: "Debit Note", refinery_bills: "Refinery",
+        };
+
+        document.getElementById("unlinkedCount").textContent =
+          unlinkedData.length + " unlinked photo(s) found";
+
+        const container = document.getElementById("unlinkedItems");
+        container.innerHTML = unlinkedData.map((item, i) => {
+          const filename = item.public_id.split("/").pop();
+          const label = FOLDER_LABELS[item.folder] || item.folder;
+          const date = item.created_at ? item.created_at.slice(0, 10) : "—";
+          const sizeKb = item.bytes ? (item.bytes / 1024).toFixed(0) + " KB" : "";
+          return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;">
+            <input type="checkbox" class="unlinked-cb" data-idx="${i}" checked style="width:15px;height:15px;flex-shrink:0;" />
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${filename}</div>
+              <div style="color:var(--ink-3);margin-top:2px;">${label} · ${date}${sizeKb ? " · " + sizeKb : ""}${item.is_pdf ? " · PDF" : ""}</div>
+            </div>
+          </label>`;
+        }).join("");
+
+        document.getElementById("unlinkedList").style.display = "block";
+      }
+
+      function selectAllUnlinked(checked) {
+        document.querySelectorAll(".unlinked-cb").forEach((cb) => (cb.checked = checked));
+      }
+
+      function closeUnlinkedModal() {
+        document.getElementById("unlinkedModal").classList.remove("show");
+        unlinkedData = [];
+      }
+
+      async function confirmDeleteUnlinked() {
+        const selected = [...document.querySelectorAll(".unlinked-cb:checked")]
+          .map((cb) => unlinkedData[parseInt(cb.dataset.idx)])
+          .filter(Boolean)
+          .map((item) => ({ public_id: item.public_id, resource_type: item.resource_type }));
+
+        if (!selected.length) {
+          showToast("No items selected", "error");
+          return;
+        }
+
+        const btn = document.getElementById("confirmDeleteBtn");
+        btn.disabled = true;
+        btn.textContent = `⏳ Deleting ${selected.length}...`;
 
         try {
           const res = await fetch("/api/cloudinary/delete-unlinked", {
             method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ public_ids: selected }),
           });
           const data = await res.json();
+          closeUnlinkedModal();
           if (data.status === "SUCCESS") {
-            if (data.deleted === 0) {
-              showToast(
-                "No unlinked photos found — nothing deleted",
-                "success",
-              );
-            } else {
-              showToast(
-                `Deleted ${data.deleted} unlinked photo(s) from Cloudinary`,
-                "success",
-              );
-            }
-            if (data.failed > 0) {
-              showToast(`${data.failed} photo(s) failed to delete`, "error");
-            }
-            // Reload gallery
-            await loadAllPurchases();
+            showToast(`Deleted ${data.deleted} photo(s) from Cloudinary`, "success");
+            loadAllPurchases();
           } else {
-            showToast("Error: " + (data.error || "Unknown"), "error");
+            showToast("Error: " + data.error, "error");
           }
         } catch (e) {
           showToast("Error: " + e.message, "error");
         } finally {
           btn.disabled = false;
-          btn.textContent = "🗑 Delete Unlinked from Cloudinary";
+          btn.textContent = "🗑 Delete Selected";
         }
       }
 
       // ── KEYBOARD ──
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
-          if (document.getElementById("qrModal").classList.contains("show"))
+          if (document.getElementById("unlinkedModal").classList.contains("show"))
+            closeUnlinkedModal();
+          else if (document.getElementById("qrModal").classList.contains("show"))
             closeQrModal();
           else if (
             document.getElementById("lightbox").classList.contains("show")

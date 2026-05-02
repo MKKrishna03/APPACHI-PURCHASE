@@ -642,9 +642,9 @@
           <div class="summary-value" id="sumCount">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Bill Value</div>
+          <div class="summary-label">Labour Bill Value</div>
           <div class="summary-value" id="sumBillValue">—</div>
-          <div class="summary-sub">after deduction</div>
+          <div class="summary-sub">after deduction · excl. chittai</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Payment Received</div>
@@ -700,7 +700,7 @@
                   onclick="sortBy('billValue')"
                   style="text-align: right"
                 >
-                  Chittai / Labour Value<span class="si" id="si_billValue"
+                  Labour Value<span class="si" id="si_billValue"
                     >⇅</span
                   >
                 </th>
@@ -1184,7 +1184,10 @@
                   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
                 })()
               : "-";
-            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td><td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td><td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td><td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || b.created_by || "—"}</td></tr>`;
+            const billValCell = b._isChittai
+              ? `<td style="font-family:'DM Mono',monospace;text-align:right;color:var(--ink-3);font-style:italic;">₹${Math.round(billVal).toLocaleString("en-IN")} <span style="font-size:10px;font-style:normal;background:var(--amber-light);color:var(--amber);border-radius:4px;padding:1px 5px;font-family:inherit;">ref</span></td>`
+              : `<td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>`;
+            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td>${billValCell}<td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td><td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || b.created_by || "—"}</td></tr>`;
           })
           .join("");
         renderPagination(total);
@@ -1306,6 +1309,7 @@
                 ? labour.issue_number
                 : "-";
             b._billNo = b.bill_no || "-";
+            b._isChittai = !!chittai;
             b._billValue = chittai
               ? parseFloat(chittai.total || 0) - parseFloat(chittai.tds || 0)
               : labour
@@ -1329,7 +1333,7 @@
 
           allRows = receipts;
           receipts.forEach((b) => {
-            totalBillValue += b._billValue || 0;
+            if (!b._isChittai) totalBillValue += b._billValue || 0;
             totalPayment += parseFloat(b.total_value || 0);
           });
           updateSortIcons();

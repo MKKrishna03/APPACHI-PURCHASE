@@ -477,8 +477,13 @@
             >
               📸 Chittai Bill Photo (Optional)
             </div>
+            <div id="ctPhotoSlotsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
+            <div id="ctAiScanArea" style="display:none;margin-bottom:8px;">
+              <button type="button" id="ctAiScanBtn" onclick="ctRunAIScan()" style="padding:7px 14px;background:var(--accent,#1a6b3a);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🤖 AI Scan</button>
+              <span id="ctAiScanStatus" style="font-size:12px;color:var(--ink-3);margin-left:8px;"></span>
+            </div>
             <div
-              id="ctPhotoArea"
+              id="ctPhotoAddArea"
               style="
                 display: flex;
                 gap: 8px;
@@ -524,6 +529,7 @@
                   onchange="ctUploadFromPC(event)"
                 />
               </label>
+              <span style="font-size: 12px; color: var(--ink-3)">Up to 3 photos</span>
             </div>
             <div
               id="ctQrArea"
@@ -569,43 +575,6 @@
               >
                 Cancel
               </button>
-            </div>
-            <div id="ctPhotoPreview" style="display: none; margin-top: 10px">
-              <img
-                id="ctPhotoImg"
-                style="
-                  max-width: 180px;
-                  border-radius: 8px;
-                  border: 1px solid var(--border);
-                "
-              />
-              <div style="margin-top: 6px">
-                <span
-                  style="
-                    font-size: 12px;
-                    color: var(--accent);
-                    font-weight: 600;
-                  "
-                  >✓ Photo attached</span
-                >
-                <button
-                  type="button"
-                  onclick="ctRemovePhoto()"
-                  style="
-                    margin-left: 10px;
-                    padding: 3px 9px;
-                    background: var(--danger-light);
-                    color: var(--danger);
-                    border: 1px solid #f09898;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 11px;
-                    font-weight: 600;
-                  "
-                >
-                  Remove
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -699,7 +668,7 @@
       let companyCache = null;
       let unmappedPaymentVouchers = [];
       let ctUploadToken = null;
-      let ctUploadedPhotoUrl = null;
+      let ctUploadedPhotoUrls = [];
       let ctUploadPollInterval = null;
 
       async function handleCompanyChange() {
@@ -862,20 +831,33 @@
       }
 
       // ── CHITTAI PHOTO UPLOAD ──
+      function ctRenderPhotoSlots() {
+        const row = document.getElementById("ctPhotoSlotsRow");
+        row.innerHTML = ctUploadedPhotoUrls.map((url, i) =>
+          `<div style="position:relative;display:inline-block">
+             <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i+1}" />
+             <button type="button" onclick="ctRemovePhotoSlot(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger,#c0392b);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
+           </div>`
+        ).join("");
+        document.getElementById("ctPhotoAddArea").style.display = ctUploadedPhotoUrls.length >= 3 ? "none" : "flex";
+        document.getElementById("ctAiScanArea").style.display = ctUploadedPhotoUrls.length ? "block" : "none";
+      }
+
+      function ctRemovePhotoSlot(i) {
+        ctUploadedPhotoUrls.splice(i, 1);
+        ctRenderPhotoSlots();
+      }
+
       async function ctStartPhoneUpload() {
         const chittaiNo = document.getElementById("chittaiNo").value;
         const companySel = document.getElementById("chittaiCompany");
-        const company =
-          companySel.options[companySel.selectedIndex]?.text || "";
+        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const bill_date = document.getElementById("chittaiDate")?.value || null;
 
         const res = await fetch("/api/upload-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bill_no: chittaiNo,
-            company,
-            folder: "chittai",
-          }),
+          body: JSON.stringify({ bill_no: chittaiNo, company, folder: "chittai", bill_date }),
         });
         const data = await res.json();
         ctUploadToken = data.token;
@@ -885,7 +867,7 @@
         qrDiv.innerHTML = "";
         new QRCode(qrDiv, { text: url, width: 160, height: 160 });
 
-        document.getElementById("ctPhotoArea").style.display = "none";
+        document.getElementById("ctPhotoAddArea").style.display = "none";
         document.getElementById("ctQrArea").style.display = "block";
 
         ctUploadPollInterval = setInterval(ctCheckUploadStatus, 2000);
@@ -894,16 +876,14 @@
       async function ctCheckUploadStatus() {
         if (!ctUploadToken) return;
         try {
-          const res = await fetch(
-            `/api/upload-session/${ctUploadToken}/status`,
-          );
+          const res = await fetch(`/api/upload-session/${ctUploadToken}/status`);
           const data = await res.json();
           if (data.uploaded && data.photo_url) {
-            ctUploadedPhotoUrl = data.photo_url;
+            ctUploadedPhotoUrls.push(data.photo_url);
+            ctUploadToken = null;
             clearInterval(ctUploadPollInterval);
             document.getElementById("ctQrArea").style.display = "none";
-            document.getElementById("ctPhotoImg").src = data.photo_url;
-            document.getElementById("ctPhotoPreview").style.display = "block";
+            ctRenderPhotoSlots();
           }
         } catch (e) {}
       }
@@ -912,7 +892,7 @@
         if (ctUploadPollInterval) clearInterval(ctUploadPollInterval);
         ctUploadToken = null;
         document.getElementById("ctQrArea").style.display = "none";
-        document.getElementById("ctPhotoArea").style.display = "flex";
+        ctRenderPhotoSlots();
       }
 
       async function ctUploadFromPC(event) {
@@ -923,19 +903,29 @@
           event.target.value = "";
           return;
         }
+        const chittaiNo = document.getElementById("chittaiNo").value;
+        const companySel = document.getElementById("chittaiCompany");
+        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const bill_date = document.getElementById("chittaiDate")?.value || null;
         try {
+          const sessRes = await fetch("/api/upload-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_no: chittaiNo, company, folder: "chittai", bill_date }),
+          });
+          const sessData = await sessRes.json();
+          const token = sessData.token;
           const fd = new FormData();
           fd.append("photo", file);
-          const res = await fetch("/api/chittai-upload", {
+          fd.append("folder", "chittai");
+          const upRes = await fetch(`/api/upload-session/${token}/upload`, {
             method: "POST",
             body: fd,
           });
-          const data = await res.json();
+          const data = await upRes.json();
           if (data.status === "SUCCESS") {
-            ctUploadedPhotoUrl = data.photo_url;
-            document.getElementById("ctPhotoArea").style.display = "none";
-            document.getElementById("ctPhotoImg").src = data.photo_url;
-            document.getElementById("ctPhotoPreview").style.display = "block";
+            ctUploadedPhotoUrls.push(data.photo_url);
+            ctRenderPhotoSlots();
           } else {
             alert("Upload failed: " + (data.error || ""));
           }
@@ -946,9 +936,44 @@
       }
 
       function ctRemovePhoto() {
-        ctUploadedPhotoUrl = null;
-        document.getElementById("ctPhotoPreview").style.display = "none";
-        document.getElementById("ctPhotoArea").style.display = "flex";
+        ctUploadedPhotoUrls = [];
+        ctRenderPhotoSlots();
+      }
+
+      // ── AI SCAN ──
+      async function ctRunAIScan() {
+        if (!ctUploadedPhotoUrls.length) return;
+        const btn = document.getElementById("ctAiScanBtn");
+        const status = document.getElementById("ctAiScanStatus");
+        btn.disabled = true;
+        btn.textContent = "⏳ Scanning...";
+        status.textContent = "";
+        try {
+          const res = await fetch("/api/ai-scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_url: ctUploadedPhotoUrls[0], form_type: "chittai" })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Scan failed");
+          ctApplyAIScanFields(data.fields || {});
+          status.textContent = "✓ Fields filled";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        } catch (e) {
+          status.textContent = "⚠ " + e.message;
+        }
+        btn.disabled = false;
+        btn.textContent = "🤖 AI Scan";
+      }
+
+      function ctApplyAIScanFields(f) {
+        if (f.date) document.getElementById("chittaiDate").value = f.date;
+        if (f.weight != null) document.getElementById("chittaiWeight").value = f.weight;
+        if (f.rate != null) document.getElementById("chittaiRate").value = f.rate;
+        if (f.others != null) document.getElementById("chittaiOthers").value = f.others;
+        if (f.rnd != null) document.getElementById("chittaiRnd").value = f.rnd;
+        if (f.tds != null) document.getElementById("chittaiTds").value = f.tds;
+        calcChittai();
       }
 
       function closeChittai() {
@@ -1028,7 +1053,8 @@
                   ? getSelectedPaymentVoucherIds()[0] || null
                   : null,
               created_by: getCurrentUser()?.id || null,
-              photo_url: ctUploadedPhotoUrl || null,
+              photo_url: ctUploadedPhotoUrls[0] || null,
+              photo_urls: ctUploadedPhotoUrls.length ? ctUploadedPhotoUrls : null,
               remarks:
                 document.getElementById("chittaiRemarks").value.trim() || null,
             }),
@@ -1188,12 +1214,10 @@
           document.getElementById("chittaiTds").value = c.tds || "";
           document.getElementById("chittaiRtgs").value = c.rtgs_amount || "";
           document.getElementById("chittaiRemarks").value = c.remarks || "";
-          if (c.photo_url) {
-            ctUploadedPhotoUrl = c.photo_url;
-            document.getElementById("ctPhotoArea").style.display = "none";
-            document.getElementById("ctPhotoImg").src = c.photo_url;
-            document.getElementById("ctPhotoPreview").style.display = "block";
-          }
+          if (c.photo_urls?.length) ctUploadedPhotoUrls = c.photo_urls;
+          else if (c.photo_url) ctUploadedPhotoUrls = [c.photo_url];
+          else ctUploadedPhotoUrls = [];
+          ctRenderPhotoSlots();
           // Auto-open payment section if payment exists
           const vRes = await fetch("/api/vouchers/list");
           const vouchers = await vRes.json();
@@ -1271,7 +1295,8 @@
               total,
               tds,
               rtgs_amount: rtgs,
-              photo_url: ctUploadedPhotoUrl || null,
+              photo_url: ctUploadedPhotoUrls[0] || null,
+              photo_urls: ctUploadedPhotoUrls.length ? ctUploadedPhotoUrls : null,
               remarks:
                 document.getElementById("chittaiRemarks").value.trim() || null,
             }),
