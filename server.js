@@ -10,8 +10,8 @@ const multer = require("multer");
 const crypto = require("crypto");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const { GoogleGenAI } = require("@google/genai");
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Cloudinary config
 cloudinary.config({
@@ -3119,27 +3119,34 @@ Return this structure:
 Use null for missing numbers.`,
 };
 
-// Models tried in order — falls back if one is rate-limited or unavailable
-const GEMINI_MODELS = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+const GEMINI_MODELS = ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 async function geminiScan(prompt, mimeType, b64) {
   let lastErr;
-  for (const modelName of GEMINI_MODELS) {
+  for (const model of GEMINI_MODELS) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent([
-        prompt,
-        { inlineData: { mimeType, data: b64 } }
-      ]);
-      return result.response.text() || "{}";
+      const response = await genAI.models.generateContent({
+        model,
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType, data: b64 } }
+          ]
+        }]
+      });
+      return response.text || "{}";
     } catch (err) {
       lastErr = err;
-      const is429 = err.message && err.message.includes("429");
-      if (!is429) throw err; // non-quota error — don't bother retrying other models
-      console.warn(`AI SCAN: ${modelName} quota hit, trying next model...`);
+      const msg = err.message || "";
+      if (msg.includes("404") || msg.includes("429") || msg.includes("not found")) {
+        console.warn(`AI SCAN: ${model} unavailable, trying next...`);
+        continue;
+      }
+      throw err;
     }
   }
-  throw lastErr;
+  throw lastErr || new Error("No Gemini model available. Check your API key.");
 }
 
 app.post("/api/ai-scan", async (req, res) => {
