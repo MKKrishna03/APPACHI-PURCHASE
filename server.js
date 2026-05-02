@@ -89,6 +89,14 @@ setInterval(() => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function generateResetKey() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.randomBytes(5);
+  let key = "";
+  for (let i = 0; i < 5; i++) key += chars[bytes[i] % chars.length];
+  return key;
+}
+
 const dbUrl = new URL(process.env.DATABASE_URL);
 const pool = new Pool({
   host: dbUrl.hostname,
@@ -361,6 +369,19 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(
     `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE`,
   );
+  await pool.query(
+    `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS reset_key TEXT`,
+  );
+  // Generate reset_key for any user that doesn't have one yet
+  const usersWithoutKey = await pool.query(
+    `SELECT id FROM auth_users WHERE reset_key IS NULL`,
+  );
+  for (const row of usersWithoutKey.rows) {
+    await pool.query(
+      `UPDATE auth_users SET reset_key=$1 WHERE id=$2`,
+      [generateResetKey(), row.id],
+    );
+  }
 
   // ── Base tables that may not exist on a fresh setup ──
   await pool.query(`
@@ -2143,6 +2164,53 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/auth/reset-password", async (req, res) => {
+  const { user_id, key, new_password } = req.body;
+  if (!user_id || !key || !new_password)
+    return res.json({ error: "All fields are required." });
+  if (new_password.length < 6)
+    return res.json({ error: "Password must be at least 6 characters." });
+  try {
+    const result = await pool.query(
+      "SELECT id, reset_key FROM auth_users WHERE user_id=$1",
+      [user_id],
+    );
+    const user = result.rows[0];
+    if (!user) return res.json({ error: "User ID not found." });
+    if (!user.reset_key || user.reset_key.toUpperCase() !== key.trim().toUpperCase())
+      return res.json({ error: "Invalid key. Please contact admin." });
+    const hash = await bcrypt.hash(new_password, 10);
+    const newKey = generateResetKey();
+    await pool.query(
+      "UPDATE auth_users SET password=$1, reset_key=$2 WHERE id=$3",
+      [hash, newKey, user.id],
+    );
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin-only: view all users with their reset keys
+app.get("/api/auth/admin-keys", async (req, res) => {
+  const { requester_id } = req.query;
+  if (!requester_id) return res.status(403).json({ error: "Forbidden" });
+  try {
+    const check = await pool.query(
+      "SELECT can_delete FROM auth_users WHERE user_id=$1",
+      [requester_id],
+    );
+    if (!check.rows[0]?.can_delete)
+      return res.status(403).json({ error: "Admin access required." });
+    const result = await pool.query(
+      "SELECT user_id, name, reset_key FROM auth_users WHERE is_active=true ORDER BY name",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/login", (req, res) =>
   res.sendFile(path.join(__dirname, "login.html")),
 );
@@ -3051,13 +3119,35 @@ Return this structure:
 Use null for missing numbers.`,
 };
 
+// Models tried in order — falls back if one is rate-limited or unavailable
+const GEMINI_MODELS = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+
+async function geminiScan(prompt, mimeType, b64) {
+  let lastErr;
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent([
+        prompt,
+        { inlineData: { mimeType, data: b64 } }
+      ]);
+      return result.response.text() || "{}";
+    } catch (err) {
+      lastErr = err;
+      const is429 = err.message && err.message.includes("429");
+      if (!is429) throw err; // non-quota error — don't bother retrying other models
+      console.warn(`AI SCAN: ${modelName} quota hit, trying next model...`);
+    }
+  }
+  throw lastErr;
+}
+
 app.post("/api/ai-scan", async (req, res) => {
   try {
     const { image_url, form_type } = req.body;
     if (!image_url) return res.status(400).json({ error: "image_url required" });
     const prompt = AI_SCAN_PROMPTS[form_type] || AI_SCAN_PROMPTS.purchase;
 
-    // Fetch image as base64
     const imgResp = await fetch(image_url);
     if (!imgResp.ok) return res.status(400).json({ error: "Could not fetch image" });
     const contentType = imgResp.headers.get("content-type") || "image/jpeg";
@@ -3068,21 +3158,19 @@ app.post("/api/ai-scan", async (req, res) => {
     const buf = Buffer.from(await imgResp.arrayBuffer());
     const b64 = buf.toString("base64");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { mimeType, data: b64 } }
-    ]);
-
-    const raw = result.response.text() || "{}";
-    // Strip any accidental markdown code fences
+    const raw = await geminiScan(prompt, mimeType, b64);
     const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
     let fields;
     try { fields = JSON.parse(cleaned); } catch { fields = {}; }
     res.json({ fields });
   } catch (err) {
     console.error("AI SCAN ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    const is429 = err.message && err.message.includes("429");
+    res.status(is429 ? 429 : 500).json({
+      error: is429
+        ? "AI quota exceeded. Please try again in a minute."
+        : err.message
+    });
   }
 });
 

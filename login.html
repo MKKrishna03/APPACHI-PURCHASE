@@ -529,6 +529,7 @@
             Sign In
           </button>
           <button class="tab" onclick="switchTab('signup')">Sign Up</button>
+          <button class="tab" onclick="switchTab('reset')">Reset</button>
         </div>
 
         <div id="msg" class="msg"></div>
@@ -601,6 +602,51 @@
             Create Account →
           </button>
         </div>
+
+        <!-- RESET PASSWORD FORM -->
+        <div id="form-reset" class="form">
+          <div class="field">
+            <label>Your ID</label>
+            <input
+              type="text"
+              id="reset-id"
+              placeholder="Your assigned ID"
+              autocomplete="username"
+            />
+          </div>
+          <div class="field">
+            <label>Reset Key</label>
+            <input
+              type="text"
+              id="reset-key"
+              placeholder="5-char key from admin"
+              autocomplete="off"
+              style="font-family:'DM Mono',monospace;letter-spacing:0.15em;text-transform:uppercase;"
+              oninput="this.value=this.value.toUpperCase()"
+              maxlength="5"
+            />
+            <div class="id-hint">⚠ Get this key from your admin.</div>
+          </div>
+          <div class="field">
+            <label>New Password</label>
+            <input
+              type="password"
+              id="reset-newpw"
+              placeholder="Min. 6 characters"
+            />
+          </div>
+          <div class="field">
+            <label>Confirm Password</label>
+            <input
+              type="password"
+              id="reset-confirmpw"
+              placeholder="••••••••"
+            />
+          </div>
+          <button class="btn-submit" onclick="doReset()" style="margin-top:6px;">
+            Reset Password →
+          </button>
+        </div>
       </div>
     </div>
 
@@ -629,18 +675,14 @@
       }
 
       // ── TABS ──
+      const TABS = ["login", "signup", "reset"];
       function switchTab(tab) {
-        document
-          .querySelectorAll(".tab")
-          .forEach((t, i) =>
-            t.classList.toggle("active", (i === 0) === (tab === "login")),
-          );
-        document
-          .getElementById("form-login")
-          .classList.toggle("active", tab === "login");
-        document
-          .getElementById("form-signup")
-          .classList.toggle("active", tab === "signup");
+        document.querySelectorAll(".tab").forEach((t, i) =>
+          t.classList.toggle("active", TABS[i] === tab)
+        );
+        TABS.forEach(id =>
+          document.getElementById("form-" + id).classList.toggle("active", id === tab)
+        );
         clearMsg();
       }
 
@@ -734,14 +776,52 @@
         }
       }
 
+      // ── RESET PASSWORD ──
+      async function doReset() {
+        const id = document.getElementById("reset-id").value.trim();
+        const key = document.getElementById("reset-key").value.trim().toUpperCase();
+        const newpw = document.getElementById("reset-newpw").value;
+        const confirmpw = document.getElementById("reset-confirmpw").value;
+        if (!id || !key || !newpw || !confirmpw) {
+          showMsg("Please fill all fields", "error"); return;
+        }
+        if (key.length !== 5) {
+          showMsg("Key must be 5 characters", "error"); return;
+        }
+        if (newpw !== confirmpw) {
+          showMsg("Passwords do not match", "error"); return;
+        }
+        if (newpw.length < 6) {
+          showMsg("Password must be at least 6 characters", "error"); return;
+        }
+        try {
+          const res = await fetch("/api/auth/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: id, key, new_password: newpw }),
+          });
+          const data = await res.json();
+          if (data.status === "SUCCESS") {
+            showMsg("Password reset! Please sign in.", "success");
+            document.getElementById("reset-id").value = "";
+            document.getElementById("reset-key").value = "";
+            document.getElementById("reset-newpw").value = "";
+            document.getElementById("reset-confirmpw").value = "";
+            setTimeout(() => switchTab("login"), 1800);
+          } else {
+            showMsg(data.error || "Reset failed", "error");
+          }
+        } catch (e) {
+          showMsg("Network error", "error");
+        }
+      }
+
       // ── ENTER KEY ──
       document.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
-          if (
-            document.getElementById("form-login").classList.contains("active")
-          )
-            doLogin();
-          else doSignup();
+          if (document.getElementById("form-login").classList.contains("active")) doLogin();
+          else if (document.getElementById("form-signup").classList.contains("active")) doSignup();
+          else if (document.getElementById("form-reset").classList.contains("active")) doReset();
         }
       });
 
