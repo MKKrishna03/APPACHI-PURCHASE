@@ -3306,11 +3306,12 @@ app.post("/api/ai-scan", async (req, res) => {
     }
     res.json({ fields });
   } catch (err) {
-    console.error("AI SCAN ERROR:", err.message);
+    console.error("AI SCAN ERROR FULL:", err);
+    console.error("AI SCAN ERROR MSG:", err.message);
     const is429 = err.message && err.message.includes("429");
     res.status(is429 ? 429 : 500).json({
       error: is429
-        ? "AI quota exceeded. Please try again in a minute."
+        ? "AI quota exceeded. Already retried 3 times. Either wait a few minutes (per-minute limit) or try again tomorrow after 12:30 PM IST (daily limit hit)."
         : err.message,
     });
   }
