@@ -1176,7 +1176,7 @@
                 margin-bottom: 10px;
               "
             >
-              📸 Bill Photo (Optional)
+              📸 Bill Photo
             </div>
             <div id="photoSlotsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
             <div id="aiScanArea" style="display:none;margin-bottom:8px;">
@@ -2203,11 +2203,16 @@
                   photo_url: uploadedPhotoUrls[0] || null,
                   photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
                 };
-                await fetch("/api/purchases", {
+                const hmRes = await fetch("/api/purchases", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(hmPayload),
                 });
+                const hmResult = await hmRes.json();
+                if (hmResult.status !== "SUCCESS") {
+                  showMessage("Purchase saved but hallmark voucher failed: " + (hmResult.error || "unknown error"), "error");
+                  return;
+                }
               }
             }
             showMessage("Purchase Voucher created successfully!", "success");
@@ -2442,15 +2447,28 @@
               <td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
             tbody.appendChild(row);
             row._taxPct = inferredTaxPct;
-            if (qty !== "" && rate !== "") {
-              row.querySelector(".taxable").value = (parseFloat(qty) * parseFloat(rate)).toFixed(2);
-            }
+            // Trigger calcRow so taxable cell is computed and row._taxPct is locked in
+            calcRow(rowCount);
           });
         }
 
         if (f.round_off != null) document.getElementById("billRoundOff").value = f.round_off;
         if (f.tds != null) document.getElementById("billTds").value = f.tds;
         updateTotals();
+
+        // If AI returned a bill-level total, adjust round_off so the computed
+        // total exactly matches the actual bill rather than relying on imprecise
+        // per-item tax inference.
+        if (f.total_value != null) {
+          const taxable = parseFloat(document.getElementById("billTaxable").value) || 0;
+          const cgst    = parseFloat(document.getElementById("billCgst").value)    || 0;
+          const sgst    = parseFloat(document.getElementById("billSgst").value)    || 0;
+          const igst    = parseFloat(document.getElementById("billIgst").value)    || 0;
+          const vadd    = parseFloat(document.getElementById("billValueAdded").value) || 0;
+          const correctedRoundOff = parseFloat(f.total_value) - taxable - vadd - cgst - sgst - igst;
+          document.getElementById("billRoundOff").value = correctedRoundOff.toFixed(2);
+          updateTotals();
+        }
       }
 
       // ── HELPERS ──
