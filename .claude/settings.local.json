@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(node -e \"require\\('@google/generative-ai'\\); console.log\\('ok'\\)\")",
-      "Bash(Get-ChildItem -Recurse -Name)"
+      "Bash(Get-ChildItem -Recurse -Name)",
+      "Bash(node -e ' *)"
     ]
   }
 }

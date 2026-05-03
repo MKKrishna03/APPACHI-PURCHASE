@@ -8,6 +8,7 @@
       }
     </style>
     <title>IV-RV Report</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -539,6 +540,7 @@
         opacity: 0.4;
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="topbar">
@@ -1751,6 +1753,131 @@
         `${fmt(drpStart)} To ${fmt(drpEnd)}`;
       activePreset = 10;
       loadReport();
+
+      // ── TOOLBAR: Export CSV + Print ──
+      (function() {
+        const header = document.querySelector(".card-header");
+        if (!header) return;
+        const btnStyle = "padding:5px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-family:inherit;font-size:12px;cursor:pointer;color:var(--ink-2);";
+        const toolbar = document.createElement("div");
+        toolbar.style.cssText = "display:flex;gap:6px;align-items:center;margin-left:auto;";
+
+        const csvBtn = document.createElement("button");
+        csvBtn.textContent = "⬇ CSV";
+        csvBtn.title = "Export visible rows to CSV";
+        csvBtn.style.cssText = btnStyle;
+        csvBtn.onclick = exportCSV;
+
+        const printBtn = document.createElement("button");
+        printBtn.textContent = "🖨 Print";
+        printBtn.title = "Print report";
+        printBtn.style.cssText = btnStyle;
+        printBtn.onclick = () => window.print();
+
+        toolbar.appendChild(csvBtn);
+        toolbar.appendChild(printBtn);
+        header.appendChild(toolbar);
+      })();
+
+      function exportCSV() {
+        const headers = ["Issue Date","Company","Issue No","IV Weight (g)","Receipt Date","Bill No","RV Weight (g)","Bill Value","Payment","Status"];
+        const rows = allRows.filter(r => !r.isSubtotal);
+        const lines = [headers.join(",")];
+        rows.forEach(r => {
+          lines.push([
+            r.issueDate ? fmt(r.issueDate) : "",
+            `"${(r.companyName||"").replace(/"/g,'""')}"`,
+            `"${(r.issueNo||"").replace(/"/g,'""')}"`,
+            r.ivWeight > 0 ? r.ivWeight.toFixed(2) : "",
+            r.receiptDate ? fmt(r.receiptDate) : "",
+            `"${(r.billNo||"").replace(/"/g,'""')}"`,
+            r.rvWeight > 0 ? r.rvWeight.toFixed(2) : "",
+            r.billValue > 0 ? Math.round(r.billValue) : "",
+            r.payment > 0 ? Math.round(r.payment) : "",
+            r.status || ""
+          ].join(","));
+        });
+        const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `iv-rv-report-${fmt(drpStart||new Date()).replace(/\//g,"-")}.csv`;
+        a.click();
+      }
+
+      // ── FILTER SUMMARY LINE ──
+      const filterSummaryEl = document.createElement("div");
+      filterSummaryEl.style.cssText = "font-size:12px;color:var(--ink-3);padding:0 0 10px;";
+      document.querySelector(".card").insertBefore(filterSummaryEl, document.getElementById("paginationBar"));
+
+      function updateFilterSummary() {
+        const count = allRows.filter(r => !r.isSubtotal).length;
+        const dateMode = document.getElementById("dateFilter")?.selectedOptions[0]?.text || "";
+        const company = document.getElementById("companySelect")?.selectedOptions[0]?.text || "";
+        const rv = document.getElementById("rvFilter")?.selectedOptions[0]?.text || "";
+        const pay = document.getElementById("payFilter")?.selectedOptions[0]?.text || "";
+        const metal = document.getElementById("metalFilter")?.selectedOptions[0]?.text || "";
+        const range = drpStart && drpEnd ? `${fmt(drpStart)} – ${fmt(drpEnd)}` : "all dates";
+        const parts = [range, dateMode].filter(v => v && !v.startsWith("—"));
+        if (company && !company.startsWith("—")) parts.push(company);
+        if (rv && !rv.startsWith("—")) parts.push(rv);
+        if (pay && !pay.startsWith("—")) parts.push(pay);
+        if (metal && !metal.startsWith("—")) parts.push(metal);
+        filterSummaryEl.textContent = count > 0
+          ? `Showing ${count} record${count!==1?"s":""} · ${parts.join(" · ")}`
+          : "";
+      }
+
+      const _origRenderRows = renderRows;
+      renderRows = function() { _origRenderRows(); updateFilterSummary(); };
+
+      // ── QUICK SEARCH BOX ──
+      (function() {
+        const bar = document.getElementById("paginationBar");
+        if (!bar) return;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;align-items:center;gap:6px;padding:0 0 8px;justify-content:flex-end;";
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.placeholder = "Search company / bill no…";
+        inp.id = "quickSearch";
+        inp.style.cssText = "padding:5px 10px;border:1px solid var(--border-strong);border-radius:6px;font-family:inherit;font-size:12px;background:var(--surface);color:var(--ink);width:210px;";
+        inp.oninput = function() {
+          const q = this.value.trim().toLowerCase();
+          document.querySelectorAll("#reportTable tr").forEach(row => {
+            if (!q) { row.style.display = ""; return; }
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(q) ? "" : "none";
+          });
+        };
+        wrap.appendChild(inp);
+        bar.parentNode.insertBefore(wrap, bar);
+      })();
+
+      // ── BACK TO TOP ──
+      (function() {
+        const btn = document.createElement("button");
+        btn.textContent = "↑ Top";
+        btn.style.cssText = "position:fixed;bottom:24px;right:24px;padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:20px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.2);opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:999;";
+        document.body.appendChild(btn);
+        window.addEventListener("scroll", () => {
+          const show = window.scrollY > 300;
+          btn.style.opacity = show ? "1" : "0";
+          btn.style.pointerEvents = show ? "auto" : "none";
+        });
+        btn.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
+      })();
+
+      // ── CLICK TO COPY MONEY VALUES ──
+      document.getElementById("reportTable").addEventListener("click", (e) => {
+        const td = e.target.closest("td");
+        if (!td) return;
+        const text = td.textContent.trim().replace(/[₹,]/g, "");
+        if (!/^\d+(\.\d+)?$/.test(text) || parseFloat(text) <= 0) return;
+        navigator.clipboard.writeText(text).then(() => {
+          const orig = td.style.background;
+          td.style.background = "rgba(45,106,79,0.18)";
+          setTimeout(() => td.style.background = orig, 600);
+        });
+      });
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

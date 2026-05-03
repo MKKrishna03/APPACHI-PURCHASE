@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <style>body{opacity:0;transition:opacity 0.1s;}</style>
     <title>Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap"
@@ -54,209 +55,269 @@
 
       /* ─── SIDEBAR ─── */
       .sidebar {
-        width: 250px;
-        background: linear-gradient(160deg, #1a3a2e 0%, #1d6fa4 100%);
+        width: 260px;
+        background: linear-gradient(180deg, #0d1e2d 0%, #122518 100%);
         padding: 0;
         overflow-y: auto;
+        overflow-x: hidden;
         flex-shrink: 0;
-        transition: width 0.3s ease;
+        transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         flex-direction: column;
+        border-right: 1px solid rgba(255, 255, 255, 0.04);
       }
-      .sidebar.collapsed {
-        width: 64px;
-      }
-      .sidebar::-webkit-scrollbar {
-        width: 4px;
-      }
+      .sidebar.collapsed { width: 56px; }
+      .sidebar::-webkit-scrollbar { width: 3px; }
       .sidebar::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 2px;
       }
 
+      /* ── Brand ── */
       .sidebar-brand {
-        padding: 22px 20px 18px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 20px 18px 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        flex-shrink: 0;
       }
       .sidebar-brand-name {
-        font-size: 17px;
+        font-size: 15px;
         font-weight: 700;
         color: #fff;
-        letter-spacing: -0.3px;
+        letter-spacing: -0.2px;
         display: flex;
         align-items: center;
         gap: 10px;
+        line-height: 1;
       }
       .sidebar-brand-dot {
         width: 8px;
         height: 8px;
         background: #52b788;
         border-radius: 50%;
-        display: inline-block;
+        flex-shrink: 0;
+        box-shadow: 0 0 8px rgba(82, 183, 136, 0.55);
+      }
+      .sidebar-brand-tagline {
+        font-size: 9.5px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.3);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-top: 5px;
       }
 
+      /* ── Toggle ── */
       .toggle-btn {
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.5);
-        font-size: 18px;
+        color: rgba(255, 255, 255, 0.38);
         cursor: pointer;
-        padding: 8px;
+        padding: 7px 10px;
         border-radius: 8px;
-        transition: all 0.15s;
+        transition: background 0.15s, color 0.15s;
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-weight: 500;
+        gap: 7px;
+        font-weight: 600;
         font-family: inherit;
-        margin: 12px 12px 4px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        margin: 10px 10px 2px;
       }
       .toggle-btn:hover {
         background: rgba(255, 255, 255, 0.06);
-        color: rgba(255, 255, 255, 0.8);
-      }
-      .sidebar.collapsed .toggle-btn span:not(:first-child) {
-        display: none;
+        color: rgba(255, 255, 255, 0.7);
       }
 
+      /* ── Content ── */
       .sidebar-content {
-        display: block;
-        opacity: 1;
-        transition: opacity 0.2s;
         flex: 1;
-        padding: 8px 12px 20px;
+        padding: 4px 10px 16px;
+        overflow-x: hidden;
       }
-      .sidebar.collapsed .sidebar-content {
-        display: none;
-        opacity: 0;
-        padding: 0;
-      }
-      .sidebar.collapsed .brand-full {
-        display: none !important;
-      }
-      .sidebar.collapsed .brand-short {
-        display: inline !important;
-      }
+      .sidebar.collapsed .sidebar-content { display: none; }
+      .sidebar.collapsed .sidebar-footer { display: none; }
+      .sidebar.collapsed .sidebar-brand { padding: 14px 0; display: flex; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .sidebar.collapsed .sidebar-brand-name { justify-content: center; }
+      .sidebar.collapsed .sidebar-brand-tagline { display: none; }
+      .sidebar.collapsed .brand-full { display: none !important; }
+      .sidebar.collapsed .brand-short { display: inline !important; }
+      .sidebar.collapsed .toggle-btn { justify-content: center; margin: 8px 6px; padding: 8px; }
+      .sidebar.collapsed .toggle-btn span:not(:first-child) { display: none; }
 
-      .sidebar-label {
-        font-size: 10px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.3);
+      /* ── Category label ── */
+      .sidebar-cat {
+        font-size: 9px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.2);
         text-transform: uppercase;
-        letter-spacing: 0.12em;
-        padding: 16px 8px 6px;
+        letter-spacing: 0.16em;
+        padding: 20px 10px 7px;
+        line-height: 1;
+        user-select: none;
+      }
+      .sidebar-cat:first-child { padding-top: 12px; }
+
+      /* ── Shared nav item pieces ── */
+      .nav-item-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+      }
+      .nav-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        color: rgba(255, 255, 255, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.15s;
+      }
+      .nav-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        letter-spacing: -0.1px;
+        white-space: nowrap;
+        transition: color 0.15s;
       }
 
-      .sidebar-section {
-        margin-bottom: 2px;
-        border-radius: 8px;
-        overflow: hidden;
-      }
+      /* ── Expandable section ── */
+      .sidebar-section { margin-bottom: 1px; }
+
       .sidebar-section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 9px 10px;
+        border-radius: 9px;
         cursor: pointer;
-        background: transparent;
-        border-radius: 8px;
         transition: background 0.15s;
         user-select: none;
-        font-weight: 600;
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.7);
       }
-      .sidebar-section-header:hover {
-        background: rgba(255, 255, 255, 0.06);
-        color: #fff;
-      }
-      .sidebar-section-icon {
-        font-size: 11px;
-        margin-right: 8px;
-        display: inline-block;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        color: rgba(255, 255, 255, 0.35);
-      }
-      .sidebar-section.collapsed .sidebar-section-icon {
-        transform: rotate(-90deg);
-      }
+      .sidebar-section-header:hover { background: rgba(255, 255, 255, 0.07); }
+      .sidebar-section-header:hover .nav-icon { color: rgba(255, 255, 255, 0.75); }
+      .sidebar-section-header:hover .nav-label { color: #fff; }
 
+      /* Chevron */
+      .nav-chevron {
+        width: 16px;
+        height: 16px;
+        color: rgba(255, 255, 255, 0.22);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s;
+      }
+      .sidebar-section-header:hover .nav-chevron { color: rgba(255, 255, 255, 0.5); }
+      .sidebar-section.collapsed .nav-chevron { transform: rotate(-90deg); }
+
+      /* Sub-items */
       .sidebar-section-content {
-        max-height: 300px;
+        max-height: 260px;
         overflow: hidden;
-        transition:
-          max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-          opacity 0.2s;
-        padding: 0 0 2px;
+        transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+        padding-bottom: 4px;
+        border-left: 1px solid rgba(255, 255, 255, 0.06);
+        margin-left: 18px;
+        padding-left: 0;
       }
       .sidebar-section.collapsed .sidebar-section-content {
         max-height: 0;
         opacity: 0;
-        padding: 0;
       }
 
       .sidebar-option {
-        padding: 8px 12px 8px 32px;
+        display: block;
+        padding: 7px 10px 7px 14px;
         margin: 1px 0;
-        background: transparent;
-        border: none;
-        border-radius: 6px;
+        border-radius: 0 7px 7px 0;
         cursor: pointer;
-        transition: all 0.15s;
-        font-size: 13px;
+        transition: background 0.12s, color 0.12s;
+        font-size: 12.5px;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.5);
+        color: rgba(255, 255, 255, 0.42);
         position: relative;
       }
       .sidebar-option::before {
-        content: "";
+        content: '';
         position: absolute;
-        left: 16px;
+        left: -1px;
         top: 50%;
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.2);
+        width: 1px;
+        height: 16px;
+        background: transparent;
         transform: translateY(-50%);
+        border-radius: 1px;
         transition: background 0.15s;
       }
       .sidebar-option:hover {
-        background: rgba(255, 255, 255, 0.06);
-        color: #fff;
+        background: rgba(255, 255, 255, 0.07);
+        color: rgba(255, 255, 255, 0.9);
       }
-      .sidebar-option:hover::before {
-        background: var(--accent-2);
+      .sidebar-option:hover::before { background: #52b788; }
+
+      /* ── Direct nav link ── */
+      .sidebar-nav-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 10px;
+        margin-bottom: 1px;
+        border-radius: 9px;
+        cursor: pointer;
+        transition: background 0.15s;
+        user-select: none;
       }
-      .sidebar-option.company-action {
-        font-weight: 600;
+      .sidebar-nav-link:hover { background: rgba(255, 255, 255, 0.07); }
+      .sidebar-nav-link:hover .nav-icon { color: rgba(255, 255, 255, 0.75); }
+      .sidebar-nav-link:hover .nav-label { color: #fff; }
+
+      .nav-arrow {
+        width: 14px;
+        height: 14px;
+        color: rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.18s ease, color 0.15s;
+      }
+      .sidebar-nav-link:hover .nav-arrow {
+        transform: translateX(3px);
+        color: rgba(255, 255, 255, 0.55);
       }
 
-      .sidebar select {
+      /* ── Sidebar footer / logout ── */
+      .sidebar-footer {
+        padding: 12px 10px 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      .logoutButton {
         width: 100%;
-        padding: 8px 10px;
-        margin: 2px 0 2px 0;
-        background: rgba(255, 255, 255, 0.06);
-        color: rgba(255, 255, 255, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 500;
-        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 12px;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 9px;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 12.5px;
+        font-weight: 600;
         font-family: inherit;
-        transition: all 0.15s;
-        margin-left: 0;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+        letter-spacing: 0.02em;
       }
-      .sidebar select option {
-        background: var(--ink);
-        color: #fff;
-      }
-      .sidebar select:focus {
-        outline: none;
-        border-color: var(--accent-2);
-        box-shadow: 0 0 0 2px rgba(82, 183, 136, 0.2);
-      }
-      .sidebar select:hover {
-        border-color: rgba(255, 255, 255, 0.2);
+      .logoutButton:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.82);
       }
 
       /* ─── MAIN ─── */
@@ -663,6 +724,7 @@
         font-size: 18px;
         transition: all 0.2s;
         flex-shrink: 0;
+        overflow: visible !important;
       }
       .bell-btn:hover {
         background: var(--surface-2);
@@ -1129,7 +1191,7 @@
           width: 220px;
         }
         .sidebar.collapsed {
-          width: 64px;
+          width: 56px;
         }
       }
       .user-avatar {
@@ -1194,166 +1256,199 @@
       }
       .user-dropdown-btn:hover { background: #fce8e6; }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">
           <span class="sidebar-brand-dot"></span>
-          <span class="brand-full">Appachi Jewellery</span
-          ><span class="brand-short" style="display: none">AJ</span>
+          <span class="brand-full">Appachi Jewellery</span>
+          <span class="brand-short" style="display:none;">AJ</span>
         </div>
+        <div class="sidebar-brand-tagline brand-full">Management System</div>
       </div>
+
       <button class="toggle-btn" onclick="toggleSidebar()">
-        <span>☰</span>
-        <span style="font-size: 12px; letter-spacing: 0.05em">MENU</span>
+        <span style="font-size:15px;line-height:1;">☰</span>
+        <span>MENU</span>
       </button>
+
       <div class="sidebar-content">
-        <div class="sidebar-section" id="companySection">
-          <div
-            class="sidebar-section-header"
-            onclick="toggleSection('companySection')"
-          >
-            <span><span class="sidebar-section-icon">▸</span> Company</span>
+
+        <!-- ── OPERATIONS ── -->
+        <div class="sidebar-cat">Operations</div>
+
+        <!-- Company (expandable) -->
+        <div class="sidebar-section collapsed" id="companySection">
+          <div class="sidebar-section-header" onclick="toggleSection('companySection')">
+            <div class="nav-item-left">
+              <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.2"/>
+                  <path d="M3 13.5c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+                </svg>
+              </span>
+              <span class="nav-label">Company</span>
+            </div>
+            <span class="nav-chevron">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 7,9 11,5"/></svg>
+            </span>
           </div>
           <div class="sidebar-section-content">
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/profile'"
-            >
-              Profile
-            </div>
-            <div class="sidebar-option" onclick="openCompanyListModal()">
-              Companies
-            </div>
+            <div class="sidebar-option" onclick="window.location.href='/profile'">Profile</div>
+            <div class="sidebar-option" onclick="openCompanyListModal()">Companies</div>
           </div>
         </div>
 
-        <div class="sidebar-section" id="labourSection">
-          <div
-            class="sidebar-section-header"
-            onclick="toggleSection('labourSection')"
-          >
-            <span><span class="sidebar-section-icon">▸</span> Labour</span>
+        <!-- Labour (expandable) -->
+        <div class="sidebar-section collapsed" id="labourSection">
+          <div class="sidebar-section-header" onclick="toggleSection('labourSection')">
+            <div class="nav-item-left">
+              <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 14V8l5-5 5 5v6"/><rect x="6" y="9.5" width="4" height="4.5" rx="0.5"/>
+                </svg>
+              </span>
+              <span class="nav-label">Labour</span>
+            </div>
+            <span class="nav-chevron">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 7,9 11,5"/></svg>
+            </span>
           </div>
           <div class="sidebar-section-content">
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/labour'"
-            >
-              Create Issue Voucher
+            <div class="sidebar-option" onclick="window.location.href='/labour'">New Issue Voucher</div>
+            <div class="sidebar-option" onclick="window.location.href='/labclose'">Close Issue Voucher</div>
+          </div>
+        </div>
+
+        <!-- Transactions (direct) -->
+        <div class="sidebar-nav-link" onclick="window.location.href='/transaction'">
+          <div class="nav-item-left">
+            <span class="nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 5h10M9 3l3 2-3 2"/><path d="M14 11H4M7 9l-3 2 3 2"/>
+              </svg>
+            </span>
+            <span class="nav-label">Transactions</span>
+          </div>
+          <span class="nav-arrow">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6h8M7 3l3 3-3 3"/></svg>
+          </span>
+        </div>
+
+        <!-- Chittai (direct, opens modal) -->
+        <div class="sidebar-nav-link" onclick="openChittaiModal()">
+          <div class="nav-item-left">
+            <span class="nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="5" cy="8" r="2"/><circle cx="11" cy="8" r="2"/>
+                <path d="M7 8h2"/>
+              </svg>
+            </span>
+            <span class="nav-label">Chittai</span>
+          </div>
+          <span class="nav-arrow">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6h8M7 3l3 3-3 3"/></svg>
+          </span>
+        </div>
+
+        <!-- Purchase (expandable) -->
+        <div class="sidebar-section collapsed" id="purchaseSection">
+          <div class="sidebar-section-header" onclick="toggleSection('purchaseSection')">
+            <div class="nav-item-left">
+              <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="2" width="10" height="12" rx="1.5"/>
+                  <line x1="6" y1="6" x2="10" y2="6"/><line x1="6" y1="9" x2="10" y2="9"/><line x1="6" y1="12" x2="8" y2="12"/>
+                </svg>
+              </span>
+              <span class="nav-label">Purchase</span>
             </div>
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/labclose'"
-            >
-              Close Issue Voucher
-            </div>
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="transactionSection">
-          <div
-            class="sidebar-section-header"
-            onclick="window.location.href = '/transaction'"
-            style="cursor: pointer"
-          >
-            <span
-              ><span class="sidebar-section-icon">▸</span> Transactions</span
-            >
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="chittaiSection">
-          <div
-            class="sidebar-section-header"
-            onclick="openChittaiModal()"
-            style="cursor: pointer"
-          >
-            <span><span class="sidebar-section-icon">▸</span> Chittai</span>
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="purchaseSection">
-          <div
-            class="sidebar-section-header"
-            onclick="toggleSection('purchaseSection')"
-          >
-            <span><span class="sidebar-section-icon">▸</span> Purchase</span>
+            <span class="nav-chevron">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 7,9 11,5"/></svg>
+            </span>
           </div>
           <div class="sidebar-section-content">
-            <div class="sidebar-option" onclick="window.location.href = '/purchase'">
-              New Purchase Voucher
+            <div class="sidebar-option" onclick="window.location.href='/purchase'">New Voucher</div>
+            <div class="sidebar-option" onclick="window.location.href='/media'">Bill Photos</div>
+          </div>
+        </div>
+
+        <!-- ── RECORDS ── -->
+        <div class="sidebar-cat">Records</div>
+
+        <!-- CR / DR Note (direct) -->
+        <div class="sidebar-nav-link" onclick="window.location.href='/note'">
+          <div class="nav-item-left">
+            <span class="nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="2" width="10" height="12" rx="1.5"/>
+                <line x1="6" y1="6" x2="10" y2="6"/><line x1="6" y1="9" x2="8.5" y2="9"/>
+                <path d="M9.5 11.5l1.5-1.5 1 1"/>
+              </svg>
+            </span>
+            <span class="nav-label">CR / DR Note</span>
+          </div>
+          <span class="nav-arrow">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6h8M7 3l3 3-3 3"/></svg>
+          </span>
+        </div>
+
+        <!-- HM / EX (direct) -->
+        <div class="sidebar-nav-link" onclick="window.location.href='/hmex'">
+          <div class="nav-item-left">
+            <span class="nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="8,2 14,5.5 14,10.5 8,14 2,10.5 2,5.5"/>
+                <circle cx="8" cy="8" r="2"/>
+              </svg>
+            </span>
+            <span class="nav-label">HM / EX</span>
+          </div>
+          <span class="nav-arrow">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6h8M7 3l3 3-3 3"/></svg>
+          </span>
+        </div>
+
+        <!-- ── ANALYTICS ── -->
+        <div class="sidebar-cat">Analytics</div>
+
+        <!-- Reports (expandable) -->
+        <div class="sidebar-section collapsed" id="reportsSection">
+          <div class="sidebar-section-header" onclick="toggleSection('reportsSection')">
+            <div class="nav-item-left">
+              <span class="nav-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="10" width="3" height="4" rx="0.5"/>
+                  <rect x="6.5" y="6" width="3" height="8" rx="0.5"/>
+                  <rect x="11" y="2" width="3" height="12" rx="0.5"/>
+                </svg>
+              </span>
+              <span class="nav-label">Reports</span>
             </div>
-            <div class="sidebar-option" onclick="window.location.href = '/media'">
-              📸 Bill Photos
-            </div>
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="noteSection">
-          <div
-            class="sidebar-section-header"
-            onclick="window.location.href = '/note'"
-            style="cursor: pointer"
-          >
-            <span><span class="sidebar-section-icon">▸</span> CR / DR Note</span>
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="hmexSection">
-          <div
-            class="sidebar-section-header"
-            onclick="window.location.href = '/hmex'"
-            style="cursor: pointer"
-          >
-            <span><span class="sidebar-section-icon">▸</span> HM / EX</span>
-          </div>
-        </div>
-
-        <div class="sidebar-section" id="reportsSection">
-          <div
-            class="sidebar-section-header"
-            onclick="toggleSection('reportsSection')"
-          >
-            <span><span class="sidebar-section-icon">▸</span> Reports</span>
+            <span class="nav-chevron">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 7,9 11,5"/></svg>
+            </span>
           </div>
           <div class="sidebar-section-content">
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/reports/transaction'"
-            >
-              Transaction Report
-            </div>
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/reports/iv-rv'"
-            >
-              I/V - R/V Report
-            </div>
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/reports/tds'"
-            >
-              TDS Report
-            </div>
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/reports/chittai'"
-            >
-              Chittai Report
-            </div>
-            <div
-              class="sidebar-option"
-              onclick="window.location.href = '/reports/purchase'"
-            >
-              Purchase Report
-            </div>
+            <div class="sidebar-option" onclick="window.location.href='/reports/transaction'">Transaction Report</div>
+            <div class="sidebar-option" onclick="window.location.href='/reports/iv-rv'">I/V – R/V Report</div>
+            <div class="sidebar-option" onclick="window.location.href='/reports/tds'">TDS Report</div>
+            <div class="sidebar-option" onclick="window.location.href='/reports/chittai'">Chittai Report</div>
+            <div class="sidebar-option" onclick="window.location.href='/reports/purchase'">Purchase Report</div>
           </div>
         </div>
-<div style="padding:12px;border-top:1px solid rgba(255,255,255,0.08);margin-top:auto;">
-        <button class="logoutButton" onclick="doLogout()" style="width:100%;justify-content:center;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+
+      </div><!-- /sidebar-content -->
+
+      <div class="sidebar-footer">
+        <button class="logoutButton" onclick="doLogout()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
           Log Out
         </button>
       </div>
@@ -1374,6 +1469,7 @@
           <p id="welcomeUser">Purchases</p>
         </div>
         <div style="display:flex;gap:10px;align-items:center;">
+          <span title="Keyboard shortcuts: P=Purchase  L=Labour  C=Close IV  T=Transaction  N=Note  H=Hallmark  M=Media" style="font-size:11px;color:var(--ink-3);cursor:help;border:1px solid var(--border);border-radius:4px;padding:2px 7px;">⌨ shortcuts</span>
           <button
             class="bell-btn"
             id="scheduleBtn"
@@ -2304,7 +2400,7 @@ function doLogout() {
           });
           const pending = issues.filter((b) => !closedSet.has(b.issue_number));
           window._pendingVouchers = pending;
-          document.getElementById("pendingCount").textContent = pending.length;
+          _countUp(document.getElementById("pendingCount"), pending.length, 600);
           renderPending(pending);
         } catch (e) {
           document.getElementById("pendingVoucherList").innerHTML =
@@ -2557,8 +2653,7 @@ function doLogout() {
             if (p) b.company_name = p.company || p.alias;
           });
           window._pendingPayVouchers = receipts;
-          document.getElementById("pendingPayCount").textContent =
-            receipts.length;
+          _countUp(document.getElementById("pendingPayCount"), receipts.length, 600);
           renderPendingPay(receipts);
         } catch (e) {
           document.getElementById("pendingPayList").innerHTML =
@@ -3777,7 +3872,7 @@ function doLogout() {
             if (prof) p.company_name = prof.company || prof.alias;
           });
           window._pendingPurchasePayVouchers = unpaid;
-          document.getElementById("pendingPurchasePayCount").textContent = unpaid.length;
+          _countUp(document.getElementById("pendingPurchasePayCount"), unpaid.length, 600);
           renderPendingPurchasePay(unpaid);
         } catch(e) {
           document.getElementById("pendingPurchasePayList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
@@ -3848,7 +3943,7 @@ function doLogout() {
             if (prof) v.company_name = prof.company || prof.alias;
           });
           window._pendingPurchasePaidVouchers = paymentVouchers;
-          document.getElementById("pendingPurchasePaidCount").textContent = paymentVouchers.length;
+          _countUp(document.getElementById("pendingPurchasePaidCount"), paymentVouchers.length, 600);
           renderPendingPurchasePaid(paymentVouchers);
         } catch(e) {
           document.getElementById("pendingPurchasePaidList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
@@ -4387,6 +4482,41 @@ async function deleteScheduleInstance(id) {
   await fetch(`/api/schedule/instances/${id}`, { method: 'DELETE' });
   loadSchedule();
 }
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable) return;
+  const map = {
+    "p": "/purchase",
+    "l": "/labour",
+    "c": "/labclose",
+    "t": "/transaction",
+    "n": "/note",
+    "h": "/hmex",
+    "m": "/media",
+  };
+  const key = e.key.toLowerCase();
+  if (map[key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    window.location.href = map[key];
+  }
+});
+
+// ── LAST UPDATED TIMESTAMP ON CARDS ──
+(function() {
+  const ts = new Date();
+  const label = ts.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  document.querySelectorAll(".dash-card-header").forEach(header => {
+    const existing = header.querySelector(".dash-card-updated");
+    if (existing) return;
+    const span = document.createElement("span");
+    span.className = "dash-card-updated";
+    span.textContent = "as of " + label;
+    span.style.cssText = "font-size:10px;color:var(--ink-3);margin-left:auto;font-weight:400;";
+    header.appendChild(span);
+  });
+})();
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

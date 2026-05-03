@@ -8,6 +8,7 @@
       }
     </style>
     <title>Labour Voucher</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap"
@@ -401,9 +402,10 @@
         }
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
-    <div class="main-content">
+    <div class="main-content" data-dirty-check>
       <div class="container">
         <div class="page-header">
           <div class="header-copy">
@@ -743,8 +745,9 @@
           });
           const result = await res.json();
           if (result.status === "SUCCESS") {
-            alert("Labour Voucher created successfully!");
-            location.reload();
+            if (window._toast) _toast("Labour Voucher saved!", "success");
+            if (window._markFormClean) _markFormClean();
+            setTimeout(() => location.reload(), 800);
           } else alert(result.error || "Failed to create voucher");
         } catch (err) {
           alert(err.message);
@@ -953,5 +956,6 @@
         }
       }
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

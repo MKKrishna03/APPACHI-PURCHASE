@@ -7,7 +7,8 @@
         visibility: hidden;
       }
     </style>
-    <title>Login — Labour Management</title>
+    <title>Sign In — Appachi</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -367,6 +368,16 @@
         text-decoration: none;
       }
 
+      /* Password show/hide */
+      .pw-wrap { position: relative; }
+      .pw-wrap input { padding-right: 38px; }
+      .pw-toggle {
+        position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer; color: var(--text-3);
+        font-size: 15px; padding: 2px; line-height: 1;
+      }
+      .pw-toggle:hover { color: var(--gold); }
+
       /* Buttons */
       .btn-submit {
         width: 100%;
@@ -470,6 +481,7 @@
         }
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <!-- Lamp Scene -->
@@ -522,12 +534,10 @@
           </div>
           <div class="field">
             <label>Password</label>
-            <input
-              type="password"
-              id="login-password"
-              placeholder="••••••••"
-              autocomplete="current-password"
-            />
+            <div class="pw-wrap">
+              <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+              <button type="button" class="pw-toggle" onclick="togglePw('login-password',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <button class="btn-submit" onclick="doLogin()">Sign In →</button>
           <div style="text-align:center;margin-top:12px;">
@@ -551,15 +561,17 @@
           </div>
           <div class="field">
             <label>Password</label>
-            <input
-              type="password"
-              id="signup-password"
-              placeholder="••••••••"
-            />
+            <div class="pw-wrap">
+              <input type="password" id="signup-password" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('signup-password',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <div class="field">
             <label>Confirm Password</label>
-            <input type="password" id="signup-confirm" placeholder="••••••••" />
+            <div class="pw-wrap">
+              <input type="password" id="signup-confirm" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('signup-confirm',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <div class="field">
             <label>Your ID</label>
@@ -606,19 +618,17 @@
           </div>
           <div class="field">
             <label>New Password</label>
-            <input
-              type="password"
-              id="reset-newpw"
-              placeholder="Min. 6 characters"
-            />
+            <div class="pw-wrap">
+              <input type="password" id="reset-newpw" placeholder="Min. 6 characters" />
+              <button type="button" class="pw-toggle" onclick="togglePw('reset-newpw',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <div class="field">
             <label>Confirm Password</label>
-            <input
-              type="password"
-              id="reset-confirmpw"
-              placeholder="••••••••"
-            />
+            <div class="pw-wrap">
+              <input type="password" id="reset-confirmpw" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('reset-confirmpw',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <button class="btn-submit" onclick="doReset()" style="margin-top:6px;">
             Reset Password →
@@ -823,6 +833,18 @@
         }
       })();
       document.body.style.visibility = "visible";
+
+      // ── PASSWORD TOGGLE ──
+      function togglePw(id, btn) {
+        const inp = document.getElementById(id);
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        btn.textContent = show ? "🙈" : "👁";
+      }
+
+      // ── AUTOFOCUS ──
+      document.getElementById("login-id").focus();
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>
