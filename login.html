@@ -367,30 +367,6 @@
         text-decoration: none;
       }
 
-      /* Stay logged in */
-      .stay-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 18px;
-        margin-top: 4px;
-      }
-      .stay-row input[type="checkbox"] {
-        width: 15px;
-        height: 15px;
-        accent-color: var(--gold);
-        cursor: pointer;
-      }
-      .stay-row label {
-        font-size: 12px;
-        color: var(--text-2);
-        cursor: pointer;
-        margin-bottom: 0;
-        text-transform: none;
-        letter-spacing: 0;
-        font-weight: 400;
-      }
-
       /* Buttons */
       .btn-submit {
         width: 100%;
@@ -529,7 +505,6 @@
             Sign In
           </button>
           <button class="tab" onclick="switchTab('signup')">Sign Up</button>
-          <button class="tab" onclick="switchTab('reset')">Reset</button>
         </div>
 
         <div id="msg" class="msg"></div>
@@ -554,11 +529,10 @@
               autocomplete="current-password"
             />
           </div>
-          <div class="stay-row">
-            <input type="checkbox" id="stayLogin" checked />
-            <label for="stayLogin">Stay logged in for 3 days</label>
-          </div>
           <button class="btn-submit" onclick="doLogin()">Sign In →</button>
+          <div style="text-align:center;margin-top:12px;">
+            <button onclick="switchTab('reset')" style="background:none;border:none;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;padding:0;">Forgot password? Reset</button>
+          </div>
         </div>
 
         <!-- SIGNUP FORM -->
@@ -605,6 +579,9 @@
 
         <!-- RESET PASSWORD FORM -->
         <div id="form-reset" class="form">
+          <div style="margin-bottom:10px;">
+            <button onclick="switchTab('login')" style="background:none;border:none;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;padding:0;">← Back to Sign In</button>
+          </div>
           <div class="field">
             <label>Your ID</label>
             <input
@@ -697,26 +674,20 @@
       }
 
       // ── AUTH HELPERS ──
-      function setSession(user, stay) {
+      function setSession(user) {
         const data = JSON.stringify(user);
         const deviceId = Math.random().toString(36).slice(2) + Date.now();
-        if (stay) {
-          const exp = Date.now() + 3 * 24 * 60 * 60 * 1000;
-          localStorage.setItem("auth_user", data);
-          localStorage.setItem("auth_exp", exp);
-          localStorage.setItem("auth_device", deviceId);
-          sessionStorage.setItem("auth_device", deviceId);
-        } else {
-          sessionStorage.setItem("auth_user", data);
-          sessionStorage.setItem("auth_device", deviceId);
-        }
+        const exp = Date.now() + 3 * 24 * 60 * 60 * 1000;
+        localStorage.setItem("auth_user", data);
+        localStorage.setItem("auth_exp", exp);
+        localStorage.setItem("auth_device", deviceId);
+        sessionStorage.setItem("auth_device", deviceId);
       }
 
       // ── LOGIN ──
       async function doLogin() {
         const id = document.getElementById("login-id").value.trim();
         const password = document.getElementById("login-password").value;
-        const stay = document.getElementById("stayLogin").checked;
         if (!id || !password) {
           showMsg("Please fill all fields", "error");
           return;
@@ -729,7 +700,7 @@
           });
           const data = await res.json();
           if (data.status === "SUCCESS") {
-            setSession(data.user, stay);
+            setSession(data.user);
             window.location.href = "/";
           } else {
             showMsg(data.error || "Invalid credentials", "error");

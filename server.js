@@ -538,6 +538,25 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
   await pool.query(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
 
+  // Fix photo_urls columns that may have been created as JSONB in an earlier migration.
+  // pg sends JS arrays as PostgreSQL array literals {..} which are invalid JSON,
+  // causing "invalid input syntax for type json" when the column is JSONB.
+  for (const table of ['purchases', 'labour', 'chittai', 'hallmark_expenses']) {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = '${table}' AND column_name = 'photo_urls' AND udt_name = 'jsonb'
+        ) THEN
+          ALTER TABLE ${table} ALTER COLUMN photo_urls TYPE TEXT[]
+          USING CASE WHEN photo_urls IS NULL THEN NULL::TEXT[]
+                     ELSE ARRAY(SELECT jsonb_array_elements_text(photo_urls)) END;
+        END IF;
+      END $$;
+    `);
+  }
+
   console.log("DB ready");
 }
 
