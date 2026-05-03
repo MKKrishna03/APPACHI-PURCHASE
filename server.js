@@ -3317,4 +3317,18 @@ app.post("/api/ai-scan", async (req, res) => {
   }
 });
 
+app.get("/api/debug/photo-urls-type", async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT table_name, column_name, udt_name, data_type
+      FROM information_schema.columns
+      WHERE column_name='photo_urls'
+      ORDER BY table_name
+    `);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
