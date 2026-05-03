@@ -579,6 +579,34 @@ alias TEXT UNIQUE NOT NULL,
     `);
   }
 
+  // Fix purchases.linked_voucher_ids / linked_chittai_ids if they were created as JSONB.
+  for (const col of [
+    "linked_voucher_ids",
+    "linked_chittai_ids",
+    "linked_purchase_ids",
+  ]) {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'purchases' AND column_name = '${col}' AND udt_name IN ('jsonb','json')
+        ) THEN
+          ALTER TABLE purchases ALTER COLUMN ${col} TYPE INTEGER[]
+          USING CASE
+            WHEN ${col} IS NULL THEN NULL::INTEGER[]
+            WHEN jsonb_typeof(${col}::jsonb) = 'array'
+              THEN ARRAY(SELECT (jsonb_array_elements_text(${col}::jsonb))::INTEGER)
+            ELSE NULL::INTEGER[]
+          END;
+        END IF;
+      END $$;
+    `);
+  }
+
+  // Drop the stray "items" jsonb column on purchases (line items live in purchase_items table).
+  await pool.query(`ALTER TABLE purchases DROP COLUMN IF EXISTS items`);
+
   console.log("DB ready");
 }
 
