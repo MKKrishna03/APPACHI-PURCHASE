@@ -1606,6 +1606,18 @@
           </div>
         </div>
 
+        <!-- Card 7: Purchase Bills with No Photo -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-title">Bills Without Photo</span>
+            <span class="dash-card-badge" id="noPhotoBillsCount">0</span>
+          </div>
+          <input type="text" class="pending-search" id="noPhotoBillsSearch" placeholder="Search..." oninput="filterNoPictureBills(this.value)" />
+          <div class="pending-list" id="noPhotoBillsList">
+            <div class="empty-msg">Loading...</div>
+          </div>
+        </div>
+
       </div>
         </div>
       </div>
@@ -3852,6 +3864,7 @@ function doLogout() {
       loadPendingPurchasePaid();
       loadPendingChittai();
       loadPendingBillsForPay();
+      loadNoPictureBills();
       const _actDate = document.getElementById("activityDate");
       _actDate.value = new Date().toISOString().split("T")[0];
       loadActivity(_actDate.value);
@@ -4157,6 +4170,71 @@ function doLogout() {
         const f = q.toLowerCase();
         renderPendingBillsForPay(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
       }
+
+      // ── Purchase Bills with No Attached Photo ──
+      async function loadNoPictureBills() {
+        try {
+          const list = await fetch("/api/purchases/no-photo").then(r => r.json());
+          window._noPictureBills = list;
+          _countUp(document.getElementById("noPhotoBillsCount"), list.length, 600);
+          renderNoPictureBills(list);
+        } catch(e) {
+          document.getElementById("noPhotoBillsList").innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderNoPictureBills(list) {
+        const el = document.getElementById("noPhotoBillsList");
+        if (!list.length) { el.innerHTML = '<div class="empty-msg">All bills have photos attached</div>'; return; }
+        const grouped = {};
+        list.forEach(p => { const k = p.company_name || "-"; if (!grouped[k]) grouped[k] = []; grouped[k].push(p); });
+        el.innerHTML = Object.entries(grouped).map(([company, bills], i) => `
+          <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div onclick="toggleNoPicGroup(event,${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface-2);cursor:pointer;">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--accent);">${company}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${bills.length} bill${bills.length > 1 ? "s" : ""}</div>
+              </div>
+              <span id="nparrow_${i}" style="font-size:11px;color:var(--ink-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="npgroup_${i}" style="display:none;background:var(--surface);border-top:1px solid var(--border);">
+              ${bills.map(b => {
+                const hrefMap = { purchase: `/purchase?id=${b.id}`, receipt_voucher: `/receipt?id=${b.id}`, hallmark: `/hmex?id=${b.id}`, expenses: `/hmex?id=${b.id}` };
+                const labelMap = { purchase: 'Purchase', receipt_voucher: 'Receipt', hallmark: 'Hallmark', expenses: 'Expenses' };
+                const href = hrefMap[b.source] || `/purchase?id=${b.id}`;
+                const typeLabel = labelMap[b.source] || 'Bill';
+                return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);">
+                  <div>
+                    <div style="font-weight:600;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;"><a href="${href}" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${b.bill_no || "-"}</a></div>
+                    <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "-"} · ${typeLabel}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <span style="padding:2px 8px;border-radius:99px;background:#fff3e0;color:#b5620a;font-size:10px;font-weight:700;">No Photo</span>
+                    <div style="font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px;">₹${parseFloat(b.net_value||b.total_value||0).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>`;
+              }).join("")}
+            </div>
+          </div>`).join("");
+      }
+
+      function toggleNoPicGroup(event, i) {
+        event.stopPropagation();
+        const body = document.getElementById(`npgroup_${i}`);
+        const arrow = document.getElementById(`nparrow_${i}`);
+        const isOpen = body.style.display === "block";
+        document.querySelectorAll('[id^="npgroup_"]').forEach(g => g.style.display = "none");
+        document.querySelectorAll('[id^="nparrow_"]').forEach(a => a.style.transform = "");
+        if (!isOpen) { body.style.display = "block"; arrow.style.transform = "rotate(180deg)"; }
+      }
+
+      function filterNoPictureBills(q) {
+        const all = window._noPictureBills || [];
+        const f = q.toLowerCase();
+        renderNoPictureBills(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
+      }
+
       function toggleActivityPanel() {
         const panel = document.getElementById("activityPanel");
         panel.style.display = panel.style.display === "flex" ? "none" : "flex";

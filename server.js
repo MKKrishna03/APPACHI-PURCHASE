@@ -1471,6 +1471,39 @@ app.get("/api/purchases/list", async (req, res) => {
   }
 });
 
+app.get("/api/purchases/no-photo", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.profile_id, p.bill_no, p.date, p.net_value, p.total_value,
+              COALESCE(pr.alias, pr.company_name) AS company_name, 'purchase' AS source
+       FROM purchases p
+       LEFT JOIN profiles pr ON pr.id = p.profile_id
+       WHERE (p.photo_url IS NULL OR p.photo_url = '')
+         AND (p.voucher_type IS NULL OR p.voucher_type != 'Hallmark Voucher')
+       UNION ALL
+       SELECT l.id, l.profile_id, l.receipt_bill_no AS bill_no, l.date,
+              l.bill_value_after_deduction AS net_value, l.total AS total_value,
+              COALESCE(pr2.alias, pr2.company_name, l.company_name) AS company_name, 'receipt_voucher' AS source
+       FROM labour l
+       LEFT JOIN profiles pr2 ON pr2.id = l.profile_id
+       WHERE l.voucher_type = 'Receipt Voucher'
+         AND (l.photo_url IS NULL OR l.photo_url = '')
+       UNION ALL
+       SELECT he.id, he.profile_id, he.bill_no, he.date, he.net_value, he.total_value,
+              COALESCE(pr3.alias, pr3.company_name) AS company_name,
+              CASE WHEN he.voucher_type = 'Hallmark' THEN 'hallmark' ELSE 'expenses' END AS source
+       FROM hallmark_expenses he
+       LEFT JOIN profiles pr3 ON pr3.id = he.profile_id
+       WHERE he.voucher_type IN ('Hallmark', 'Expenses')
+         AND (he.photo_url IS NULL OR he.photo_url = '')
+       ORDER BY date DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/purchases/:id", async (req, res) => {
   try {
     const p = await pool.query("SELECT * FROM purchases WHERE id=$1", [
