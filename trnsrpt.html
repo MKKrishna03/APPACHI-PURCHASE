@@ -1189,7 +1189,7 @@
             const billValCell = b._isChittai
               ? `<td style="font-family:'DM Mono',monospace;text-align:right;color:var(--ink-3);font-style:italic;">₹${Math.round(billVal).toLocaleString("en-IN")} <span style="font-size:10px;font-style:normal;background:var(--amber-light);color:var(--amber);border-radius:4px;padding:1px 5px;font-family:inherit;">ref</span></td>`
               : `<td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>`;
-            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b.profile_id}'">${b._companyName}</td><td>${date}</td>${billValCell}<td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td><td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || b.created_by || "—"}</td></tr>`;
+            return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b._pid}'">${b._companyName}</td><td>${date}</td>${billValCell}<td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td><td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || b.created_by || "—"}</td></tr>`;
           })
           .join("");
         renderPagination(total);
@@ -1301,10 +1301,13 @@
               b.profile_id ||
               (chittai && chittai.profile_id) ||
               (labour && labour.profile_id);
+            b._pid = pid;
             const p = profileRes.find((c) => String(c.id) === String(pid));
-            b._companyName = p
-              ? p.company || p.alias
-              : `[no match: pid=${pid}]`;
+            let companyName;
+            if (p) companyName = p.company || p.alias;
+            else if (pid) companyName = `[no match: pid=${pid}]`;
+            else companyName = `[no profile]`;
+            b._companyName = companyName;
             b._issueNo = chittai
               ? chittai.chittai_no
               : labour

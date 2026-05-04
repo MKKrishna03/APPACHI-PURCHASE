@@ -3061,6 +3061,7 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
           prefix: folder,
           max_results: 500,
           resource_type: "image",
+          context: "true",
         });
         if (nextCursor) params.append("next_cursor", nextCursor);
 
@@ -3078,6 +3079,7 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
             public_id: r.public_id,
             url: r.secure_url,
             created_at: r.created_at,
+            bill_date: r.context?.custom?.bill_date || null,
             folder: folder,
             bytes: r.bytes,
             format: r.format,
@@ -3096,6 +3098,7 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
           prefix: folder,
           max_results: 500,
           resource_type: "raw",
+          context: "true",
         });
         if (nextCursor) params.append("next_cursor", nextCursor);
 
@@ -3113,6 +3116,7 @@ app.get("/api/cloudinary/all-photos", async (req, res) => {
             public_id: r.public_id,
             url: r.secure_url,
             created_at: r.created_at,
+            bill_date: r.context?.custom?.bill_date || null,
             folder: folder,
             bytes: r.bytes,
             format: r.format,

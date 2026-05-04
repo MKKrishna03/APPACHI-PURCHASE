@@ -876,97 +876,85 @@
           document.getElementById("galleryContainer").innerHTML =
             `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
 
-          const [cloudinaryRes, purchasesRes, labourRes] = await Promise.all([
+          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes] = await Promise.all([
             fetch("/api/cloudinary/all-photos"),
             fetch("/api/purchases/list"),
             fetch("/api/labour"),
+            fetch("/api/hallmark-expenses/list"),
           ]);
 
-          const cloudinaryPhotos = cloudinaryRes.ok
-            ? await cloudinaryRes.json()
-            : [];
+          const cloudinaryPhotos = cloudinaryRes.ok ? await cloudinaryRes.json() : [];
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
-          const labour = labourRes.ok ? await labourRes.json() : [];
+          const labour    = labourRes.ok    ? await labourRes.json()    : [];
+          const hallmark  = hallmarkRes.ok  ? await hallmarkRes.json()  : [];
 
-          // Extract public_id from a Cloudinary URL
+          // Robust public_id extraction — handles URLs with or without transformation params
           function extractPublicId(url) {
             if (!url) return null;
             try {
-              // Remove query params
               const clean = url.split("?")[0];
-              // Match everything after /upload/ and strip version (v1234567/)
-              const match = clean.match(/\/upload\/(?:v\d+\/)?(.+)$/);
-              if (match) {
-                // Remove file extension for images
-                return match[1].replace(/\.[^/.]+$/, "");
-              }
+              // Primary: find /vNNNN/ version marker and take everything after it
+              const vm = clean.match(/\/v\d+\/(.+)$/);
+              if (vm) return vm[1].replace(/\.[^/.]+$/, "");
+              // Fallback: take everything after /upload/
+              const um = clean.match(/\/upload\/(.+)$/);
+              if (um) return um[1].replace(/\.[^/.]+$/, "");
               return null;
-            } catch (e) {
-              return null;
-            }
+            } catch(e) { return null; }
           }
 
-          // Build lookup maps by public_id (most reliable) AND by url (fallback)
-          const purchaseByPublicId = {};
-          const purchaseByUrl = {};
-          purchases.forEach((p) => {
-            if (p.photo_url) {
-              purchaseByUrl[p.photo_url] = p;
-              const pid = extractPublicId(p.photo_url);
-              if (pid) purchaseByPublicId[pid] = p;
-            }
-          });
+          function buildMaps(records, urlField) {
+            const byPid = {}, byUrl = {};
+            records.forEach(r => {
+              const urls = [r[urlField], ...(Array.isArray(r.photo_urls) ? r.photo_urls : [])].filter(Boolean);
+              urls.forEach(u => {
+                byUrl[u] = r;
+                const pid = extractPublicId(u);
+                if (pid) byPid[pid] = r;
+              });
+            });
+            return { byPid, byUrl };
+          }
 
-          const labourByPublicId = {};
-          const labourByUrl = {};
-          labour.forEach((l) => {
-            if (l.photo_url) {
-              labourByUrl[l.photo_url] = l;
-              const pid = extractPublicId(l.photo_url);
-              if (pid) labourByPublicId[pid] = l;
-            }
-          });
-
+          const { byPid: purchaseByPid, byUrl: purchaseByUrl } = buildMaps(purchases, "photo_url");
+          const { byPid: labourByPid,   byUrl: labourByUrl   } = buildMaps(labour,    "photo_url");
+          const { byPid: hallmarkByPid, byUrl: hallmarkByUrl  } = buildMaps(hallmark,  "photo_url");
 
           allPurchases = cloudinaryPhotos.map((item) => {
-            // Try matching by public_id first, then by full URL
-            const dbPurchase =
-              purchaseByPublicId[item.public_id] ||
-              purchaseByUrl[item.url] ||
-              purchaseByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+            const pid0 = item.public_id.replace(/\.[^/.]+$/, "");
 
-            const dbLabour =
-              labourByPublicId[item.public_id] ||
-              labourByUrl[item.url] ||
-              labourByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+            const dbPurchase = purchaseByPid[item.public_id] || purchaseByUrl[item.url] || purchaseByPid[pid0];
+            const dbLabour   = labourByPid[item.public_id]   || labourByUrl[item.url]   || labourByPid[pid0];
+            const dbHallmark = hallmarkByPid[item.public_id] || hallmarkByUrl[item.url] || hallmarkByPid[pid0];
 
-            const dbRecord = dbPurchase || dbLabour;
+            const dbRecord = dbPurchase || dbLabour || dbHallmark;
 
-            // If matched to labour, use labour bill_no
             let bill_no = item.public_id.split("/").pop();
-            if (dbPurchase) bill_no = dbPurchase.bill_no;
-            else if (dbLabour)
-              bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
+            if (dbPurchase)      bill_no = dbPurchase.bill_no;
+            else if (dbLabour)   bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
+            else if (dbHallmark) bill_no = dbHallmark.bill_no;
+
+            // Date priority: DB record date → Cloudinary bill_date context → upload timestamp
+            const date = dbRecord?.date || item.bill_date || item.created_at;
 
             return {
               id: item.public_id,
               public_id: item.public_id,
               profile_id: dbRecord ? dbRecord.profile_id : null,
               bill_no,
-              date: dbRecord ? dbRecord.date : item.created_at,
+              date,
               photo_url: item.url,
-              is_accounted: dbPurchase
-                ? dbPurchase.is_accounted
-                : dbLabour
-                  ? dbLabour.is_accounted
-                  : false,
+              is_accounted: dbPurchase ? dbPurchase.is_accounted : dbLabour ? dbLabour.is_accounted : false,
               folder: item.folder,
               is_pdf: item.is_pdf || false,
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
               _labourDbId: dbLabour ? dbLabour.id : null,
+              _hallmarkDbId: dbHallmark ? dbHallmark.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
+              _isHallmark: !!dbHallmark && !dbPurchase && !dbLabour,
               _labourRecord: dbLabour || null,
+              _hallmarkRecord: dbHallmark || null,
               _issueItemType: (dbLabour?.effective_item_type || dbLabour?.labour_item_type || ""),
               _purchaseRecord: dbPurchase || null,
               _matched: !!dbRecord,

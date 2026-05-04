@@ -1582,8 +1582,23 @@
           <div class="kpi-value" id="kpiPurchaseValue">₹0</div>
           <div class="kpi-sub" id="kpiPurchaseCount">0 bills</div>
         </div>
+        <div class="kpi-tile kpi-blue">
+          <div class="kpi-label">Receipt Voucher Value (FY)</div>
+          <div class="kpi-value" id="kpiReceiptValue">₹0</div>
+          <div class="kpi-sub" id="kpiReceiptCount">0 vouchers</div>
+        </div>
+        <div class="kpi-tile kpi-blue">
+          <div class="kpi-label">Hallmark Value (FY)</div>
+          <div class="kpi-value" id="kpiHallmarkValue">₹0</div>
+          <div class="kpi-sub" id="kpiHallmarkCount">0 bills</div>
+        </div>
+        <div class="kpi-tile kpi-blue">
+          <div class="kpi-label">Expense Value (FY)</div>
+          <div class="kpi-value" id="kpiExpenseValue">₹0</div>
+          <div class="kpi-sub" id="kpiExpenseCount">0 bills</div>
+        </div>
         <div class="kpi-tile">
-          <div class="kpi-label">TDS Deducted (FY)</div>
+          <div class="kpi-label">TDS — All Bills (FY)</div>
           <div class="kpi-value" id="kpiTdsValue">₹0</div>
           <div class="kpi-sub" id="kpiTdsBills">0 bills with TDS</div>
         </div>
@@ -4347,20 +4362,48 @@ function doLogout() {
           const fyStart = new Date(fyYear, 3, 1);
           const fyEnd   = new Date(fyYear + 1, 2, 31, 23, 59, 59);
 
-          const purchases = await fetch('/api/purchases/list').then(r => r.json());
-          const fyPurchases = purchases.filter(p => {
-            if (!p.date) return false;
-            const d = new Date(p.date);
+          const [purchases, labourAll, hallmarkAll] = await Promise.all([
+            fetch('/api/purchases/list').then(r => r.json()),
+            fetch('/api/labour').then(r => r.json()),
+            fetch('/api/hallmark-expenses/list').then(r => r.json()),
+          ]);
+
+          function inFY(dateStr) {
+            if (!dateStr) return false;
+            const d = new Date(dateStr);
             return d >= fyStart && d <= fyEnd;
-          });
+          }
 
-          const totalValue = fyPurchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
-          const totalTds   = fyPurchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0);
-          const tdsCount   = fyPurchases.filter(p => parseFloat(p.tds || 0) > 0).length;
+          const fyPurchases = purchases.filter(p => inFY(p.date));
+          const fyReceipts  = labourAll.filter(l => l.voucher_type === 'Receipt Voucher' && inFY(l.date));
+          const fyHallmark  = hallmarkAll.filter(h => h.voucher_type === 'Hallmark' && inFY(h.date));
+          const fyExpenses  = hallmarkAll.filter(h => h.voucher_type === 'Expenses' && inFY(h.date));
 
-          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalValue, 800);
+          const totalPurchaseValue = fyPurchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
+          const totalReceiptValue  = fyReceipts.reduce((s, l) => s + parseFloat(l.total || 0), 0);
+          const totalHallmarkValue = fyHallmark.reduce((s, h) => s + parseFloat(h.net_value || h.total_value || 0), 0);
+          const totalExpenseValue  = fyExpenses.reduce((s, h) => s + parseFloat(h.net_value || h.total_value || 0), 0);
+
+          const combinedTds =
+            fyPurchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0) +
+            fyReceipts.reduce((s, l) => s + parseFloat(l.tds || 0), 0) +
+            fyHallmark.reduce((s, h) => s + parseFloat(h.tds || 0), 0) +
+            fyExpenses.reduce((s, h) => s + parseFloat(h.tds || 0), 0);
+          const tdsCount =
+            fyPurchases.filter(p => parseFloat(p.tds || 0) > 0).length +
+            fyReceipts.filter(l => parseFloat(l.tds || 0) > 0).length +
+            fyHallmark.filter(h => parseFloat(h.tds || 0) > 0).length +
+            fyExpenses.filter(h => parseFloat(h.tds || 0) > 0).length;
+
+          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalPurchaseValue, 800);
           document.getElementById('kpiPurchaseCount').textContent = `${fyPurchases.length} bills`;
-          _kpiCountCurrency(document.getElementById('kpiTdsValue'), totalTds, 800);
+          _kpiCountCurrency(document.getElementById('kpiReceiptValue'), totalReceiptValue, 800);
+          document.getElementById('kpiReceiptCount').textContent = `${fyReceipts.length} vouchers`;
+          _kpiCountCurrency(document.getElementById('kpiHallmarkValue'), totalHallmarkValue, 800);
+          document.getElementById('kpiHallmarkCount').textContent = `${fyHallmark.length} bills`;
+          _kpiCountCurrency(document.getElementById('kpiExpenseValue'), totalExpenseValue, 800);
+          document.getElementById('kpiExpenseCount').textContent = `${fyExpenses.length} bills`;
+          _kpiCountCurrency(document.getElementById('kpiTdsValue'), combinedTds, 800);
           document.getElementById('kpiTdsBills').textContent = `${tdsCount} bills with TDS`;
 
           // Monthly chart: April→March for current FY
