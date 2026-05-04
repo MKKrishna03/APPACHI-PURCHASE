@@ -8,6 +8,7 @@
       }
     </style>
     <title>IV-RV Report</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -539,6 +540,7 @@
         opacity: 0.4;
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="topbar">
@@ -619,6 +621,11 @@
 
     <div class="main">
       <div class="filters">
+        <select id="dateFilter" onchange="loadReport()">
+          <option value="iv">Date = IV Date</option>
+          <option value="rv">Date = RV Date</option>
+          <option value="either">Date = IV or RV</option>
+        </select>
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
@@ -685,7 +692,7 @@
             <thead>
               <tr>
                 <th class="sortable" data-col="date" onclick="sortBy('date')">
-                  Date<span class="si" id="si_date">▼</span>
+                  Issue Date<span class="si" id="si_date">▼</span>
                 </th>
                 <th
                   class="sortable"
@@ -709,6 +716,7 @@
                 >
                   IV Weight (g)<span class="si" id="si_ivWeight">⇅</span>
                 </th>
+                <th>Receipt Date</th>
                 <th
                   class="sortable"
                   data-col="billNo"
@@ -746,7 +754,7 @@
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="10" class="loading-state">
+                <td colspan="11" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
@@ -755,6 +763,7 @@
               <tr>
                 <td colspan="3">Total</td>
                 <td id="footIVWeight" style="text-align: right">—</td>
+                <td></td>
                 <td></td>
                 <td id="footRVWeight" style="text-align: right">—</td>
                 <td id="footBillVal" style="text-align: right">—</td>
@@ -1217,7 +1226,7 @@
           return 0;
         });
         if (!sorted.length) {
-          tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No records found</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No records found</td></tr>`;
           renderPagination(0);
           return;
         }
@@ -1235,7 +1244,8 @@
         });
         tbody.innerHTML = visibleRows
           .map((row) => {
-            const dateStr = row.date ? fmt(row.date) : "-";
+            const issueDateStr = row.issueDate ? fmt(row.issueDate) : "-";
+            const receiptDateStr = row.receiptDate ? fmt(row.receiptDate) : "-";
             let ivSum = 0;
             if (row.isSubtotal) {
               const nums = (row.issueNo.match(/\(([^)]+)\)/)?.[1] || "")
@@ -1265,10 +1275,11 @@
               ? `<span style="display:inline-block;width:12px;color:var(--accent);">${isExpanded ? "▾" : "▸"}</span> `
               : "";
             return `<tr${rowStyle}${onClick}>
-            <td>${caret}${dateStr}</td>
+            <td>${caret}${issueDateStr}</td>
             <td style="color:var(--ink);font-weight:500;${row.isSubtotal ? "" : "cursor:pointer;"}" ${row.isSubtotal ? "" : `onclick="window.location.href='/company?id=${row.profile_id}'"`}>${row.companyName}</td>
             <td class="mono"${row.isSubtotal ? ' style="color:var(--accent);font-weight:700;"' : ""}>${row.issueNo || "-"}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.isSubtotal ? (ivSum > 0 ? ivSum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-") : row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+            <td>${receiptDateStr}</td>
             <td class="mono">${row.billNo}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
@@ -1339,7 +1350,7 @@
         if (!drpStart || !drpEnd) return;
         const companyId = document.getElementById("companySelect").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="loading-state">Loading...</td></tr>`;
 
         try {
           const [labourRes, voucherRes, profileRes, descRes] =
@@ -1357,6 +1368,7 @@
             metalMap[d.name.toUpperCase()] = d.metal_type;
           });
 
+          const dateFilter = document.getElementById("dateFilter").value;
           const inRange = (dateStr) => {
             if (!dateStr) return false;
             const ist = new Date(
@@ -1368,6 +1380,11 @@
               ist.getUTCDate(),
             );
             return normalized >= drpStart && normalized <= drpEnd;
+          };
+          const rowInRange = (ivDateStr, rvDateStr) => {
+            if (dateFilter === "iv") return inRange(ivDateStr);
+            if (dateFilter === "rv") return inRange(rvDateStr);
+            return inRange(ivDateStr) || inRange(rvDateStr);
           };
 
           // Get all issue vouchers
@@ -1430,9 +1447,11 @@
 
             if (ivRvs.length === 0) {
               // IV with no RV
-              if (inRange(iv.date)) {
+              if (rowInRange(iv.date, null)) {
                 rows.push({
                   date: ivDate,
+                  issueDate: ivDate,
+                  receiptDate: null,
                   companyName,
                   issueNo: iv.issue_number,
                   ivWeight: parseFloat(iv.weight || 0),
@@ -1458,7 +1477,7 @@
                       );
                     })()
                   : null;
-                if (!inRange(iv.date) && !inRange(rv.date)) return;
+                if (!rowInRange(iv.date, rv.date)) return;
                 const payment = paymentMap[rv.id];
                 const issueNums = (rv.issue_number || "")
                   .split(",")
@@ -1467,6 +1486,8 @@
                 const isMulti = issueNums.length > 1;
                 rows.push({
                   date: rvDate || ivDate,
+                  issueDate: ivDate,
+                  receiptDate: rvDate,
                   companyName,
                   issueNo: iv.issue_number,
                   ivWeight: parseFloat(iv.weight || 0),
@@ -1485,6 +1506,8 @@
                 ) {
                   rows.push({
                     date: rvDate || ivDate,
+                    issueDate: null,
+                    receiptDate: rvDate,
                     companyName,
                     issueNo: "Subtotal (" + issueNums.join(" + ") + ")",
                     ivWeight: 0,
@@ -1639,7 +1662,7 @@
           document.getElementById("rowCount").textContent = filteredRows.length;
 
           if (!filteredRows.length) {
-            tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No records found for selected range</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0, 0);
             return;
@@ -1688,7 +1711,7 @@
           const uniqueRVs = filteredRows.filter((r) => r.billNo !== "-").length;
           updateSummary(uniqueIVs, uniqueRVs, totalBillVal, totalPayment);
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="11" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
@@ -1730,6 +1753,131 @@
         `${fmt(drpStart)} To ${fmt(drpEnd)}`;
       activePreset = 10;
       loadReport();
+
+      // ── TOOLBAR: Export CSV + Print ──
+      (function() {
+        const header = document.querySelector(".card-header");
+        if (!header) return;
+        const btnStyle = "padding:5px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-family:inherit;font-size:12px;cursor:pointer;color:var(--ink-2);";
+        const toolbar = document.createElement("div");
+        toolbar.style.cssText = "display:flex;gap:6px;align-items:center;margin-left:auto;";
+
+        const csvBtn = document.createElement("button");
+        csvBtn.textContent = "⬇ CSV";
+        csvBtn.title = "Export visible rows to CSV";
+        csvBtn.style.cssText = btnStyle;
+        csvBtn.onclick = exportCSV;
+
+        const printBtn = document.createElement("button");
+        printBtn.textContent = "🖨 Print";
+        printBtn.title = "Print report";
+        printBtn.style.cssText = btnStyle;
+        printBtn.onclick = () => window.print();
+
+        toolbar.appendChild(csvBtn);
+        toolbar.appendChild(printBtn);
+        header.appendChild(toolbar);
+      })();
+
+      function exportCSV() {
+        const headers = ["Issue Date","Company","Issue No","IV Weight (g)","Receipt Date","Bill No","RV Weight (g)","Bill Value","Payment","Status"];
+        const rows = allRows.filter(r => !r.isSubtotal);
+        const lines = [headers.join(",")];
+        rows.forEach(r => {
+          lines.push([
+            r.issueDate ? fmt(r.issueDate) : "",
+            `"${(r.companyName||"").replace(/"/g,'""')}"`,
+            `"${(r.issueNo||"").replace(/"/g,'""')}"`,
+            r.ivWeight > 0 ? r.ivWeight.toFixed(2) : "",
+            r.receiptDate ? fmt(r.receiptDate) : "",
+            `"${(r.billNo||"").replace(/"/g,'""')}"`,
+            r.rvWeight > 0 ? r.rvWeight.toFixed(2) : "",
+            r.billValue > 0 ? Math.round(r.billValue) : "",
+            r.payment > 0 ? Math.round(r.payment) : "",
+            r.status || ""
+          ].join(","));
+        });
+        const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `iv-rv-report-${fmt(drpStart||new Date()).replace(/\//g,"-")}.csv`;
+        a.click();
+      }
+
+      // ── FILTER SUMMARY LINE ──
+      const filterSummaryEl = document.createElement("div");
+      filterSummaryEl.style.cssText = "font-size:12px;color:var(--ink-3);padding:0 0 10px;";
+      document.querySelector(".card").insertBefore(filterSummaryEl, document.getElementById("paginationBar"));
+
+      function updateFilterSummary() {
+        const count = allRows.filter(r => !r.isSubtotal).length;
+        const dateMode = document.getElementById("dateFilter")?.selectedOptions[0]?.text || "";
+        const company = document.getElementById("companySelect")?.selectedOptions[0]?.text || "";
+        const rv = document.getElementById("rvFilter")?.selectedOptions[0]?.text || "";
+        const pay = document.getElementById("payFilter")?.selectedOptions[0]?.text || "";
+        const metal = document.getElementById("metalFilter")?.selectedOptions[0]?.text || "";
+        const range = drpStart && drpEnd ? `${fmt(drpStart)} – ${fmt(drpEnd)}` : "all dates";
+        const parts = [range, dateMode].filter(v => v && !v.startsWith("—"));
+        if (company && !company.startsWith("—")) parts.push(company);
+        if (rv && !rv.startsWith("—")) parts.push(rv);
+        if (pay && !pay.startsWith("—")) parts.push(pay);
+        if (metal && !metal.startsWith("—")) parts.push(metal);
+        filterSummaryEl.textContent = count > 0
+          ? `Showing ${count} record${count!==1?"s":""} · ${parts.join(" · ")}`
+          : "";
+      }
+
+      const _origRenderRows = renderRows;
+      renderRows = function() { _origRenderRows(); updateFilterSummary(); };
+
+      // ── QUICK SEARCH BOX ──
+      (function() {
+        const bar = document.getElementById("paginationBar");
+        if (!bar) return;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;align-items:center;gap:6px;padding:0 0 8px;justify-content:flex-end;";
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.placeholder = "Search company / bill no…";
+        inp.id = "quickSearch";
+        inp.style.cssText = "padding:5px 10px;border:1px solid var(--border-strong);border-radius:6px;font-family:inherit;font-size:12px;background:var(--surface);color:var(--ink);width:210px;";
+        inp.oninput = function() {
+          const q = this.value.trim().toLowerCase();
+          document.querySelectorAll("#reportTable tr").forEach(row => {
+            if (!q) { row.style.display = ""; return; }
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(q) ? "" : "none";
+          });
+        };
+        wrap.appendChild(inp);
+        bar.parentNode.insertBefore(wrap, bar);
+      })();
+
+      // ── BACK TO TOP ──
+      (function() {
+        const btn = document.createElement("button");
+        btn.textContent = "↑ Top";
+        btn.style.cssText = "position:fixed;bottom:24px;right:24px;padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:20px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.2);opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:999;";
+        document.body.appendChild(btn);
+        window.addEventListener("scroll", () => {
+          const show = window.scrollY > 300;
+          btn.style.opacity = show ? "1" : "0";
+          btn.style.pointerEvents = show ? "auto" : "none";
+        });
+        btn.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
+      })();
+
+      // ── CLICK TO COPY MONEY VALUES ──
+      document.getElementById("reportTable").addEventListener("click", (e) => {
+        const td = e.target.closest("td");
+        if (!td) return;
+        const text = td.textContent.trim().replace(/[₹,]/g, "");
+        if (!/^\d+(\.\d+)?$/.test(text) || parseFloat(text) <= 0) return;
+        navigator.clipboard.writeText(text).then(() => {
+          const orig = td.style.background;
+          td.style.background = "rgba(45,106,79,0.18)";
+          setTimeout(() => td.style.background = orig, 600);
+        });
+      });
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

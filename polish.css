@@ -1,0 +1,394 @@
+/* ═══════════════════════════════════════════════════════════════
+   polish.css — Global animation & polish layer for Appachi
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── BUTTON RIPPLE ── */
+.btn,
+.camera-btn,
+.upload-btn,
+.retake-btn,
+.folder-card,
+.nav-crumb {
+  position: relative;
+  overflow: hidden;
+}
+/* Buttons that carry external badges must NOT clip them */
+button:not(.bell-btn):not(.logoutButton):not(.lightbox-close):not(.toggle-btn):not(.sidebar-section-header) {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-wave {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0);
+  pointer-events: none;
+  animation: ripple-expand 0.55s ease-out forwards;
+}
+@keyframes ripple-expand {
+  to { transform: scale(4); opacity: 0; }
+}
+
+/* ── INPUT FOCUS GLOW ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: var(--accent, #1d6fa4) !important;
+  box-shadow: 0 0 0 3px rgba(29, 111, 164, 0.13) !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* ── TABLE ROW SMOOTH HOVER ── */
+tbody tr {
+  transition: background 0.15s ease;
+}
+
+/* ── STICKY THEAD SHADOW ── */
+.thead-shadow thead th,
+.thead-shadow thead td {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+/* ── STATUS BADGE PULSE ── */
+.pulse {
+  animation: pulse-anim 1.6s ease-in-out infinite;
+}
+@keyframes pulse-anim {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* ── SCROLL-REVEAL ROWS ── */
+.reveal-row {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.reveal-row.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── SESSION EXPIRY BANNER ── */
+#session-expiry-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg, #b5620a, #e07b10);
+  color: #fff;
+  text-align: center;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 99999;
+  display: none;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(181, 98, 10, 0.4);
+  animation: slide-down 0.3s ease;
+}
+#session-expiry-banner.show {
+  display: flex;
+}
+@keyframes slide-down {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+#session-expiry-banner button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+  color: #fff;
+  padding: 3px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+#session-expiry-banner button:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ── SKELETON SHIMMER ── */
+.skeleton {
+  background: linear-gradient(90deg, #ebebeb 25%, #f5f5f5 50%, #ebebeb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shine 1.4s ease-in-out infinite;
+  border-radius: 6px;
+  color: transparent !important;
+}
+@keyframes skeleton-shine {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── TOAST (for pages that lack a native toast) ── */
+#polish-toast-wrap {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99998;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 360px;
+}
+.polish-toast {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: auto;
+}
+.polish-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.polish-toast.success { background: #2d6a4f; }
+.polish-toast.error   { background: #b5301e; }
+.polish-toast.info    { background: #1d6fa4; }
+.polish-toast.warn    { background: #b5620a; }
+
+/* ── LAST SAVED INDICATOR ── */
+.last-saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2d6a4f;
+  background: #d8f3dc;
+  border-radius: 99px;
+  padding: 4px 12px;
+  animation: chip-pop 0.3s ease;
+}
+@keyframes chip-pop {
+  0%   { opacity: 0; transform: scale(0.85); }
+  60%  { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ── PAGE FADE-IN HELPER ── */
+body.polish-ready {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: opacity 0.18s ease;
+}
+
+/* ── PRINT STYLES (reports) ── */
+@media print {
+  .sidebar,
+  .topbar,
+  .filters,
+  .actions-bar,
+  .summary-bar,
+  .no-print,
+  .back-top,
+  button:not(.print-keep),
+  .btn:not(.print-keep) {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12px !important;
+    visibility: visible !important;
+  }
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+  tfoot {
+    display: table-footer-group !important;
+  }
+  th,
+  td {
+    border: 1px solid #ccc !important;
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+    color: #000 !important;
+    background: transparent !important;
+  }
+  thead th {
+    background: #f0f0f0 !important;
+    font-weight: 700 !important;
+  }
+  tfoot td {
+    background: #f5f5f5 !important;
+    font-weight: 700 !important;
+  }
+  .main,
+  .report-body,
+  .content {
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  @page {
+    margin: 1.5cm;
+    size: A4 landscape;
+  }
+}
+
+/* ── BREADCRUMB (for pages that need it) ── */
+.polish-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8888aa;
+  margin-bottom: 4px;
+}
+.polish-breadcrumb a {
+  color: #1d6fa4;
+  text-decoration: none;
+  font-weight: 500;
+}
+.polish-breadcrumb a:hover {
+  text-decoration: underline;
+}
+.polish-breadcrumb span {
+  color: #ccc;
+}
+
+/* ── ZOOM ON HOVER (media thumbnails) ── */
+.photo-thumb {
+  transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+  will-change: transform;
+}
+.photo-card:hover .photo-thumb {
+  transform: scale(1.04);
+}
+
+/* ── COPY LINK BUTTON ── */
+.copy-link-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  z-index: 6;
+}
+.photo-card:hover .copy-link-btn {
+  opacity: 1;
+}
+.copy-link-btn:hover {
+  background: #fff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* ── LIGHTBOX PREV/NEXT ARROWS ── */
+.lb-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: background 0.15s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.lb-arrow:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.lb-arrow.lb-prev { left: 16px; }
+.lb-arrow.lb-next { right: 16px; }
+
+/* ── DRAG HANDLE IN GALLERY ── */
+.drag-handle {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  font-size: 11px;
+  color: #8888aa;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 6;
+  line-height: 1;
+}
+.photo-card:hover .drag-handle {
+  opacity: 1;
+}
+.photo-card.dragging {
+  opacity: 0.45;
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.photo-card.drag-over {
+  outline: 2px dashed var(--accent, #1d6fa4);
+  outline-offset: -2px;
+}
+
+/* ── UPLOAD PROGRESS BAR (retake) ── */
+.retake-progress {
+  width: 100%;
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+  display: none;
+}
+.retake-progress.show {
+  display: block;
+}
+.retake-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #1d6fa4, #4da3d4);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.4s ease;
+  animation: progress-pulse 1.5s ease-in-out infinite;
+}
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}

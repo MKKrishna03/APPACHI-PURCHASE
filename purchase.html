@@ -8,12 +8,14 @@
       }
     </style>
     <title>Purchase Voucher</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@4.1.4/dist/tesseract.min.js"></script>
     <style>
       :root {
         --bg: #f5f5f0;
@@ -634,6 +636,7 @@
         color: var(--green);
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="sidebar">
@@ -679,7 +682,7 @@
       </div>
     </div>
 
-    <div class="main">
+    <div class="main" data-dirty-check>
       <div class="breadcrumb">
         <a href="/">Dashboard</a>
         <span>/</span>
@@ -1135,6 +1138,7 @@
                   Auto TDS (194Q)
                 </label>
               </span>
+              <span id="tdsMandatoryBadge" style="display:none;font-size:10px;font-weight:700;color:#b5301e;background:#fdecea;border:1px solid #f5c6c6;border-radius:6px;padding:2px 8px;">TDS Mandatory</span>
               <input
                 type="number"
                 id="billTds"
@@ -1176,7 +1180,7 @@
                 margin-bottom: 10px;
               "
             >
-              📸 Bill Photo (Optional)
+              📸 Bill Photo
             </div>
             <div id="photoSlotsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
             <div id="aiScanArea" style="display:none;margin-bottom:8px;">
@@ -1284,7 +1288,7 @@
           </div>
 
           <div class="action-bar" style="margin-top: 20px">
-            <button class="btn-submit" onclick="submitPurchase()">
+            <button class="btn-submit" onclick="submitPurchase()" title="Save (Ctrl+Enter)">
               Submit Purchase Voucher →
             </button>
           </div>
@@ -1328,6 +1332,7 @@
       let selectedChittaiIds = [];
       let uploadToken = null;
       let uploadedPhotoUrls = [];
+      let photoOcrTexts = {};
       let uploadPollInterval = null;
 
       // ── UTILS ──
@@ -1779,11 +1784,15 @@
         document.getElementById("chittaiBanner").classList.remove("show");
       }
 
-      function onCompanyChange(reloadSidebar = true) {
+      let _tdsMandatory = false;
+
+      async function onCompanyChange(reloadSidebar = true) {
         const companyId = document.getElementById("companySelect").value;
         const btn = document.getElementById("createFreeBtn");
         if (!companyId) {
           if (btn) btn.style.display = "none";
+          _tdsMandatory = false;
+          document.getElementById("tdsMandatoryBadge").style.display = "none";
           return;
         }
         if (btn) btn.style.display = "inline-block";
@@ -1806,6 +1815,19 @@
           selectedGstType === "CGST_SGST" ? "flex" : "none";
         document.getElementById("igstRow").style.display =
           selectedGstType === "IGST" ? "flex" : "none";
+
+        // Check TDS mandatory for this company in current FY
+        try {
+          const r = await fetch(`/api/tds-required/${companyId}`);
+          const data = await r.json();
+          _tdsMandatory = data.required;
+          const badge = document.getElementById("tdsMandatoryBadge");
+          badge.style.display = _tdsMandatory ? "inline-block" : "none";
+          if (_tdsMandatory) {
+            const toggle = document.getElementById("autoTdsToggle");
+            if (!toggle.checked) { toggle.checked = true; applyAutoTds(); }
+          }
+        } catch(e) { _tdsMandatory = false; }
       }
 
       // ── TABLE ──
@@ -2097,6 +2119,12 @@
           showMessage("Please attach a bill photo before saving", "error");
           return;
         }
+        const tdsVal = parseFloat(document.getElementById("billTds").value) || 0;
+        if (_tdsMandatory && tdsVal <= 0) {
+          showMessage("TDS is mandatory for this company — previous TDS found in this financial year", "error");
+          document.getElementById("billTds").focus();
+          return;
+        }
 
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, idx) => {
@@ -2203,14 +2231,21 @@
                   photo_url: uploadedPhotoUrls[0] || null,
                   photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
                 };
-                await fetch("/api/purchases", {
+                const hmRes = await fetch("/api/purchases", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(hmPayload),
                 });
+                const hmResult = await hmRes.json();
+                if (hmResult.status !== "SUCCESS") {
+                  showMessage("Purchase saved but hallmark voucher failed: " + (hmResult.error || "unknown error"), "error");
+                  return;
+                }
               }
             }
             showMessage("Purchase Voucher created successfully!", "success");
+            _showLastSaved(document.getElementById("message"));
+            if (window._markFormClean) _markFormClean();
             // Update selected cards balance live
             const netVal =
               parseFloat(document.getElementById("billNet").value) || 0;
@@ -2274,7 +2309,7 @@
         const row = document.getElementById("photoSlotsRow");
         row.innerHTML = uploadedPhotoUrls.map((url, i) =>
           `<div style="position:relative;display:inline-block">
-             <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i+1}" />
+             <img src="${url}" loading="lazy" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i+1}" />
              <button type="button" onclick="removePhotoSlot(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger,#c0392b);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
            </div>`
         ).join("");
@@ -2321,7 +2356,7 @@
         try {
           const res = await fetch(`/api/upload-session/${uploadToken}/status`);
           const data = await res.json();
-          if (data.uploaded && data.photo_url) {
+          if (data.done && data.photo_url) {
             uploadedPhotoUrls.push(data.photo_url);
             uploadToken = null;
             clearInterval(uploadPollInterval);
@@ -2353,6 +2388,12 @@
         const company = companySel.options[companySel.selectedIndex]?.text || "";
         const bill_date = getBillDateForUpload();
 
+        // Start OCR in parallel with upload (only for image files, not PDF)
+        const isPdf = file.type === "application/pdf";
+        const ocrPromise = (!isPdf && typeof Tesseract !== "undefined")
+          ? runTesseractOCR(file).catch(() => null)
+          : Promise.resolve(null);
+
         try {
           showMessage("Uploading...", "success");
           const sessRes = await fetch("/api/upload-session", {
@@ -2377,6 +2418,10 @@
             renderPhotoSlots();
             showMessage("Photo uploaded ✓", "success");
             setTimeout(() => { const m = document.getElementById("message"); m.style.display = "none"; }, 1500);
+            // Store OCR result when it finishes (non-blocking)
+            ocrPromise.then(text => {
+              if (text) photoOcrTexts[upData.photo_url] = text;
+            });
           } else {
             showMessage("Upload failed: " + (upData.error || "unknown"), "error");
           }
@@ -2384,6 +2429,16 @@
           showMessage("Upload error: " + e.message, "error");
         }
         event.target.value = "";
+      }
+
+      async function runTesseractOCR(file) {
+        const worker = await Tesseract.createWorker("eng", 1, { logger: () => {} });
+        try {
+          const { data: { text } } = await worker.recognize(file);
+          return text.trim();
+        } finally {
+          await worker.terminate();
+        }
       }
 
       // ── AI SCAN ──
@@ -2395,15 +2450,45 @@
         btn.textContent = "⏳ Scanning...";
         status.textContent = "";
         try {
-          const res = await fetch("/api/ai-scan", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_url: uploadedPhotoUrls[0], form_type: "purchase" })
-          });
+          const photoUrl = uploadedPhotoUrls[0];
+          let ocrText = photoOcrTexts[photoUrl] || null;
+
+          // If OCR hasn't finished yet (upload was very fast), wait up to 20s
+          if (!ocrText && typeof Tesseract !== "undefined") {
+            const isPdf = photoUrl.endsWith(".pdf") || photoUrl.includes("/raw/");
+            if (!isPdf) {
+              status.textContent = "🔍 Reading text...";
+              try {
+                const worker = await Tesseract.createWorker("eng", 1, { logger: () => {} });
+                const { data: { text } } = await worker.recognize(photoUrl);
+                await worker.terminate();
+                ocrText = text.trim();
+                if (ocrText) photoOcrTexts[photoUrl] = ocrText;
+              } catch (_) { ocrText = null; }
+            }
+          }
+
+          let res;
+          if (ocrText) {
+            status.textContent = "🧠 Structuring...";
+            res = await fetch("/api/ai-scan-text", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ocr_text: ocrText, form_type: "purchase" }),
+            });
+          } else {
+            status.textContent = "🖼 Vision scan...";
+            res = await fetch("/api/ai-scan", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image_url: photoUrl, form_type: "purchase" }),
+            });
+          }
+
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Scan failed");
           applyAIScanFields(data.fields || {});
-          status.textContent = "✓ Fields filled";
+          status.textContent = ocrText ? "✓ Fields filled (OCR+AI)" : "✓ Fields filled";
           setTimeout(() => { status.textContent = ""; }, 3000);
         } catch (e) {
           status.textContent = "⚠ " + e.message;
@@ -2442,15 +2527,28 @@
               <td><button class="btn-row-del" onclick="deleteRow(${rowCount})">Del</button></td>`;
             tbody.appendChild(row);
             row._taxPct = inferredTaxPct;
-            if (qty !== "" && rate !== "") {
-              row.querySelector(".taxable").value = (parseFloat(qty) * parseFloat(rate)).toFixed(2);
-            }
+            // Trigger calcRow so taxable cell is computed and row._taxPct is locked in
+            calcRow(rowCount);
           });
         }
 
         if (f.round_off != null) document.getElementById("billRoundOff").value = f.round_off;
         if (f.tds != null) document.getElementById("billTds").value = f.tds;
         updateTotals();
+
+        // If AI returned a bill-level total, adjust round_off so the computed
+        // total exactly matches the actual bill rather than relying on imprecise
+        // per-item tax inference.
+        if (f.total_value != null) {
+          const taxable = parseFloat(document.getElementById("billTaxable").value) || 0;
+          const cgst    = parseFloat(document.getElementById("billCgst").value)    || 0;
+          const sgst    = parseFloat(document.getElementById("billSgst").value)    || 0;
+          const igst    = parseFloat(document.getElementById("billIgst").value)    || 0;
+          const vadd    = parseFloat(document.getElementById("billValueAdded").value) || 0;
+          const correctedRoundOff = parseFloat(f.total_value) - taxable - vadd - cgst - sgst - igst;
+          document.getElementById("billRoundOff").value = correctedRoundOff.toFixed(2);
+          updateTotals();
+        }
       }
 
       // ── HELPERS ──
@@ -2604,7 +2702,7 @@
         if (photos.length)
           html += bvSectionTitle("Bill Photo") +
             `<div style="display:flex;gap:8px;flex-wrap:wrap;">` +
-            photos.map(u => `<img src="${u}" style="max-width:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("") +
+            photos.map(u => `<img src="${u}" loading="lazy" style="max-width:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("") +
             `</div>`;
         el.innerHTML = html;
         enteredBy.textContent = mainEntry.created_by_name
@@ -2641,6 +2739,98 @@
           return null;
         }
       }
+
+      // ── CTRL+ENTER TO SAVE ──
+      document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          submitPurchase();
+        }
+      });
+
+      // ── AUTOFOCUS BILL NO AFTER COMPANY SELECTED ──
+      const _origOnCompanyChange = onCompanyChange;
+      onCompanyChange = function(...args) {
+        _origOnCompanyChange.apply(this, args);
+        setTimeout(() => {
+          const billNoEl = document.getElementById("billNo");
+          if (billNoEl && !billNoEl.value) billNoEl.focus();
+        }, 100);
+      };
+
+      // ── BILL NO: char counter + autocomplete off + red border on duplicate ──
+      (function() {
+        const inp = document.getElementById("billNo");
+        if (!inp) return;
+        inp.setAttribute("autocomplete", "off");
+        inp.setAttribute("maxlength", "60");
+        // counter
+        const counter = document.createElement("div");
+        counter.style.cssText = "font-size:11px;color:var(--ink-3);text-align:right;margin-top:3px;";
+        counter.textContent = "0 / 60";
+        inp.parentNode.insertBefore(counter, inp.nextSibling);
+        inp.addEventListener("input", () => {
+          const len = inp.value.length;
+          counter.textContent = `${len} / 60`;
+          counter.style.color = len > 50 ? "var(--danger,#c0392b)" : "var(--ink-3)";
+        });
+        // red border on duplicate (extend existing checkDuplicatePurchaseBillNo)
+        const _orig = window.checkDuplicatePurchaseBillNo;
+        window.checkDuplicatePurchaseBillNo = function(val) {
+          _orig && _orig(val);
+          const isDup = val && existingPurchaseBillNos.includes(val.trim().toLowerCase());
+          inp.style.borderColor = isDup ? "var(--danger,#c0392b)" : "";
+          inp.style.boxShadow = isDup ? "0 0 0 3px rgba(192,57,43,0.15)" : "";
+        };
+      })();
+
+      // ── DIM AI SCAN BUTTON WHEN NO PHOTO ──
+      (function() {
+        const btn = document.getElementById("aiScanBtn");
+        if (!btn) return;
+        btn.title = "Upload a photo first";
+        btn.style.opacity = "0.45";
+        btn.style.cursor = "not-allowed";
+        const _origRender = renderPhotoSlots;
+        renderPhotoSlots = function() {
+          _origRender();
+          btn.style.opacity = uploadedPhotoUrls.length ? "1" : "0.45";
+          btn.style.cursor = uploadedPhotoUrls.length ? "pointer" : "not-allowed";
+          btn.title = uploadedPhotoUrls.length ? "Scan bill with AI" : "Upload a photo first";
+        };
+      })();
+
+      // ── CLEAR FORM BUTTON ──
+      (function() {
+        const saveBtn = document.querySelector("button[onclick='submitPurchase()']");
+        if (!saveBtn) return;
+        const clearBtn = document.createElement("button");
+        clearBtn.type = "button";
+        clearBtn.textContent = "Clear Form";
+        clearBtn.style.cssText = "margin-left:10px;padding:10px 18px;background:none;border:1px solid var(--border-strong,#ccc);border-radius:var(--radius,8px);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink-2);";
+        clearBtn.onmouseenter = () => clearBtn.style.borderColor = "var(--danger,#c0392b)";
+        clearBtn.onmouseleave = () => clearBtn.style.borderColor = "var(--border-strong,#ccc)";
+        clearBtn.onclick = () => {
+          if (!confirm("Clear all entered data?")) return;
+          document.getElementById("billNo").value = "";
+          document.getElementById("billDate").value = new Date().toISOString().split("T")[0];
+          document.getElementById("billValueAdded").value = "";
+          document.getElementById("billRoundOff").value = "";
+          document.getElementById("billTds").value = "";
+          document.getElementById("itemsTable").innerHTML = "";
+          rowCount = 0; addRow();
+          uploadedPhotoUrls = []; renderPhotoSlots();
+          updateTotals();
+          document.getElementById("billNo").style.borderColor = "";
+          document.getElementById("billNo").style.boxShadow = "";
+          document.getElementById("purchaseBillNoDuplicateMsg").style.display = "none";
+          showMessage("Form cleared.", "success");
+        };
+        saveBtn.parentNode.style.display = "flex";
+        saveBtn.parentNode.style.gap = "0";
+        saveBtn.parentNode.appendChild(clearBtn);
+      })();
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

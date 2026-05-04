@@ -8,6 +8,7 @@
       }
     </style>
     <title>Media - Purchase Bills</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -543,6 +544,7 @@
         font-size: 12px;
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="topbar">
@@ -602,6 +604,15 @@
             <option value="credit_notes">Credit Notes</option>
             <option value="debit_notes">Debit Notes</option>
             <option value="refinery_bills">Refinery Bills</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Bill Type</label>
+          <select id="filterBillType" onchange="applyFilters()">
+            <option value="">All Types</option>
+            <option value="old_silver">Old Silver</option>
+            <option value="bullion">Bullion Issue Voucher</option>
+            <option value="refinery">Refinery</option>
           </select>
         </div>
         <div class="filter-group">
@@ -721,18 +732,25 @@
       id="lightbox"
       onclick="if (event.target === this) closeLightbox();"
     >
+      <button class="lb-arrow lb-prev" id="lbPrev" onclick="lbNavigate(-1)" title="Previous (←)">‹</button>
       <div class="lightbox-content">
         <div class="lightbox-header">
           <div>
             <div class="lightbox-title" id="lbTitle">Bill Photo</div>
             <div class="lightbox-sub" id="lbSub">—</div>
           </div>
-          <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="lbCounter" style="font-size:11px;color:var(--ink-3);font-weight:600;"></span>
+            <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+          </div>
         </div>
         <div class="lightbox-body">
           <img id="lbImg" src="" alt="Bill" />
         </div>
         <div class="lightbox-footer">
+          <button class="btn btn-secondary" onclick="copyLightboxLink()">
+            🔗 Copy Link
+          </button>
           <button class="btn btn-secondary" onclick="downloadSingle()">
             ⬇ Download JPG
           </button>
@@ -744,6 +762,7 @@
           </button>
         </div>
       </div>
+      <button class="lb-arrow lb-next" id="lbNext" onclick="lbNavigate(1)" title="Next (→)">›</button>
     </div>
 
     <!-- Retake QR Modal -->
@@ -760,6 +779,9 @@
         </p>
         <div id="retakeQrCode"></div>
         <div id="retakeStatus">Waiting for upload...</div>
+        <div class="retake-progress" id="retakeProgress">
+          <div class="retake-progress-bar" id="retakeProgressBar"></div>
+        </div>
         <button
           class="btn btn-secondary"
           onclick="closeQrModal()"
@@ -854,17 +876,19 @@
           document.getElementById("galleryContainer").innerHTML =
             `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
 
-          const [cloudinaryRes, purchasesRes, labourRes] = await Promise.all([
+          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes] = await Promise.all([
             fetch("/api/cloudinary/all-photos"),
             fetch("/api/purchases/list"),
             fetch("/api/labour"),
+            fetch("/api/hallmark-expenses/list"),
           ]);
 
           const cloudinaryPhotos = cloudinaryRes.ok
             ? await cloudinaryRes.json()
             : [];
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
-          const labour = labourRes.ok ? await labourRes.json() : [];
+          const labour    = labourRes.ok    ? await labourRes.json()    : [];
+          const hallmark  = hallmarkRes.ok  ? await hallmarkRes.json()  : [];
 
           // Extract public_id from a Cloudinary URL
           function extractPublicId(url) {
@@ -905,25 +929,41 @@
             }
           });
 
+          const hallmarkByPublicId = {};
+          const hallmarkByUrl = {};
+          hallmark.forEach((h) => {
+            const urls = [h.photo_url, ...(Array.isArray(h.photo_urls) ? h.photo_urls : [])].filter(Boolean);
+            urls.forEach(u => {
+              hallmarkByUrl[u] = h;
+              const pid = extractPublicId(u);
+              if (pid) hallmarkByPublicId[pid] = h;
+            });
+          });
+
           allPurchases = cloudinaryPhotos.map((item) => {
             // Try matching by public_id first, then by full URL
+            const pid0 = item.public_id.replace(/\.[^/.]+$/, "");
             const dbPurchase =
               purchaseByPublicId[item.public_id] ||
               purchaseByUrl[item.url] ||
-              purchaseByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+              purchaseByPublicId[pid0];
 
             const dbLabour =
               labourByPublicId[item.public_id] ||
               labourByUrl[item.url] ||
-              labourByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
+              labourByPublicId[pid0];
 
-            const dbRecord = dbPurchase || dbLabour;
+            const dbHallmark =
+              hallmarkByPublicId[item.public_id] ||
+              hallmarkByUrl[item.url] ||
+              hallmarkByPublicId[pid0];
 
-            // If matched to labour, use labour bill_no
+            const dbRecord = dbPurchase || dbLabour || dbHallmark;
+
             let bill_no = item.public_id.split("/").pop();
-            if (dbPurchase) bill_no = dbPurchase.bill_no;
-            else if (dbLabour)
-              bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
+            if (dbPurchase)      bill_no = dbPurchase.bill_no;
+            else if (dbLabour)   bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
+            else if (dbHallmark) bill_no = dbHallmark.bill_no;
 
             return {
               id: item.public_id,
@@ -942,8 +982,12 @@
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
               _labourDbId: dbLabour ? dbLabour.id : null,
+              _hallmarkDbId: dbHallmark ? dbHallmark.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
+              _isHallmark: !!dbHallmark && !dbPurchase && !dbLabour,
               _labourRecord: dbLabour || null,
+              _hallmarkRecord: dbHallmark || null,
+              _issueItemType: (dbLabour?.effective_item_type || dbLabour?.labour_item_type || ""),
               _purchaseRecord: dbPurchase || null,
               _matched: !!dbRecord,
             };
@@ -1012,6 +1056,9 @@
         const folderFilter = document.getElementById("filterFolder")
           ? document.getElementById("filterFolder").value
           : "";
+        const billTypeFilter = document.getElementById("filterBillType")
+          ? document.getElementById("filterBillType").value
+          : "";
 
         filtered = allPurchases.filter((p) => {
           if (company && String(p.profile_id) !== String(company)) return false;
@@ -1024,6 +1071,12 @@
           if (accounted === "yes" && !p.is_accounted) return false;
           if (accounted === "no" && p.is_accounted) return false;
           if (folderFilter && p.folder !== folderFilter) return false;
+          if (billTypeFilter) {
+            const itemType = (p._issueItemType || "").toLowerCase();
+            if (billTypeFilter === "old_silver" && !itemType.includes("old silver")) return false;
+            if (billTypeFilter === "bullion" && !itemType.includes("bullion")) return false;
+            if (billTypeFilter === "refinery" && !itemType.includes("refinery")) return false;
+          }
           return true;
         });
 
@@ -1083,6 +1136,8 @@
         document.getElementById("filterAccounted").value = "";
         const ff = document.getElementById("filterFolder");
         if (ff) ff.value = "";
+        const fbt = document.getElementById("filterBillType");
+        if (fbt) fbt.value = "";
         applyFilters();
       }
 
@@ -1227,16 +1282,18 @@
           return;
         }
 
-        container.innerHTML = `<div class="gallery">${items
-          .map((p) => {
+        container.innerHTML = `<div class="gallery" id="galleryGrid">${items
+          .map((p, idx) => {
             const isSel = selected.has(String(p.id));
             const t = detectType(p);
             const meta = TYPE_META[t] || TYPE_META.other;
             const thumb = p.is_pdf
               ? `<div class="photo-no-img" style="background:#fef0d6;color:var(--amber);font-size:40px;">📄</div>`
               : `<img class="photo-thumb" src="${p.photo_url}" alt="Bill" loading="lazy" onerror="this.outerHTML='<div class=\\'photo-no-img\\'>📷</div>'" />`;
-            return `<div class="photo-card ${isSel ? "selected" : ""}" onclick="openLightbox('${p.id}')">
+            return `<div class="photo-card ${isSel ? "selected" : ""}" data-id="${p.id}" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragover="onCardDragOver(event)" ondrop="onCardDrop(event,'${p.id}')" ondragend="onCardDragEnd()" onclick="openLightbox('${p.id}')">
                   <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
+                  <button class="copy-link-btn" onclick="event.stopPropagation();copyPhotoLink('${p.photo_url}')" title="Copy photo link">🔗</button>
+                  <div class="drag-handle" title="Drag to reorder">⠿</div>
                   ${thumb}
                   <div class="photo-info">
                     <div class="photo-bill">${p.bill_no || "—"}</div>
@@ -1371,21 +1428,59 @@
       }
 
       // ── LIGHTBOX ──
+      let lbIndex = -1;
+
       function openLightbox(id) {
         id = String(id);
-        const p = filtered.find((x) => String(x.id) === id);
+        const items = getFilteredForLevel();
+        lbIndex = items.findIndex((x) => String(x.id) === id);
+        if (lbIndex === -1) return;
+        _renderLightbox(items, lbIndex);
+        document.getElementById("lightbox").classList.add("show");
+      }
+
+      function _renderLightbox(items, idx) {
+        const p = items[idx];
         if (!p) return;
         currentLightbox = p;
         document.getElementById("lbTitle").textContent =
           `Bill: ${p.bill_no || "—"}`;
         document.getElementById("lbSub").textContent =
           `${getCompanyName(p.profile_id)} · ${fmtDate(p.date)}`;
-        document.getElementById("lbImg").src = p.photo_url;
-        document.getElementById("lightbox").classList.add("show");
+        const imgEl = document.getElementById("lbImg");
+        imgEl.style.opacity = "0";
+        imgEl.src = p.photo_url;
+        imgEl.onload = () => { imgEl.style.transition = "opacity 0.2s"; imgEl.style.opacity = "1"; };
+        document.getElementById("lbCounter").textContent = `${idx + 1} / ${items.length}`;
+        document.getElementById("lbPrev").style.display = idx === 0 ? "none" : "flex";
+        document.getElementById("lbNext").style.display = idx === items.length - 1 ? "none" : "flex";
       }
+
+      function lbNavigate(dir) {
+        const items = getFilteredForLevel();
+        const next = lbIndex + dir;
+        if (next < 0 || next >= items.length) return;
+        lbIndex = next;
+        _renderLightbox(items, lbIndex);
+      }
+
       function closeLightbox() {
         document.getElementById("lightbox").classList.remove("show");
         currentLightbox = null;
+        lbIndex = -1;
+      }
+
+      function copyLightboxLink() {
+        if (!currentLightbox) return;
+        navigator.clipboard.writeText(currentLightbox.photo_url).then(() => {
+          showToast("Link copied to clipboard", "success");
+        }).catch(() => showToast("Copy failed", "error"));
+      }
+
+      function copyPhotoLink(url) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast("Link copied!", "success");
+        }).catch(() => showToast("Copy failed", "error"));
       }
 
       // ── DOWNLOAD ──
@@ -1672,6 +1767,7 @@
         document.getElementById("qrModal").classList.add("show");
         document.getElementById("retakeStatus").textContent =
           "Waiting for upload...";
+        _startRetakeProgress();
         retakePollInterval = setInterval(checkRetakeStatus, 2000);
       }
 
@@ -1694,6 +1790,7 @@
             if (upd.ok) {
               document.getElementById("retakeStatus").textContent =
                 "✓ Photo updated!";
+              _finishRetakeProgress();
               showToast("Photo replaced successfully", "success");
               setTimeout(() => {
                 closeQrModal();
@@ -1711,6 +1808,7 @@
         if (retakePollInterval) clearInterval(retakePollInterval);
         retakeToken = null;
         retakePurchaseId = null;
+        _finishRetakeProgress();
         document.getElementById("qrModal").classList.remove("show");
       }
 
@@ -1824,15 +1922,18 @@
 
       // ── KEYBOARD ──
       document.addEventListener("keydown", (e) => {
+        const lbOpen = document.getElementById("lightbox").classList.contains("show");
         if (e.key === "Escape") {
           if (document.getElementById("unlinkedModal").classList.contains("show"))
             closeUnlinkedModal();
           else if (document.getElementById("qrModal").classList.contains("show"))
             closeQrModal();
-          else if (
-            document.getElementById("lightbox").classList.contains("show")
-          )
+          else if (lbOpen)
             closeLightbox();
+        } else if (lbOpen && e.key === "ArrowLeft") {
+          lbNavigate(-1);
+        } else if (lbOpen && e.key === "ArrowRight") {
+          lbNavigate(1);
         }
       });
       function showMoveMenu(id, btn) {
@@ -1929,6 +2030,74 @@
         }
       }
 
+      // ── DRAG-TO-REORDER IN GALLERY ──
+      let _dragSrcId = null;
+
+      function onCardDragStart(e, id) {
+        _dragSrcId = id;
+        e.dataTransfer.effectAllowed = "move";
+        e.currentTarget.classList.add("dragging");
+      }
+
+      function onCardDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        document.querySelectorAll(".photo-card.drag-over").forEach(el => el.classList.remove("drag-over"));
+        e.currentTarget.classList.add("drag-over");
+      }
+
+      function onCardDrop(e, targetId) {
+        e.preventDefault();
+        document.querySelectorAll(".photo-card.drag-over").forEach(el => el.classList.remove("drag-over"));
+        if (!_dragSrcId || _dragSrcId === String(targetId)) return;
+
+        const items = getFilteredForLevel();
+        const fromIdx = items.findIndex(p => String(p.id) === String(_dragSrcId));
+        const toIdx   = items.findIndex(p => String(p.id) === String(targetId));
+        if (fromIdx === -1 || toIdx === -1) return;
+
+        // Reorder inside the filtered array (which is a subset of allPurchases)
+        const moved = items.splice(fromIdx, 1)[0];
+        items.splice(toIdx, 0, moved);
+
+        // Sync back into filtered
+        const levelItems = getFilteredForLevel();
+        levelItems.splice(0, levelItems.length, ...items);
+
+        renderGallery(document.getElementById("galleryContainer"));
+      }
+
+      function onCardDragEnd() {
+        _dragSrcId = null;
+        document.querySelectorAll(".photo-card.dragging").forEach(el => el.classList.remove("dragging"));
+        document.querySelectorAll(".photo-card.drag-over").forEach(el => el.classList.remove("drag-over"));
+      }
+
+      // ── RETAKE PROGRESS BAR ANIMATION ──
+      function _startRetakeProgress() {
+        const bar = document.getElementById("retakeProgressBar");
+        const wrap = document.getElementById("retakeProgress");
+        if (!bar || !wrap) return;
+        wrap.classList.add("show");
+        let pct = 0;
+        const tick = setInterval(() => {
+          pct = Math.min(pct + (Math.random() * 4 + 1), 88);
+          bar.style.width = pct + "%";
+        }, 600);
+        window._retakeProgressTick = tick;
+      }
+
+      function _finishRetakeProgress() {
+        const bar = document.getElementById("retakeProgressBar");
+        const wrap = document.getElementById("retakeProgress");
+        clearInterval(window._retakeProgressTick);
+        if (bar) bar.style.width = "100%";
+        setTimeout(() => {
+          if (wrap) wrap.classList.remove("show");
+          if (bar) bar.style.width = "0%";
+        }, 600);
+      }
+
       // ── INIT ──
       (async () => {
         await loadCompanies();
@@ -1938,5 +2107,6 @@
       // Override applyFilters to reset folder nav
       const _origApplyFilters = applyFilters;
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>

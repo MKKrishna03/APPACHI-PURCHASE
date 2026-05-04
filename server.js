@@ -10,8 +10,8 @@ const multer = require("multer");
 const crypto = require("crypto");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const { GoogleGenAI } = require("@google/genai");
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Cloudinary config
 cloudinary.config({
@@ -52,7 +52,9 @@ function makeUploader(defaultFolder) {
         console.log(
           `[CLOUDINARY UPLOAD] folder=${folder} token=${req.params?.token || "none"} sessionFolder=${uploadSessions.get(req.params?.token)?.folder || "none"} bodyFolder=${req.body?.folder || "none"}`,
         );
-        const session = req.params?.token ? uploadSessions.get(req.params.token) : null;
+        const session = req.params?.token
+          ? uploadSessions.get(req.params.token)
+          : null;
         const bill_date = session?.bill_date || req.body?.bill_date || null;
         return {
           folder,
@@ -88,6 +90,14 @@ setInterval(() => {
 }, 60000);
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+function generateResetKey() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.randomBytes(5);
+  let key = "";
+  for (let i = 0; i < 5; i++) key += chars[bytes[i] % chars.length];
+  return key;
+}
 
 const dbUrl = new URL(process.env.DATABASE_URL);
 const pool = new Pool({
@@ -361,6 +371,19 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(
     `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE`,
   );
+  await pool.query(
+    `ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS reset_key TEXT`,
+  );
+  // Generate reset_key for any user that doesn't have one yet
+  const usersWithoutKey = await pool.query(
+    `SELECT id FROM auth_users WHERE reset_key IS NULL`,
+  );
+  for (const row of usersWithoutKey.rows) {
+    await pool.query(`UPDATE auth_users SET reset_key=$1 WHERE id=$2`, [
+      generateResetKey(),
+      row.id,
+    ]);
+  }
 
   // ── Base tables that may not exist on a fresh setup ──
   await pool.query(`
@@ -505,17 +528,81 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(`CREATE SEQUENCE IF NOT EXISTS receipt_voucher_seq START 1`);
 
   // ── Missing columns on existing tables ──
-  await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS ledger_types TEXT[] DEFAULT '{}'`);
-  await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS voucher_no TEXT`);
-  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_voucher_ids INTEGER[]`);
-  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_chittai_ids INTEGER[]`);
-  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS voucher_type TEXT`);
+  await pool.query(
+    `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS ledger_types TEXT[] DEFAULT '{}'`,
+  );
+  await pool.query(
+    `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS voucher_no TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_voucher_ids INTEGER[]`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS linked_chittai_ids INTEGER[]`,
+  );
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS voucher_type TEXT`,
+  );
 
   // ── Multiple photos per bill ──
-  await pool.query(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
-  await pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
-  await pool.query(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
-  await pool.query(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+  await pool.query(
+    `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`,
+  );
+  await pool.query(
+    `ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`,
+  );
+  await pool.query(
+    `ALTER TABLE chittai ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`,
+  );
+  await pool.query(
+    `ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`,
+  );
+
+  // Fix photo_urls columns that may have been created as JSON/JSONB in an earlier migration.
+  for (const table of ["purchases", "labour", "chittai", "hallmark_expenses"]) {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = '${table}' AND column_name = 'photo_urls' AND udt_name IN ('jsonb','json')
+        ) THEN
+          ALTER TABLE ${table} ALTER COLUMN photo_urls TYPE TEXT[]
+          USING CASE
+            WHEN photo_urls IS NULL THEN NULL::TEXT[]
+            WHEN jsonb_typeof(photo_urls::jsonb) = 'array'
+              THEN ARRAY(SELECT jsonb_array_elements_text(photo_urls::jsonb))
+            ELSE NULL::TEXT[]
+          END;
+        END IF;
+      END $$;
+    `);
+  }
+
+  // Fix purchases.linked_voucher_ids / linked_chittai_ids / linked_purchase_ids
+  // if they were created as JSONB. Drop and recreate as INTEGER[] (link metadata is rebuilt from vouchers side).
+  for (const col of [
+    "linked_voucher_ids",
+    "linked_chittai_ids",
+    "linked_purchase_ids",
+  ]) {
+    const check = await pool.query(
+      `SELECT udt_name FROM information_schema.columns
+       WHERE table_name='purchases' AND column_name=$1`,
+      [col],
+    );
+    if (
+      check.rows[0] &&
+      (check.rows[0].udt_name === "jsonb" || check.rows[0].udt_name === "json")
+    ) {
+      await pool.query(`ALTER TABLE purchases DROP COLUMN ${col}`);
+      await pool.query(`ALTER TABLE purchases ADD COLUMN ${col} INTEGER[]`);
+      console.log(`Migrated purchases.${col} from jsonb to INTEGER[]`);
+    }
+  }
+
+  // Drop the stray "items" jsonb column on purchases (line items live in purchase_items table).
+  await pool.query(`ALTER TABLE purchases DROP COLUMN IF EXISTS items`);
 
   console.log("DB ready");
 }
@@ -868,7 +955,18 @@ app.get("/api/labour/:id", async (req, res) => {
 app.get("/api/labour", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT l.*, u.name AS created_by_name FROM labour l LEFT JOIN auth_users u ON u.user_id::text = l.created_by ORDER BY l.created_at DESC`,
+      `SELECT l.*, u.name AS created_by_name,
+              CASE WHEN l.voucher_type = 'Receipt Voucher'
+                   THEN (SELECT iv.labour_item_type FROM labour iv
+                         WHERE UPPER(iv.voucher_type) = 'ISSUE VOUCHER'
+                           AND (l.issue_number = iv.issue_number
+                                OR l.issue_number LIKE '%' || iv.issue_number || '%')
+                         LIMIT 1)
+                   ELSE l.labour_item_type
+              END AS effective_item_type
+       FROM labour l
+       LEFT JOIN auth_users u ON u.user_id::text = l.created_by
+       ORDER BY l.created_at DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1379,6 +1477,65 @@ app.get("/api/purchases/list", async (req, res) => {
     }
 
     res.json(purchases);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tds-required/:profile_id", async (req, res) => {
+  try {
+    const { profile_id } = req.params;
+    const now = new Date();
+    const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fyStart = `${fyYear}-04-01`;
+    const fyEnd   = `${fyYear + 1}-03-31`;
+
+    const result = await pool.query(
+      `SELECT tds FROM purchases
+       WHERE profile_id = $1 AND tds IS NOT NULL AND tds > 0
+         AND date BETWEEN $2 AND $3
+       UNION ALL
+       SELECT tds FROM labour
+       WHERE profile_id = $1 AND voucher_type = 'Receipt Voucher'
+         AND tds IS NOT NULL AND tds > 0
+         AND date BETWEEN $2 AND $3
+       LIMIT 1`,
+      [profile_id, fyStart, fyEnd]
+    );
+    res.json({ required: result.rows.length > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/purchases/no-photo", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.profile_id, p.bill_no, p.date, p.net_value, p.total_value,
+              COALESCE(pr.alias, pr.company_name) AS company_name, 'purchase' AS source
+       FROM purchases p
+       LEFT JOIN profiles pr ON pr.id = p.profile_id
+       WHERE (p.photo_url IS NULL OR p.photo_url = '')
+         AND (p.voucher_type IS NULL OR p.voucher_type != 'Hallmark Voucher')
+       UNION ALL
+       SELECT l.id, l.profile_id, l.receipt_bill_no AS bill_no, l.date,
+              l.bill_value_after_deduction AS net_value, l.total AS total_value,
+              COALESCE(pr2.alias, pr2.company_name, l.company_name) AS company_name, 'receipt_voucher' AS source
+       FROM labour l
+       LEFT JOIN profiles pr2 ON pr2.id = l.profile_id
+       WHERE l.voucher_type = 'Receipt Voucher'
+         AND (l.photo_url IS NULL OR l.photo_url = '')
+       UNION ALL
+       SELECT he.id, he.profile_id, he.bill_no, he.date, he.net_value, he.total_value,
+              COALESCE(pr3.alias, pr3.company_name) AS company_name,
+              CASE WHEN he.voucher_type = 'Hallmark' THEN 'hallmark' ELSE 'expenses' END AS source
+       FROM hallmark_expenses he
+       LEFT JOIN profiles pr3 ON pr3.id = he.profile_id
+       WHERE he.voucher_type IN ('Hallmark', 'Expenses')
+         AND (he.photo_url IS NULL OR he.photo_url = '')
+       ORDER BY date DESC`
+    );
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2143,6 +2300,56 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/auth/reset-password", async (req, res) => {
+  const { user_id, key, new_password } = req.body;
+  if (!user_id || !key || !new_password)
+    return res.json({ error: "All fields are required." });
+  if (new_password.length < 6)
+    return res.json({ error: "Password must be at least 6 characters." });
+  try {
+    const result = await pool.query(
+      "SELECT id, reset_key FROM auth_users WHERE user_id=$1",
+      [user_id],
+    );
+    const user = result.rows[0];
+    if (!user) return res.json({ error: "User ID not found." });
+    if (
+      !user.reset_key ||
+      user.reset_key.toUpperCase() !== key.trim().toUpperCase()
+    )
+      return res.json({ error: "Invalid key. Please contact admin." });
+    const hash = await bcrypt.hash(new_password, 10);
+    const newKey = generateResetKey();
+    await pool.query(
+      "UPDATE auth_users SET password=$1, reset_key=$2 WHERE id=$3",
+      [hash, newKey, user.id],
+    );
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin-only: view all users with their reset keys
+app.get("/api/auth/admin-keys", async (req, res) => {
+  const { requester_id } = req.query;
+  if (!requester_id) return res.status(403).json({ error: "Forbidden" });
+  try {
+    const check = await pool.query(
+      "SELECT can_delete FROM auth_users WHERE user_id=$1",
+      [requester_id],
+    );
+    if (!check.rows[0]?.can_delete)
+      return res.status(403).json({ error: "Admin access required." });
+    const result = await pool.query(
+      "SELECT user_id, name, reset_key FROM auth_users WHERE is_active=true ORDER BY name",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/login", (req, res) =>
   res.sendFile(path.join(__dirname, "login.html")),
 );
@@ -2311,9 +2518,10 @@ app.delete("/api/delete-entry", async (req, res) => {
     }
     // Delete main entry
     if (type === "issue" || type === "receipt") {
-      const ph = await pool.query(`SELECT photo_url, photo_urls FROM labour WHERE id=$1`, [
-        id,
-      ]);
+      const ph = await pool.query(
+        `SELECT photo_url, photo_urls FROM labour WHERE id=$1`,
+        [id],
+      );
       if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
       await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
       await pool.query(`DELETE FROM labour WHERE id=$1`, [id]);
@@ -2342,9 +2550,10 @@ app.delete("/api/delete-entry", async (req, res) => {
       }
     }
     if (type === "chittai") {
-      const ph = await pool.query(`SELECT photo_url, photo_urls FROM chittai WHERE id=$1`, [
-        id,
-      ]);
+      const ph = await pool.query(
+        `SELECT photo_url, photo_urls FROM chittai WHERE id=$1`,
+        [id],
+      );
       if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
       await pool.query(
         `UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`,
@@ -2507,6 +2716,8 @@ app.post("/api/upload-session", (req, res) => {
     folder: finalFolder,
     bill_date: bill_date || null,
     photo_url: null,
+    photo_urls: [],
+    done: false,
     expires: Date.now() + 30 * 60 * 1000, // 30 min
   });
   res.json({ token });
@@ -2519,8 +2730,11 @@ app.get("/api/upload-session/:token/status", (req, res) => {
   res.json({
     bill_no: session.bill_no,
     company: session.company,
-    uploaded: !!session.photo_url,
+    uploaded: session.photo_urls.length > 0,
     photo_url: session.photo_url,
+    photo_urls: session.photo_urls,
+    count: session.photo_urls.length,
+    done: session.done,
   });
 });
 
@@ -2534,8 +2748,17 @@ app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
   const session = uploadSessions.get(req.params.token);
   if (!session) return res.status(404).json({ error: "Invalid or expired" });
   if (!req.file) return res.status(400).json({ error: "No file" });
-  session.photo_url = req.file.path;
-  res.json({ status: "SUCCESS", photo_url: session.photo_url });
+  const url = req.file.path;
+  session.photo_urls.push(url);
+  if (!session.photo_url) session.photo_url = url; // first photo = legacy field
+  res.json({ status: "SUCCESS", photo_url: url, count: session.photo_urls.length });
+});
+
+app.post("/api/upload-session/:token/done", (req, res) => {
+  const session = uploadSessions.get(req.params.token);
+  if (!session) return res.status(404).json({ error: "Invalid or expired" });
+  session.done = true;
+  res.json({ status: "SUCCESS" });
 });
 
 // Phone upload page
@@ -2682,8 +2905,14 @@ app.patch("/api/labour/:id/accounted", async (req, res) => {
 
 // ── Shared helpers ──
 const CLOUDINARY_FOLDERS = [
-  "purchase_bills","chittai_bills","labour_receipts","hallmark_bills",
-  "expense_bills","credit_notes","debit_notes","refinery_bills",
+  "purchase_bills",
+  "chittai_bills",
+  "labour_receipts",
+  "hallmark_bills",
+  "expense_bills",
+  "credit_notes",
+  "debit_notes",
+  "refinery_bills",
 ];
 
 async function fetchAllCloudinaryResources() {
@@ -2695,7 +2924,12 @@ async function fetchAllCloudinaryResources() {
     for (const resource_type of ["image", "raw"]) {
       let nextCursor = null;
       do {
-        const params = new URLSearchParams({ type: "upload", prefix: folder, max_results: 500, resource_type });
+        const params = new URLSearchParams({
+          type: "upload",
+          prefix: folder,
+          max_results: 500,
+          resource_type,
+        });
         if (nextCursor) params.append("next_cursor", nextCursor);
         const r = await fetch(
           `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}?${params}`,
@@ -2703,7 +2937,16 @@ async function fetchAllCloudinaryResources() {
         );
         const d = await r.json();
         (d.resources || []).forEach((res) =>
-          all.push({ public_id: res.public_id, url: res.secure_url, created_at: res.created_at, folder, bytes: res.bytes, format: res.format, resource_type, is_pdf: resource_type === "raw" }),
+          all.push({
+            public_id: res.public_id,
+            url: res.secure_url,
+            created_at: res.created_at,
+            folder,
+            bytes: res.bytes,
+            format: res.format,
+            resource_type,
+            is_pdf: resource_type === "raw",
+          }),
         );
         nextCursor = d.next_cursor || null;
       } while (nextCursor);
@@ -2720,16 +2963,37 @@ function extractPublicIdFromUrl(url) {
 }
 
 async function getLinkedPublicIds() {
-  const [pRes, lRes, cRes, hRes, puRes, luRes, cuRes, huRes] = await Promise.all([
-    pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
-    pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
-    pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
-    pool.query("SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL").catch(() => ({ rows: [] })),
-    pool.query("SELECT unnest(photo_urls) AS u FROM purchases WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
-    pool.query("SELECT unnest(photo_urls) AS u FROM labour WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
-    pool.query("SELECT unnest(photo_urls) AS u FROM chittai WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
-    pool.query("SELECT unnest(photo_urls) AS u FROM hallmark_expenses WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
-  ]);
+  const [pRes, lRes, cRes, hRes, puRes, luRes, cuRes, huRes] =
+    await Promise.all([
+      pool.query("SELECT photo_url FROM purchases WHERE photo_url IS NOT NULL"),
+      pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
+      pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
+      pool
+        .query(
+          "SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
+      pool
+        .query(
+          "SELECT unnest(photo_urls) AS u FROM purchases WHERE photo_urls IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
+      pool
+        .query(
+          "SELECT unnest(photo_urls) AS u FROM labour WHERE photo_urls IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
+      pool
+        .query(
+          "SELECT unnest(photo_urls) AS u FROM chittai WHERE photo_urls IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
+      pool
+        .query(
+          "SELECT unnest(photo_urls) AS u FROM hallmark_expenses WHERE photo_urls IS NOT NULL",
+        )
+        .catch(() => ({ rows: [] })),
+    ]);
   const linked = new Set();
   function addUrl(url) {
     const pid = extractPublicIdFromUrl(url);
@@ -2742,13 +3006,23 @@ async function getLinkedPublicIds() {
       linked.add(pid + ".webp");
     }
   }
-  for (const row of [...pRes.rows, ...lRes.rows, ...cRes.rows, ...hRes.rows]) addUrl(row.photo_url);
-  for (const row of [...puRes.rows, ...luRes.rows, ...cuRes.rows, ...huRes.rows]) addUrl(row.u);
+  for (const row of [...pRes.rows, ...lRes.rows, ...cRes.rows, ...hRes.rows])
+    addUrl(row.photo_url);
+  for (const row of [
+    ...puRes.rows,
+    ...luRes.rows,
+    ...cuRes.rows,
+    ...huRes.rows,
+  ])
+    addUrl(row.u);
   return linked;
 }
 
 async function findUnlinkedResources() {
-  const [all, linked] = await Promise.all([fetchAllCloudinaryResources(), getLinkedPublicIds()]);
+  const [all, linked] = await Promise.all([
+    fetchAllCloudinaryResources(),
+    getLinkedPublicIds(),
+  ]);
   return all.filter((r) => {
     const clean = r.public_id.replace(/\.[^/.]+$/, "");
     return !linked.has(r.public_id) && !linked.has(clean);
@@ -2879,22 +3153,37 @@ app.delete("/api/cloudinary/delete-unlinked", async (req, res) => {
           `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/resources/${resource_type}/upload`,
           {
             method: "DELETE",
-            headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+            headers: {
+              Authorization: `Basic ${auth}`,
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({ public_ids: batch }),
           },
         );
         const data = await response.json();
-        if (data.deleted) Object.keys(data.deleted).forEach((k) => deleted.push(k));
-        if (data.failed) Object.keys(data.failed).forEach((k) => failed.push(k));
+        if (data.deleted)
+          Object.keys(data.deleted).forEach((k) => deleted.push(k));
+        if (data.failed)
+          Object.keys(data.failed).forEach((k) => failed.push(k));
       }
     }
 
-    const imageIds = public_ids.filter((r) => r.resource_type !== "raw").map((r) => r.public_id);
-    const rawIds = public_ids.filter((r) => r.resource_type === "raw").map((r) => r.public_id);
+    const imageIds = public_ids
+      .filter((r) => r.resource_type !== "raw")
+      .map((r) => r.public_id);
+    const rawIds = public_ids
+      .filter((r) => r.resource_type === "raw")
+      .map((r) => r.public_id);
     await deleteBatch(imageIds, "image");
     await deleteBatch(rawIds, "raw");
 
-    res.json({ status: "SUCCESS", deleted: deleted.length, failed: failed.length, deleted_ids: deleted, failed_ids: failed });
+    res.json({
+      status: "SUCCESS",
+      deleted: deleted.length,
+      failed: failed.length,
+      deleted_ids: deleted,
+      failed_ids: failed,
+    });
   } catch (err) {
     console.error("DELETE UNLINKED ERROR:", err.message);
     res.status(500).json({ error: err.message });
@@ -3051,37 +3340,300 @@ Return this structure:
 Use null for missing numbers.`,
 };
 
+const GEMINI_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash"];
+
+// Text-only prompts — used when Tesseract OCR text is available (cheaper than vision)
+const AI_TEXT_PROMPTS = {
+  purchase: `You are a bill/invoice data extraction assistant for an Indian jewellery business. Extract fields from the following raw OCR text of a bill and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "",
+  "vendor_name": "",
+  "vendor_gstin": "",
+  "our_gstin": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "total": null,
+  "net_value": null,
+  "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers. date format: YYYY-MM-DD. Extract all jewellery line items you can see.
+
+OCR TEXT:
+`,
+  labclose: `You are a labour receipt data extraction assistant. Extract fields from the following raw OCR text and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "receipt_bill_no": "",
+  "date": "",
+  "vendor_name": "",
+  "vendor_gstin": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "total": null,
+  "net_value": null,
+  "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers. date format: YYYY-MM-DD.
+
+OCR TEXT:
+`,
+  chittai: `You are a chittai/advance slip data extraction assistant. Extract fields from the following raw OCR text and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "chittai_no": "",
+  "date": "",
+  "vendor_name": "",
+  "vendor_gstin": "",
+  "gross_wt": null,
+  "less_wt": null,
+  "net_wt": null,
+  "rate": null,
+  "amount": null,
+  "advance": null,
+  "balance": null,
+  "rnd": null
+}
+Use null for missing numbers. date format: YYYY-MM-DD. "rnd" is round-off amount if present.
+
+OCR TEXT:
+`,
+  hallmark: `You are a hallmark expense bill data extraction assistant. Extract fields from the following raw OCR text and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "",
+  "vendor_name": "",
+  "vendor_gstin": "",
+  "our_gstin": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "total": null,
+  "net_value": null,
+  "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers. date format: YYYY-MM-DD.
+
+OCR TEXT:
+`,
+  note: `You are a credit/debit note data extraction assistant. Extract fields from the following raw OCR text and return ONLY valid JSON (no markdown, no explanation).
+Return this structure:
+{
+  "bill_no": "",
+  "date": "",
+  "vendor_name": "",
+  "vendor_gstin": "",
+  "our_gstin": "",
+  "taxable_value": null,
+  "cgst": null,
+  "sgst": null,
+  "igst": null,
+  "total": null,
+  "net_value": null,
+  "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
+}
+Use null for missing numbers. date format: YYYY-MM-DD.
+
+OCR TEXT:
+`,
+};
+
+async function geminiScan(prompt, mimeType, b64) {
+  let lastErr;
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await genAI.models.generateContent({
+          model,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType, data: b64 } },
+              ],
+            },
+          ],
+        });
+        return response.text || "{}";
+      } catch (err) {
+        lastErr = err;
+        const msg = err.message || "";
+        if (msg.includes("429")) {
+          const waitMs = 20000 * (attempt + 1);
+          console.warn(
+            `AI SCAN: 429 on ${model}, waiting ${waitMs / 1000}s...`,
+          );
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        if (msg.includes("404") || msg.includes("not found")) {
+          break;
+        }
+        throw err;
+      }
+    }
+  }
+  throw lastErr || new Error("No Gemini model available. Check your API key.");
+}
+
+async function groqTextScan(prompt) {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Groq ${res.status}: ${body}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || "{}";
+}
+
+async function geminiTextScan(prompt) {
+  let lastErr;
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await genAI.models.generateContent({
+          model,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
+        return response.text || "{}";
+      } catch (err) {
+        lastErr = err;
+        const msg = err.message || "";
+        if (msg.includes("429")) {
+          const waitMs = 20000 * (attempt + 1);
+          console.warn(`AI TEXT SCAN: 429 on ${model}, waiting ${waitMs / 1000}s...`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        if (msg.includes("404") || msg.includes("not found")) break;
+        throw err;
+      }
+    }
+  }
+  throw lastErr || new Error("No Gemini model available. Check your API key.");
+}
+
+app.post("/api/ai-scan-text", async (req, res) => {
+  try {
+    const { ocr_text, form_type } = req.body;
+    if (!ocr_text) return res.status(400).json({ error: "ocr_text required" });
+    const basePrompt = AI_TEXT_PROMPTS[form_type] || AI_TEXT_PROMPTS.purchase;
+    const fullPrompt = basePrompt + ocr_text;
+
+    let raw;
+    let engine;
+    if (process.env.GROQ_API_KEY) {
+      try {
+        raw = await groqTextScan(fullPrompt);
+        engine = "groq";
+      } catch (groqErr) {
+        console.warn("Groq failed, falling back to Gemini:", groqErr.message);
+        raw = await geminiTextScan(fullPrompt);
+        engine = "gemini-fallback";
+      }
+    } else {
+      raw = await geminiTextScan(fullPrompt);
+      engine = "gemini";
+    }
+
+    const cleaned = raw
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/```$/i, "")
+      .trim();
+    let fields;
+    try {
+      fields = JSON.parse(cleaned);
+    } catch {
+      fields = {};
+    }
+    console.log(`[AI-TEXT-SCAN] engine=${engine} form=${form_type} fields_keys=${Object.keys(fields).join(",")}`);
+    res.json({ fields });
+  } catch (err) {
+    console.error("AI TEXT SCAN ERROR:", err.message);
+    const is429 = err.message && err.message.includes("429");
+    res.status(is429 ? 429 : 500).json({
+      error: is429
+        ? "AI quota exceeded. Already retried 3 times. Either wait a few minutes (per-minute limit) or try again tomorrow after 12:30 PM IST (daily limit hit)."
+        : err.message,
+    });
+  }
+});
+
 app.post("/api/ai-scan", async (req, res) => {
   try {
     const { image_url, form_type } = req.body;
-    if (!image_url) return res.status(400).json({ error: "image_url required" });
+    if (!image_url)
+      return res.status(400).json({ error: "image_url required" });
     const prompt = AI_SCAN_PROMPTS[form_type] || AI_SCAN_PROMPTS.purchase;
 
-    // Fetch image as base64
     const imgResp = await fetch(image_url);
-    if (!imgResp.ok) return res.status(400).json({ error: "Could not fetch image" });
+    if (!imgResp.ok)
+      return res.status(400).json({ error: "Could not fetch image" });
     const contentType = imgResp.headers.get("content-type") || "image/jpeg";
-    const mimeType = contentType.startsWith("image/png") ? "image/png"
-      : contentType.startsWith("image/webp") ? "image/webp"
-      : contentType.startsWith("image/gif") ? "image/gif"
-      : "image/jpeg";
+    const mimeType = contentType.startsWith("image/png")
+      ? "image/png"
+      : contentType.startsWith("image/webp")
+        ? "image/webp"
+        : contentType.startsWith("image/gif")
+          ? "image/gif"
+          : "image/jpeg";
     const buf = Buffer.from(await imgResp.arrayBuffer());
     const b64 = buf.toString("base64");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { mimeType, data: b64 } }
-    ]);
-
-    const raw = result.response.text() || "{}";
-    // Strip any accidental markdown code fences
-    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
+    const raw = await geminiScan(prompt, mimeType, b64);
+    const cleaned = raw
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/```$/i, "")
+      .trim();
     let fields;
-    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
+    try {
+      fields = JSON.parse(cleaned);
+    } catch {
+      fields = {};
+    }
     res.json({ fields });
   } catch (err) {
-    console.error("AI SCAN ERROR:", err.message);
+    console.error("AI SCAN ERROR FULL:", err);
+    console.error("AI SCAN ERROR MSG:", err.message);
+    const is429 = err.message && err.message.includes("429");
+    res.status(is429 ? 429 : 500).json({
+      error: is429
+        ? "AI quota exceeded. Already retried 3 times. Either wait a few minutes (per-minute limit) or try again tomorrow after 12:30 PM IST (daily limit hit)."
+        : err.message,
+    });
+  }
+});
+
+app.get("/api/debug/photo-urls-type", async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT table_name, column_name, udt_name, data_type
+      FROM information_schema.columns
+      WHERE column_name='photo_urls'
+      ORDER BY table_name
+    `);
+    res.json(r.rows);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

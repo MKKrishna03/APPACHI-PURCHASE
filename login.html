@@ -7,7 +7,8 @@
         visibility: hidden;
       }
     </style>
-    <title>Login — Labour Management</title>
+    <title>Sign In — Appachi</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -367,29 +368,15 @@
         text-decoration: none;
       }
 
-      /* Stay logged in */
-      .stay-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 18px;
-        margin-top: 4px;
+      /* Password show/hide */
+      .pw-wrap { position: relative; }
+      .pw-wrap input { padding-right: 38px; }
+      .pw-toggle {
+        position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer; color: var(--text-3);
+        font-size: 15px; padding: 2px; line-height: 1;
       }
-      .stay-row input[type="checkbox"] {
-        width: 15px;
-        height: 15px;
-        accent-color: var(--gold);
-        cursor: pointer;
-      }
-      .stay-row label {
-        font-size: 12px;
-        color: var(--text-2);
-        cursor: pointer;
-        margin-bottom: 0;
-        text-transform: none;
-        letter-spacing: 0;
-        font-weight: 400;
-      }
+      .pw-toggle:hover { color: var(--gold); }
 
       /* Buttons */
       .btn-submit {
@@ -494,6 +481,7 @@
         }
       }
     </style>
+      <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <!-- Lamp Scene -->
@@ -546,18 +534,15 @@
           </div>
           <div class="field">
             <label>Password</label>
-            <input
-              type="password"
-              id="login-password"
-              placeholder="••••••••"
-              autocomplete="current-password"
-            />
-          </div>
-          <div class="stay-row">
-            <input type="checkbox" id="stayLogin" checked />
-            <label for="stayLogin">Stay logged in for 3 days</label>
+            <div class="pw-wrap">
+              <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+              <button type="button" class="pw-toggle" onclick="togglePw('login-password',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <button class="btn-submit" onclick="doLogin()">Sign In →</button>
+          <div style="text-align:center;margin-top:12px;">
+            <button onclick="switchTab('reset')" style="background:none;border:none;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;padding:0;">Forgot password? Reset</button>
+          </div>
         </div>
 
         <!-- SIGNUP FORM -->
@@ -576,15 +561,17 @@
           </div>
           <div class="field">
             <label>Password</label>
-            <input
-              type="password"
-              id="signup-password"
-              placeholder="••••••••"
-            />
+            <div class="pw-wrap">
+              <input type="password" id="signup-password" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('signup-password',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <div class="field">
             <label>Confirm Password</label>
-            <input type="password" id="signup-confirm" placeholder="••••••••" />
+            <div class="pw-wrap">
+              <input type="password" id="signup-confirm" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('signup-confirm',this)" tabindex="-1">👁</button>
+            </div>
           </div>
           <div class="field">
             <label>Your ID</label>
@@ -599,6 +586,52 @@
             style="margin-top: 6px"
           >
             Create Account →
+          </button>
+        </div>
+
+        <!-- RESET PASSWORD FORM -->
+        <div id="form-reset" class="form">
+          <div style="margin-bottom:10px;">
+            <button onclick="switchTab('login')" style="background:none;border:none;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit;padding:0;">← Back to Sign In</button>
+          </div>
+          <div class="field">
+            <label>Your ID</label>
+            <input
+              type="text"
+              id="reset-id"
+              placeholder="Your assigned ID"
+              autocomplete="username"
+            />
+          </div>
+          <div class="field">
+            <label>Reset Key</label>
+            <input
+              type="text"
+              id="reset-key"
+              placeholder="5-char key from admin"
+              autocomplete="off"
+              style="font-family:'DM Mono',monospace;letter-spacing:0.15em;text-transform:uppercase;"
+              oninput="this.value=this.value.toUpperCase()"
+              maxlength="5"
+            />
+            <div class="id-hint">⚠ Get this key from your admin.</div>
+          </div>
+          <div class="field">
+            <label>New Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="reset-newpw" placeholder="Min. 6 characters" />
+              <button type="button" class="pw-toggle" onclick="togglePw('reset-newpw',this)" tabindex="-1">👁</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Confirm Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="reset-confirmpw" placeholder="••••••••" />
+              <button type="button" class="pw-toggle" onclick="togglePw('reset-confirmpw',this)" tabindex="-1">👁</button>
+            </div>
+          </div>
+          <button class="btn-submit" onclick="doReset()" style="margin-top:6px;">
+            Reset Password →
           </button>
         </div>
       </div>
@@ -629,18 +662,14 @@
       }
 
       // ── TABS ──
+      const TABS = ["login", "signup", "reset"];
       function switchTab(tab) {
-        document
-          .querySelectorAll(".tab")
-          .forEach((t, i) =>
-            t.classList.toggle("active", (i === 0) === (tab === "login")),
-          );
-        document
-          .getElementById("form-login")
-          .classList.toggle("active", tab === "login");
-        document
-          .getElementById("form-signup")
-          .classList.toggle("active", tab === "signup");
+        document.querySelectorAll(".tab").forEach((t, i) =>
+          t.classList.toggle("active", TABS[i] === tab)
+        );
+        TABS.forEach(id =>
+          document.getElementById("form-" + id).classList.toggle("active", id === tab)
+        );
         clearMsg();
       }
 
@@ -655,26 +684,20 @@
       }
 
       // ── AUTH HELPERS ──
-      function setSession(user, stay) {
+      function setSession(user) {
         const data = JSON.stringify(user);
         const deviceId = Math.random().toString(36).slice(2) + Date.now();
-        if (stay) {
-          const exp = Date.now() + 3 * 24 * 60 * 60 * 1000;
-          localStorage.setItem("auth_user", data);
-          localStorage.setItem("auth_exp", exp);
-          localStorage.setItem("auth_device", deviceId);
-          sessionStorage.setItem("auth_device", deviceId);
-        } else {
-          sessionStorage.setItem("auth_user", data);
-          sessionStorage.setItem("auth_device", deviceId);
-        }
+        const exp = Date.now() + 3 * 24 * 60 * 60 * 1000;
+        localStorage.setItem("auth_user", data);
+        localStorage.setItem("auth_exp", exp);
+        localStorage.setItem("auth_device", deviceId);
+        sessionStorage.setItem("auth_device", deviceId);
       }
 
       // ── LOGIN ──
       async function doLogin() {
         const id = document.getElementById("login-id").value.trim();
         const password = document.getElementById("login-password").value;
-        const stay = document.getElementById("stayLogin").checked;
         if (!id || !password) {
           showMsg("Please fill all fields", "error");
           return;
@@ -687,7 +710,7 @@
           });
           const data = await res.json();
           if (data.status === "SUCCESS") {
-            setSession(data.user, stay);
+            setSession(data.user);
             window.location.href = "/";
           } else {
             showMsg(data.error || "Invalid credentials", "error");
@@ -734,14 +757,52 @@
         }
       }
 
+      // ── RESET PASSWORD ──
+      async function doReset() {
+        const id = document.getElementById("reset-id").value.trim();
+        const key = document.getElementById("reset-key").value.trim().toUpperCase();
+        const newpw = document.getElementById("reset-newpw").value;
+        const confirmpw = document.getElementById("reset-confirmpw").value;
+        if (!id || !key || !newpw || !confirmpw) {
+          showMsg("Please fill all fields", "error"); return;
+        }
+        if (key.length !== 5) {
+          showMsg("Key must be 5 characters", "error"); return;
+        }
+        if (newpw !== confirmpw) {
+          showMsg("Passwords do not match", "error"); return;
+        }
+        if (newpw.length < 6) {
+          showMsg("Password must be at least 6 characters", "error"); return;
+        }
+        try {
+          const res = await fetch("/api/auth/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: id, key, new_password: newpw }),
+          });
+          const data = await res.json();
+          if (data.status === "SUCCESS") {
+            showMsg("Password reset! Please sign in.", "success");
+            document.getElementById("reset-id").value = "";
+            document.getElementById("reset-key").value = "";
+            document.getElementById("reset-newpw").value = "";
+            document.getElementById("reset-confirmpw").value = "";
+            setTimeout(() => switchTab("login"), 1800);
+          } else {
+            showMsg(data.error || "Reset failed", "error");
+          }
+        } catch (e) {
+          showMsg("Network error", "error");
+        }
+      }
+
       // ── ENTER KEY ──
       document.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
-          if (
-            document.getElementById("form-login").classList.contains("active")
-          )
-            doLogin();
-          else doSignup();
+          if (document.getElementById("form-login").classList.contains("active")) doLogin();
+          else if (document.getElementById("form-signup").classList.contains("active")) doSignup();
+          else if (document.getElementById("form-reset").classList.contains("active")) doReset();
         }
       });
 
@@ -772,6 +833,18 @@
         }
       })();
       document.body.style.visibility = "visible";
+
+      // ── PASSWORD TOGGLE ──
+      function togglePw(id, btn) {
+        const inp = document.getElementById(id);
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        btn.textContent = show ? "🙈" : "👁";
+      }
+
+      // ── AUTOFOCUS ──
+      document.getElementById("login-id").focus();
     </script>
+      <script src="/polish.js"></script>
   </body>
 </html>
