@@ -495,6 +495,83 @@
         margin-top: 8px;
       }
 
+      /* ─── KPI STRIP ─── */
+      .kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+      .kpi-tile {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 16px 18px 14px;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.2s, transform 0.2s;
+        position: relative;
+        overflow: hidden;
+      }
+      .kpi-tile::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--accent-2);
+        border-radius: 3px 3px 0 0;
+      }
+      .kpi-tile.kpi-amber::before { background: #f59e0b; }
+      .kpi-tile.kpi-blue::before  { background: var(--blue); }
+      .kpi-tile:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+      .kpi-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 8px;
+      }
+      .kpi-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink);
+        letter-spacing: -0.5px;
+        line-height: 1;
+        margin-bottom: 5px;
+      }
+      .kpi-sub { font-size: 11px; color: var(--ink-3); }
+
+      /* ─── TREND CHART ─── */
+      .trend-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 16px 20px 14px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+      }
+      .trend-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .trend-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .trend-fy {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        background: var(--accent-light);
+        padding: 2px 8px;
+        border-radius: 99px;
+      }
+
       /* ─── MODALS ─── */
       .modal-backdrop {
         position: fixed;
@@ -1181,18 +1258,15 @@
       }
 
       @media (max-width: 900px) {
-        .cards-row {
-          grid-template-columns: 1fr;
-        }
-        .form-grid {
-          grid-template-columns: 1fr;
-        }
-        .sidebar {
-          width: 220px;
-        }
-        .sidebar.collapsed {
-          width: 56px;
-        }
+        .cards-row { grid-template-columns: 1fr; }
+        .form-grid { grid-template-columns: 1fr; }
+        .sidebar { width: 220px; }
+        .sidebar.collapsed { width: 56px; }
+        .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+      }
+      @media (max-width: 600px) {
+        .kpi-strip { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .kpi-value { font-size: 18px; }
       }
       .user-avatar {
         width: 36px;
@@ -1501,6 +1575,25 @@
         </div>
       </div>
 
+      <!-- KPI Summary Strip -->
+      <div class="kpi-strip">
+        <div class="kpi-tile">
+          <div class="kpi-label">Purchase Value (FY)</div>
+          <div class="kpi-value" id="kpiPurchaseValue">₹0</div>
+          <div class="kpi-sub" id="kpiPurchaseCount">0 bills</div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-label">TDS Deducted (FY)</div>
+          <div class="kpi-value" id="kpiTdsValue">₹0</div>
+          <div class="kpi-sub" id="kpiTdsBills">0 bills with TDS</div>
+        </div>
+        <div class="kpi-tile kpi-amber">
+          <div class="kpi-label">Open Issue Vouchers</div>
+          <div class="kpi-value" id="kpiLabourOut">0</div>
+          <div class="kpi-sub">pending receipts</div>
+        </div>
+      </div>
+
       <!-- Top Cards Row -->
       <div class="cards-row" style="grid-template-columns: 1fr;">
         <!-- LABOUR GROUP -->
@@ -1620,6 +1713,15 @@
 
       </div>
         </div>
+      </div>
+
+      <!-- Monthly Purchase Value Chart -->
+      <div class="trend-card" style="margin-top:20px;margin-bottom:0;">
+        <div class="trend-header">
+          <span class="trend-title">Monthly Purchase Value <span style="font-weight:500;opacity:0.6;text-transform:none;letter-spacing:0;">(₹ Crores)</span></span>
+          <span class="trend-fy" id="trendFyLabel">FY …</span>
+        </div>
+        <canvas id="trendChart" style="width:100%;height:150px;display:block;"></canvas>
       </div>
     </div>
 
@@ -2413,6 +2515,7 @@ function doLogout() {
           const pending = issues.filter((b) => !closedSet.has(b.issue_number));
           window._pendingVouchers = pending;
           _countUp(document.getElementById("pendingCount"), pending.length, 600);
+          _countUp(document.getElementById("kpiLabourOut"), pending.length, 700);
           renderPending(pending);
         } catch (e) {
           document.getElementById("pendingVoucherList").innerHTML =
@@ -3865,6 +3968,7 @@ function doLogout() {
       loadPendingChittai();
       loadPendingBillsForPay();
       loadNoPictureBills();
+      loadKpiAndChart();
       const _actDate = document.getElementById("activityDate");
       _actDate.value = new Date().toISOString().split("T")[0];
       loadActivity(_actDate.value);
@@ -4233,6 +4337,121 @@ function doLogout() {
         const all = window._noPictureBills || [];
         const f = q.toLowerCase();
         renderNoPictureBills(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
+      }
+
+      // ── KPI & Monthly Trend Chart ──
+      async function loadKpiAndChart() {
+        try {
+          const now = new Date();
+          const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+          const fyStart = new Date(fyYear, 3, 1);
+          const fyEnd   = new Date(fyYear + 1, 2, 31, 23, 59, 59);
+
+          const purchases = await fetch('/api/purchases/list').then(r => r.json());
+          const fyPurchases = purchases.filter(p => {
+            if (!p.date) return false;
+            const d = new Date(p.date);
+            return d >= fyStart && d <= fyEnd;
+          });
+
+          const totalValue = fyPurchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
+          const totalTds   = fyPurchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0);
+          const tdsCount   = fyPurchases.filter(p => parseFloat(p.tds || 0) > 0).length;
+
+          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalValue, 800);
+          document.getElementById('kpiPurchaseCount').textContent = `${fyPurchases.length} bills`;
+          _kpiCountCurrency(document.getElementById('kpiTdsValue'), totalTds, 800);
+          document.getElementById('kpiTdsBills').textContent = `${tdsCount} bills with TDS`;
+
+          // Monthly chart: April→March for current FY
+          const months      = [3,4,5,6,7,8,9,10,11,0,1,2];
+          const monthLabels = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+          const monthData   = months.map(m => {
+            const yr = m >= 3 ? fyYear : fyYear + 1;
+            return fyPurchases
+              .filter(p => { const d = new Date(p.date); return d.getMonth() === m && d.getFullYear() === yr; })
+              .reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
+          });
+
+          document.getElementById('trendFyLabel').textContent = `FY ${fyYear}–${String(fyYear + 1).slice(2)}`;
+          requestAnimationFrame(() => drawTrendChart(monthData, monthLabels, fyYear));
+        } catch(e) {}
+      }
+
+      function _kpiCountCurrency(el, target, dur) {
+        if (!el) return;
+        const t0 = performance.now();
+        function step(ts) {
+          const p = Math.min((ts - t0) / dur, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = '₹' + Math.round(eased * target).toLocaleString('en-IN');
+          if (p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      }
+
+      function drawTrendChart(data, labels, fyYear) {
+        const canvas = document.getElementById('trendChart');
+        if (!canvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        const W   = canvas.offsetWidth || 800;
+        const H   = 140;
+        canvas.width  = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const pad    = { top: 20, right: 8, bottom: 28, left: 8 };
+        const chartW = W - pad.left - pad.right;
+        const chartH = H - pad.top  - pad.bottom;
+        const n      = data.length;
+        const slotW  = chartW / n;
+        const barW   = Math.max(Math.floor(slotW * 0.65), 8);
+        const max    = Math.max(...data, 1);
+
+        const now         = new Date();
+        const monthOrder  = [3,4,5,6,7,8,9,10,11,0,1,2];
+        const curIdx      = monthOrder.indexOf(now.getMonth());
+
+        data.forEach((val, i) => {
+          const x      = pad.left + i * slotW + (slotW - barW) / 2;
+          const barH   = val > 0 ? Math.max((val / max) * chartH * 0.88, 4) : 3;
+          const y      = pad.top + chartH - barH;
+          const isCur  = i === curIdx;
+          const isPast = i <= curIdx;
+
+          // Bar with rounded top corners
+          const r = Math.min(4, barW / 3);
+          ctx.fillStyle = val > 0
+            ? (isCur ? '#2d6a4f' : isPast ? '#52b788' : '#c5e8d4')
+            : '#ebebeb';
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + barW - r, y);
+          ctx.arcTo(x + barW, y, x + barW, y + r, r);
+          ctx.lineTo(x + barW, y + barH);
+          ctx.lineTo(x, y + barH);
+          ctx.arcTo(x, y, x + r, y, r);
+          ctx.closePath();
+          ctx.fill();
+
+          // Month label
+          ctx.fillStyle  = isCur ? '#2d6a4f' : '#8888aa';
+          ctx.font       = `${isCur ? 700 : 600} 9px "DM Sans", system-ui, sans-serif`;
+          ctx.textAlign  = 'center';
+          ctx.fillText(labels[i], x + barW / 2, H - pad.bottom + 12);
+
+          // Value on top of bar (in crores)
+          if (val > 0 && barH > 16) {
+            ctx.fillStyle = isCur ? '#1a4a33' : '#2d6a4f';
+            ctx.font      = `600 8px "DM Sans", system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            const cr  = val / 10000000;
+            const fmt = cr >= 0.01 ? cr.toFixed(2) + 'Cr' : '<0.01Cr';
+            ctx.fillText(fmt, x + barW / 2, y - 3);
+          }
+        });
       }
 
       function toggleActivityPanel() {
