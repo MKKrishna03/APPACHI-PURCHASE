@@ -1583,24 +1583,9 @@
           <div class="kpi-sub" id="kpiPurchaseCount">0 bills</div>
         </div>
         <div class="kpi-tile">
-          <div class="kpi-label">Receipt Voucher Value (FY)</div>
-          <div class="kpi-value" id="kpiReceiptValue">₹0</div>
-          <div class="kpi-sub" id="kpiReceiptCount">0 vouchers</div>
-        </div>
-        <div class="kpi-tile">
-          <div class="kpi-label">Hallmark Value (FY)</div>
-          <div class="kpi-value" id="kpiHallmarkValue">₹0</div>
-          <div class="kpi-sub" id="kpiHallmarkCount">0 bills</div>
-        </div>
-        <div class="kpi-tile">
-          <div class="kpi-label">Expense Value (FY)</div>
-          <div class="kpi-value" id="kpiExpenseValue">₹0</div>
-          <div class="kpi-sub" id="kpiExpenseCount">0 bills</div>
-        </div>
-        <div class="kpi-tile">
-          <div class="kpi-label">TDS — All Bills (FY)</div>
+          <div class="kpi-label">TDS Deducted (FY)</div>
           <div class="kpi-value" id="kpiTdsValue">₹0</div>
-          <div class="kpi-sub" id="kpiTdsBills">across all bill types</div>
+          <div class="kpi-sub" id="kpiTdsBills">0 bills with TDS</div>
         </div>
         <div class="kpi-tile kpi-amber">
           <div class="kpi-label">Open Issue Vouchers</div>
@@ -4362,58 +4347,30 @@ function doLogout() {
           const fyStart = new Date(fyYear, 3, 1);
           const fyEnd   = new Date(fyYear + 1, 2, 31, 23, 59, 59);
 
-          function inFY(rec) {
-            if (!rec.date) return false;
-            const d = new Date(rec.date);
+          const purchases = await fetch('/api/purchases/list').then(r => r.json());
+          const fyPurchases = purchases.filter(p => {
+            if (!p.date) return false;
+            const d = new Date(p.date);
             return d >= fyStart && d <= fyEnd;
-          }
-          function val(rec) { return parseFloat(rec.net_value || rec.total_value || 0); }
-          function tds(rec) { return parseFloat(rec.tds || 0); }
+          });
 
-          const [purchases, labourAll, hmAll] = await Promise.all([
-            fetch('/api/purchases/list').then(r => r.json()),
-            fetch('/api/labour').then(r => r.json()),
-            fetch('/api/hallmark-expenses/list').then(r => r.json()),
-          ]);
+          const totalValue = fyPurchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
+          const totalTds   = fyPurchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0);
+          const tdsCount   = fyPurchases.filter(p => parseFloat(p.tds || 0) > 0).length;
 
-          const fyPurchases = purchases.filter(inFY);
-          const fyReceipts  = labourAll.filter(l => l.voucher_type === 'Receipt Voucher' && inFY(l));
-          const fyHallmark  = hmAll.filter(h => h.voucher_type === 'Hallmark'  && inFY(h));
-          const fyExpense   = hmAll.filter(h => h.voucher_type === 'Expenses'  && inFY(h));
-
-          const purchaseVal  = fyPurchases.reduce((s, r) => s + val(r), 0);
-          const receiptVal   = fyReceipts.reduce((s, r)  => s + val(r), 0);
-          const hallmarkVal  = fyHallmark.reduce((s, r)  => s + val(r), 0);
-          const expenseVal   = fyExpense.reduce((s, r)   => s + val(r), 0);
-
-          const combinedTds  = [...fyPurchases, ...fyReceipts, ...fyHallmark, ...fyExpense]
-                                 .reduce((s, r) => s + tds(r), 0);
-          const tdsCount     = [...fyPurchases, ...fyReceipts, ...fyHallmark, ...fyExpense]
-                                 .filter(r => tds(r) > 0).length;
-
-          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), purchaseVal, 800);
+          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalValue, 800);
           document.getElementById('kpiPurchaseCount').textContent = `${fyPurchases.length} bills`;
+          _kpiCountCurrency(document.getElementById('kpiTdsValue'), totalTds, 800);
+          document.getElementById('kpiTdsBills').textContent = `${tdsCount} bills with TDS`;
 
-          _kpiCountCurrency(document.getElementById('kpiReceiptValue'), receiptVal, 800);
-          document.getElementById('kpiReceiptCount').textContent = `${fyReceipts.length} vouchers`;
-
-          _kpiCountCurrency(document.getElementById('kpiHallmarkValue'), hallmarkVal, 800);
-          document.getElementById('kpiHallmarkCount').textContent = `${fyHallmark.length} bills`;
-
-          _kpiCountCurrency(document.getElementById('kpiExpenseValue'), expenseVal, 800);
-          document.getElementById('kpiExpenseCount').textContent = `${fyExpense.length} bills`;
-
-          _kpiCountCurrency(document.getElementById('kpiTdsValue'), combinedTds, 800);
-          document.getElementById('kpiTdsBills').textContent = `${tdsCount} bills across all types`;
-
-          // Monthly chart: April→March for current FY (purchase value)
+          // Monthly chart: April→March for current FY
           const months      = [3,4,5,6,7,8,9,10,11,0,1,2];
           const monthLabels = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
           const monthData   = months.map(m => {
             const yr = m >= 3 ? fyYear : fyYear + 1;
             return fyPurchases
               .filter(p => { const d = new Date(p.date); return d.getMonth() === m && d.getFullYear() === yr; })
-              .reduce((s, p) => s + val(p), 0);
+              .reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
           });
 
           document.getElementById('trendFyLabel').textContent = `FY ${fyYear}–${String(fyYear + 1).slice(2)}`;

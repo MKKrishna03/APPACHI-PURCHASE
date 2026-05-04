@@ -876,19 +876,17 @@
           document.getElementById("galleryContainer").innerHTML =
             `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
 
-          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes] = await Promise.all([
+          const [cloudinaryRes, purchasesRes, labourRes] = await Promise.all([
             fetch("/api/cloudinary/all-photos"),
             fetch("/api/purchases/list"),
             fetch("/api/labour"),
-            fetch("/api/hallmark-expenses/list"),
           ]);
 
           const cloudinaryPhotos = cloudinaryRes.ok
             ? await cloudinaryRes.json()
             : [];
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
-          const labour    = labourRes.ok    ? await labourRes.json()    : [];
-          const hallmark  = hallmarkRes.ok  ? await hallmarkRes.json()  : [];
+          const labour = labourRes.ok ? await labourRes.json() : [];
 
           // Extract public_id from a Cloudinary URL
           function extractPublicId(url) {
@@ -929,41 +927,26 @@
             }
           });
 
-          const hallmarkByPublicId = {};
-          const hallmarkByUrl = {};
-          hallmark.forEach((h) => {
-            const urls = [h.photo_url, ...(Array.isArray(h.photo_urls) ? h.photo_urls : [])].filter(Boolean);
-            urls.forEach(u => {
-              hallmarkByUrl[u] = h;
-              const pid = extractPublicId(u);
-              if (pid) hallmarkByPublicId[pid] = h;
-            });
-          });
 
           allPurchases = cloudinaryPhotos.map((item) => {
             // Try matching by public_id first, then by full URL
-            const pid0 = item.public_id.replace(/\.[^/.]+$/, "");
             const dbPurchase =
               purchaseByPublicId[item.public_id] ||
               purchaseByUrl[item.url] ||
-              purchaseByPublicId[pid0];
+              purchaseByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
 
             const dbLabour =
               labourByPublicId[item.public_id] ||
               labourByUrl[item.url] ||
-              labourByPublicId[pid0];
+              labourByPublicId[item.public_id.replace(/\.[^/.]+$/, "")];
 
-            const dbHallmark =
-              hallmarkByPublicId[item.public_id] ||
-              hallmarkByUrl[item.url] ||
-              hallmarkByPublicId[pid0];
+            const dbRecord = dbPurchase || dbLabour;
 
-            const dbRecord = dbPurchase || dbLabour || dbHallmark;
-
+            // If matched to labour, use labour bill_no
             let bill_no = item.public_id.split("/").pop();
-            if (dbPurchase)      bill_no = dbPurchase.bill_no;
-            else if (dbLabour)   bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
-            else if (dbHallmark) bill_no = dbHallmark.bill_no;
+            if (dbPurchase) bill_no = dbPurchase.bill_no;
+            else if (dbLabour)
+              bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
 
             return {
               id: item.public_id,
@@ -982,11 +965,8 @@
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
               _labourDbId: dbLabour ? dbLabour.id : null,
-              _hallmarkDbId: dbHallmark ? dbHallmark.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
-              _isHallmark: !!dbHallmark && !dbPurchase && !dbLabour,
               _labourRecord: dbLabour || null,
-              _hallmarkRecord: dbHallmark || null,
               _issueItemType: (dbLabour?.effective_item_type || dbLabour?.labour_item_type || ""),
               _purchaseRecord: dbPurchase || null,
               _matched: !!dbRecord,
