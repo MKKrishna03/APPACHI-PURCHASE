@@ -10,8 +10,6 @@ const multer = require("multer");
 const crypto = require("crypto");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const { GoogleGenAI } = require("@google/genai");
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Cloudinary config
 cloudinary.config({
@@ -3344,9 +3342,7 @@ Return this structure:
 Use null for missing numbers.`,
 };
 
-const GEMINI_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash"];
-
-// Text-only prompts — used when Tesseract OCR text is available (cheaper than vision)
+// Text-only prompts — used when Tesseract OCR text is available
 const AI_TEXT_PROMPTS = {
   purchase: `You are a bill/invoice data extraction assistant for an Indian jewellery business. Extract fields from the following raw OCR text of a bill and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -3449,45 +3445,6 @@ OCR TEXT:
 `,
 };
 
-async function geminiScan(prompt, mimeType, b64) {
-  let lastErr;
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const response = await genAI.models.generateContent({
-          model,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType, data: b64 } },
-              ],
-            },
-          ],
-        });
-        return response.text || "{}";
-      } catch (err) {
-        lastErr = err;
-        const msg = err.message || "";
-        if (msg.includes("429")) {
-          const waitMs = 20000 * (attempt + 1);
-          console.warn(
-            `AI SCAN: 429 on ${model}, waiting ${waitMs / 1000}s...`,
-          );
-          await new Promise((r) => setTimeout(r, waitMs));
-          continue;
-        }
-        if (msg.includes("404") || msg.includes("not found")) {
-          break;
-        }
-        throw err;
-      }
-    }
-  }
-  throw lastErr || new Error("No Gemini model available. Check your API key.");
-}
-
 async function groqTextScan(prompt) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -3510,31 +3467,45 @@ async function groqTextScan(prompt) {
   return data.choices?.[0]?.message?.content || "{}";
 }
 
-async function geminiTextScan(prompt) {
+async function groqVisionScan(prompt, mimeType, b64) {
+  const VISION_MODELS = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
   let lastErr;
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const response = await genAI.models.generateContent({
+  for (const model of VISION_MODELS) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
           model,
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
-        return response.text || "{}";
-      } catch (err) {
-        lastErr = err;
-        const msg = err.message || "";
-        if (msg.includes("429")) {
-          const waitMs = 20000 * (attempt + 1);
-          console.warn(`AI TEXT SCAN: 429 on ${model}, waiting ${waitMs / 1000}s...`);
-          await new Promise((r) => setTimeout(r, waitMs));
-          continue;
-        }
-        if (msg.includes("404") || msg.includes("not found")) break;
-        throw err;
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
+              ],
+            },
+          ],
+          temperature: 0,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        if (res.status === 429) throw new Error(`429: ${body}`);
+        lastErr = new Error(`Groq vision ${res.status}: ${body}`);
+        continue;
       }
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || "{}";
+    } catch (err) {
+      lastErr = err;
+      if ((err.message || "").includes("429")) throw err;
     }
   }
-  throw lastErr || new Error("No Gemini model available. Check your API key.");
+  throw lastErr || new Error("Groq vision scan failed.");
 }
 
 app.post("/api/ai-scan-text", async (req, res) => {
@@ -3543,41 +3514,18 @@ app.post("/api/ai-scan-text", async (req, res) => {
     if (!ocr_text) return res.status(400).json({ error: "ocr_text required" });
     const basePrompt = AI_TEXT_PROMPTS[form_type] || AI_TEXT_PROMPTS.purchase;
     const fullPrompt = basePrompt + ocr_text;
-
-    let raw;
-    let engine;
-    if (process.env.GROQ_API_KEY) {
-      try {
-        raw = await groqTextScan(fullPrompt);
-        engine = "groq";
-      } catch (groqErr) {
-        console.warn("Groq failed, falling back to Gemini:", groqErr.message);
-        raw = await geminiTextScan(fullPrompt);
-        engine = "gemini-fallback";
-      }
-    } else {
-      raw = await geminiTextScan(fullPrompt);
-      engine = "gemini";
-    }
-
-    const cleaned = raw
-      .replace(/^```[a-z]*\n?/i, "")
-      .replace(/```$/i, "")
-      .trim();
+    const raw = await groqTextScan(fullPrompt);
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
     let fields;
-    try {
-      fields = JSON.parse(cleaned);
-    } catch {
-      fields = {};
-    }
-    console.log(`[AI-TEXT-SCAN] engine=${engine} form=${form_type} fields_keys=${Object.keys(fields).join(",")}`);
+    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
+    console.log(`[AI-TEXT-SCAN] engine=groq form=${form_type} fields_keys=${Object.keys(fields).join(",")}`);
     res.json({ fields });
   } catch (err) {
     console.error("AI TEXT SCAN ERROR:", err.message);
     const is429 = err.message && err.message.includes("429");
     res.status(is429 ? 429 : 500).json({
       error: is429
-        ? "AI quota exceeded. Already retried 3 times. Either wait a few minutes (per-minute limit) or try again tomorrow after 12:30 PM IST (daily limit hit)."
+        ? "AI quota exceeded. Try again in a few minutes."
         : err.message,
     });
   }
@@ -3598,31 +3546,21 @@ app.post("/api/ai-scan", async (req, res) => {
       ? "image/png"
       : contentType.startsWith("image/webp")
         ? "image/webp"
-        : contentType.startsWith("image/gif")
-          ? "image/gif"
-          : "image/jpeg";
+        : "image/jpeg";
     const buf = Buffer.from(await imgResp.arrayBuffer());
     const b64 = buf.toString("base64");
 
-    const raw = await geminiScan(prompt, mimeType, b64);
-    const cleaned = raw
-      .replace(/^```[a-z]*\n?/i, "")
-      .replace(/```$/i, "")
-      .trim();
+    const raw = await groqVisionScan(prompt, mimeType, b64);
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
     let fields;
-    try {
-      fields = JSON.parse(cleaned);
-    } catch {
-      fields = {};
-    }
+    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
     res.json({ fields });
   } catch (err) {
-    console.error("AI SCAN ERROR FULL:", err);
-    console.error("AI SCAN ERROR MSG:", err.message);
+    console.error("AI SCAN ERROR:", err.message);
     const is429 = err.message && err.message.includes("429");
     res.status(is429 ? 429 : 500).json({
       error: is429
-        ? "AI quota exceeded. Already retried 3 times. Either wait a few minutes (per-minute limit) or try again tomorrow after 12:30 PM IST (daily limit hit)."
+        ? "AI quota exceeded. Try again in a few minutes."
         : err.message,
     });
   }
