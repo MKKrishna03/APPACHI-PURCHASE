@@ -607,6 +607,15 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>Bill Type</label>
+          <select id="filterBillType" onchange="applyFilters()">
+            <option value="">All Types</option>
+            <option value="old_silver">Old Silver</option>
+            <option value="bullion">Bullion Issue Voucher</option>
+            <option value="refinery">Refinery</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>Accounted</label>
           <select id="filterAccounted" onchange="applyFilters()">
             <option value="">All</option>
@@ -918,6 +927,7 @@
             }
           });
 
+
           allPurchases = cloudinaryPhotos.map((item) => {
             // Try matching by public_id first, then by full URL
             const dbPurchase =
@@ -957,6 +967,7 @@
               _labourDbId: dbLabour ? dbLabour.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
               _labourRecord: dbLabour || null,
+              _issueItemType: (dbLabour?.effective_item_type || dbLabour?.labour_item_type || ""),
               _purchaseRecord: dbPurchase || null,
               _matched: !!dbRecord,
             };
@@ -1025,6 +1036,9 @@
         const folderFilter = document.getElementById("filterFolder")
           ? document.getElementById("filterFolder").value
           : "";
+        const billTypeFilter = document.getElementById("filterBillType")
+          ? document.getElementById("filterBillType").value
+          : "";
 
         filtered = allPurchases.filter((p) => {
           if (company && String(p.profile_id) !== String(company)) return false;
@@ -1037,6 +1051,12 @@
           if (accounted === "yes" && !p.is_accounted) return false;
           if (accounted === "no" && p.is_accounted) return false;
           if (folderFilter && p.folder !== folderFilter) return false;
+          if (billTypeFilter) {
+            const itemType = (p._issueItemType || "").toLowerCase();
+            if (billTypeFilter === "old_silver" && !itemType.includes("old silver")) return false;
+            if (billTypeFilter === "bullion" && !itemType.includes("bullion")) return false;
+            if (billTypeFilter === "refinery" && !itemType.includes("refinery")) return false;
+          }
           return true;
         });
 
@@ -1096,6 +1116,8 @@
         document.getElementById("filterAccounted").value = "";
         const ff = document.getElementById("filterFolder");
         if (ff) ff.value = "";
+        const fbt = document.getElementById("filterBillType");
+        if (fbt) fbt.value = "";
         applyFilters();
       }
 

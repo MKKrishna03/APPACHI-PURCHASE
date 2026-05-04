@@ -955,7 +955,18 @@ app.get("/api/labour/:id", async (req, res) => {
 app.get("/api/labour", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT l.*, u.name AS created_by_name FROM labour l LEFT JOIN auth_users u ON u.user_id::text = l.created_by ORDER BY l.created_at DESC`,
+      `SELECT l.*, u.name AS created_by_name,
+              CASE WHEN l.voucher_type = 'Receipt Voucher'
+                   THEN (SELECT iv.labour_item_type FROM labour iv
+                         WHERE UPPER(iv.voucher_type) = 'ISSUE VOUCHER'
+                           AND (l.issue_number = iv.issue_number
+                                OR l.issue_number LIKE '%' || iv.issue_number || '%')
+                         LIMIT 1)
+                   ELSE l.labour_item_type
+              END AS effective_item_type
+       FROM labour l
+       LEFT JOIN auth_users u ON u.user_id::text = l.created_by
+       ORDER BY l.created_at DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1466,6 +1477,32 @@ app.get("/api/purchases/list", async (req, res) => {
     }
 
     res.json(purchases);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tds-required/:profile_id", async (req, res) => {
+  try {
+    const { profile_id } = req.params;
+    const now = new Date();
+    const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fyStart = `${fyYear}-04-01`;
+    const fyEnd   = `${fyYear + 1}-03-31`;
+
+    const result = await pool.query(
+      `SELECT tds FROM purchases
+       WHERE profile_id = $1 AND tds IS NOT NULL AND tds > 0
+         AND date BETWEEN $2 AND $3
+       UNION ALL
+       SELECT tds FROM labour
+       WHERE profile_id = $1 AND voucher_type = 'Receipt Voucher'
+         AND tds IS NOT NULL AND tds > 0
+         AND date BETWEEN $2 AND $3
+       LIMIT 1`,
+      [profile_id, fyStart, fyEnd]
+    );
+    res.json({ required: result.rows.length > 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2679,6 +2716,8 @@ app.post("/api/upload-session", (req, res) => {
     folder: finalFolder,
     bill_date: bill_date || null,
     photo_url: null,
+    photo_urls: [],
+    done: false,
     expires: Date.now() + 30 * 60 * 1000, // 30 min
   });
   res.json({ token });
@@ -2691,8 +2730,11 @@ app.get("/api/upload-session/:token/status", (req, res) => {
   res.json({
     bill_no: session.bill_no,
     company: session.company,
-    uploaded: !!session.photo_url,
+    uploaded: session.photo_urls.length > 0,
     photo_url: session.photo_url,
+    photo_urls: session.photo_urls,
+    count: session.photo_urls.length,
+    done: session.done,
   });
 });
 
@@ -2706,8 +2748,17 @@ app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
   const session = uploadSessions.get(req.params.token);
   if (!session) return res.status(404).json({ error: "Invalid or expired" });
   if (!req.file) return res.status(400).json({ error: "No file" });
-  session.photo_url = req.file.path;
-  res.json({ status: "SUCCESS", photo_url: session.photo_url });
+  const url = req.file.path;
+  session.photo_urls.push(url);
+  if (!session.photo_url) session.photo_url = url; // first photo = legacy field
+  res.json({ status: "SUCCESS", photo_url: url, count: session.photo_urls.length });
+});
+
+app.post("/api/upload-session/:token/done", (req, res) => {
+  const session = uploadSessions.get(req.params.token);
+  if (!session) return res.status(404).json({ error: "Invalid or expired" });
+  session.done = true;
+  res.json({ status: "SUCCESS" });
 });
 
 // Phone upload page
