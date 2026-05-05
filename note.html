@@ -718,19 +718,6 @@
           <div id="recentBillsList"><div class="no-data">Loading…</div></div>
         </div>
 
-        <!-- Unlinked Payments -->
-        <button
-          class="section-toggle"
-          onclick="toggleSection('payments')"
-          style="margin-top: 8px"
-        >
-          <span>Unlinked Payments</span>
-          <span class="section-icon open" id="arrow_payments">▾</span>
-        </button>
-        <div class="section-body show" id="body_payments">
-          <div id="paymentsList"><div class="no-data">Loading…</div></div>
-        </div>
-
         <!-- Unlinked Chittai -->
         <button
           class="section-toggle"
@@ -768,7 +755,7 @@
 
       <div class="page-title" id="pageTitle">Credit / Debit Note</div>
       <div class="page-sub" id="pageSub">
-        Create a credit or debit note linked to a purchase, payment or chittai
+        Create a credit or debit note linked to a bill
       </div>
 
       <div id="message" class="message"></div>
@@ -776,24 +763,26 @@
       <!-- Source Type Selector -->
       <div class="card" id="sourceTypeCard">
         <div class="card-title">Note Against</div>
-        <div class="note-type-selector">
-          <div
-            class="note-type-card"
-            id="sourcePurchase"
-            onclick="selectSourceType('purchase')"
-          >
+        <div class="note-type-selector" style="grid-template-columns:1fr 1fr;">
+          <div class="note-type-card" id="sourcePurchase" onclick="selectSourceType('purchase')">
             <div class="note-type-icon">🧾</div>
             <div class="note-type-label">Purchase Bill</div>
             <div class="note-type-desc">Against a purchase invoice</div>
           </div>
-          <div
-            class="note-type-card"
-            id="sourceLabour"
-            onclick="selectSourceType('labour')"
-          >
+          <div class="note-type-card" id="sourceLabour" onclick="selectSourceType('labour')">
             <div class="note-type-icon">⚒️</div>
             <div class="note-type-label">Labour Bill</div>
             <div class="note-type-desc">Against a receipt voucher</div>
+          </div>
+          <div class="note-type-card" id="sourceHallmark" onclick="selectSourceType('hallmark')">
+            <div class="note-type-icon">🔖</div>
+            <div class="note-type-label">Hallmark Bill</div>
+            <div class="note-type-desc">Against a hallmark invoice</div>
+          </div>
+          <div class="note-type-card" id="sourceExpense" onclick="selectSourceType('expense')">
+            <div class="note-type-icon">💸</div>
+            <div class="note-type-label">Expense Bill</div>
+            <div class="note-type-desc">Against an expense invoice</div>
           </div>
         </div>
       </div>
@@ -869,7 +858,7 @@
         <!-- Link Banner -->
         <div class="link-banner" id="linkBanner">
           <div>
-            <strong>Payment:</strong> <span id="bannerPayment">—</span>
+            <strong>Bill:</strong> <span id="bannerPayment">—</span>
             &nbsp;·&nbsp;
             <strong>Total:</strong> <span id="bannerAmount">—</span>
           </div>
@@ -1445,27 +1434,19 @@
 
       function selectSourceType(type) {
         sourceType = type;
-        document
-          .getElementById("sourcePurchase")
-          .classList.remove("selected", "credit");
-        document
-          .getElementById("sourceLabour")
-          .classList.remove("selected", "credit");
-        const activeId =
-          type === "purchase" ? "sourcePurchase" : "sourceLabour";
-        document.getElementById(activeId).classList.add("selected", "credit");
+        ['sourcePurchase','sourceLabour','sourceHallmark','sourceExpense'].forEach(id => {
+          document.getElementById(id)?.classList.remove("selected", "credit");
+        });
+        const idMap = { purchase:'sourcePurchase', labour:'sourceLabour', hallmark:'sourceHallmark', expense:'sourceExpense' };
+        document.getElementById(idMap[type])?.classList.add("selected", "credit");
 
         // Update sidebar section header
-        const headerBtn = document.querySelector(
-          `button[onclick="toggleSection('recentBills')"]`,
-        );
+        const headerBtn = document.querySelector(`button[onclick="toggleSection('recentBills')"]`);
         if (headerBtn) {
           const labelSpan = headerBtn.querySelector("span:not(.section-icon)");
           if (labelSpan) {
-            labelSpan.textContent =
-              type === "purchase"
-                ? "Recent 5 Purchase Bills"
-                : "Recent 5 Labour Bills";
+            const labels = { purchase:'Recent Purchase Bills', labour:'Recent Labour Bills', hallmark:'Recent Hallmark Bills', expense:'Recent Expense Bills' };
+            labelSpan.textContent = labels[type] || 'Recent Bills';
           }
         }
 
@@ -1491,7 +1472,7 @@
             .classList.add("selected", "credit");
           document.getElementById("pageTitle").textContent = "Credit Note";
           document.getElementById("pageSub").textContent =
-            "Create a credit note linked to a purchase, payment or chittai";
+            "Create a credit note linked to a bill";
           document.getElementById("billDetailsTitle").textContent =
             "Credit Note Details";
           document.getElementById("emptyText").textContent =
@@ -1585,7 +1566,6 @@
       // ── SIDEBAR DATA ──
       async function loadSidebarData(filterCompany = "") {
         await loadRecentBills(filterCompany);
-        await loadUnlinkedPayments(filterCompany);
         await loadUnlinkedChittai(filterCompany);
         await loadRecentPurchases(filterCompany);
       }
@@ -1610,52 +1590,34 @@
               date: p.date,
               profile_id: p.profile_id,
               net: parseFloat(p.net_value || p.total_value || 0),
-              remaining:
-                p.remaining_value != null
-                  ? parseFloat(p.remaining_value)
-                  : parseFloat(p.net_value || p.total_value || 0),
+              remaining: p.remaining_value != null ? parseFloat(p.remaining_value) : parseFloat(p.net_value || p.total_value || 0),
             }));
-          } else {
+          } else if (sourceType === "labour") {
             const res = await fetch(`/api/labour`);
             let recs = res.ok ? await res.json() : [];
-            recs = recs
-              .filter((l) => l.voucher_type === "Receipt Voucher")
-              .slice(0, 5);
+            recs = recs.filter((l) => l.voucher_type === "Receipt Voucher").slice(0, 5);
             bills = recs.map((l) => {
-              const net = parseFloat(
-                l.bill_value_after_deduction || l.total || 0,
-              );
-              return {
-                id: l.id,
-                bill_no: l.receipt_bill_no || "RV-" + l.id,
-                date: l.date,
-                profile_id: l.profile_id,
-                net,
-                remaining:
-                  l.remaining_value != null
-                    ? parseFloat(l.remaining_value)
-                    : net,
-              };
+              const net = parseFloat(l.bill_value_after_deduction || l.total || 0);
+              return { id: l.id, bill_no: l.receipt_bill_no || "RV-" + l.id, date: l.date, profile_id: l.profile_id, net, remaining: l.remaining_value != null ? parseFloat(l.remaining_value) : net };
+            });
+          } else {
+            const vtMap = { hallmark: 'Hallmark', expense: 'Expenses' };
+            const res = await fetch(`/api/hallmark-expenses/list`);
+            let recs = res.ok ? await res.json() : [];
+            recs = recs.filter((h) => (h.voucher_type || '').toLowerCase() === (vtMap[sourceType] || '').toLowerCase()).slice(0, 5);
+            bills = recs.map((h) => {
+              const net = parseFloat(h.net_value || 0);
+              return { id: h.id, bill_no: h.bill_no || "HM-" + h.id, date: h.date, profile_id: h.profile_id, net, remaining: h.remaining_value != null ? parseFloat(h.remaining_value) : net };
             });
           }
-          if (!bills.length) {
-            list.innerHTML = '<div class="no-data">No bills yet</div>';
-            return;
-          }
-          list.innerHTML = bills
-            .map((b) => {
-              const company = companies.find(
-                (c) => String(c.id) === String(b.profile_id),
-              );
-              const companyName = company
-                ? company.alias || company.company
-                : "—";
-              const settled = b.remaining <= 0.01;
-              const color = settled ? "var(--green)" : "var(--accent)";
-              const bg = settled
-                ? "rgba(45,106,79,0.08)"
-                : "rgba(29,111,164,0.08)";
-              return `<div class="pay-card" id="bill_${b.id}" onclick="selectRecentBill(${b.id}, ${b.net}, ${b.remaining}, ${b.profile_id})" data-net="${b.net}" data-remaining="${b.remaining}">
+          if (!bills.length) { list.innerHTML = '<div class="no-data">No bills yet</div>'; return; }
+          list.innerHTML = bills.map((b) => {
+            const company = companies.find((c) => String(c.id) === String(b.profile_id));
+            const companyName = company ? company.alias || company.company : "—";
+            const settled = b.remaining <= 0.01;
+            const color = settled ? "var(--green)" : "var(--accent)";
+            const bg = settled ? "rgba(45,106,79,0.08)" : "rgba(29,111,164,0.08)";
+            return `<div class="pay-card" id="bill_${b.id}" onclick="selectRecentBill(${b.id}, ${b.net}, ${b.remaining}, ${b.profile_id})" data-net="${b.net}" data-remaining="${b.remaining}">
               <div class="pay-card-id">${b.bill_no}</div>
               <div class="pay-card-company">${companyName}</div>
               <div class="pay-card-row"><span>Date</span><span>${b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—"}</span></div>
@@ -1665,8 +1627,7 @@
                 <span style="font-weight:700;">₹${fmt(b.remaining)}</span>
               </div>
             </div>`;
-            })
-            .join("");
+          }).join("");
         } catch (e) {
           list.innerHTML = '<div class="no-data">Error loading</div>';
         }
@@ -1703,38 +1664,29 @@
                   : parseFloat(p.net_value || p.total_value || 0),
               source: "purchase",
             }));
-          } else {
+          } else if (sourceType === "labour") {
             const res = await fetch(
               `/api/labour/list?profile_id=${filterCompany}&voucher_type=Receipt Voucher`,
             );
             let recs = res.ok ? await res.json() : [];
-            // fetch full labour records to get bill_value_after_deduction & remaining
-            const all = await fetch("/api/labour")
-              .then((r) => r.json())
-              .catch(() => []);
+            const all = await fetch("/api/labour").then((r) => r.json()).catch(() => []);
             const allMap = {};
             all.forEach((l) => (allMap[l.id] = l));
-            recs = recs.slice(0, 5);
+            recs = recs.slice(0, 10);
             bills = recs.map((l) => {
               const full = allMap[l.id] || {};
-              const net = parseFloat(
-                full.bill_value_after_deduction ||
-                  full.total ||
-                  l.total_value ||
-                  0,
-              );
-              const remaining =
-                full.remaining_value != null
-                  ? parseFloat(full.remaining_value)
-                  : net;
-              return {
-                id: l.id,
-                bill_no: l.receipt_bill_no || "RV-" + l.id,
-                date: l.date,
-                net,
-                remaining,
-                source: "labour",
-              };
+              const net = parseFloat(full.bill_value_after_deduction || full.total || l.total_value || 0);
+              const remaining = full.remaining_value != null ? parseFloat(full.remaining_value) : net;
+              return { id: l.id, bill_no: l.receipt_bill_no || "RV-" + l.id, date: l.date, net, remaining, source: "labour" };
+            });
+          } else {
+            const vtMap = { hallmark: 'Hallmark', expense: 'Expenses' };
+            const res = await fetch(`/api/hallmark-expenses/list?profile_id=${filterCompany}`);
+            let recs = res.ok ? await res.json() : [];
+            recs = recs.filter((h) => (h.voucher_type || '').toLowerCase() === (vtMap[sourceType] || '').toLowerCase()).slice(0, 10);
+            bills = recs.map((h) => {
+              const net = parseFloat(h.net_value || 0);
+              return { id: h.id, bill_no: h.bill_no || "HM-" + h.id, date: h.date, net, remaining: h.remaining_value != null ? parseFloat(h.remaining_value) : net, source: sourceType };
             });
           }
           if (!bills.length) {
@@ -1798,8 +1750,7 @@
           const banner = document.getElementById("linkBanner");
           banner.classList.add("show");
           document.getElementById("bannerPayment").textContent =
-            (sourceType === "purchase" ? "Purchase " : "Labour ") +
-            (card?.querySelector(".pay-card-id")?.textContent || billId);
+            card?.querySelector(".pay-card-id")?.textContent || billId;
           document.getElementById("bannerAmount").textContent =
             "₹" + fmt(billNet);
           document.getElementById("bannerBalance").textContent =
@@ -2461,11 +2412,11 @@
           bill_no: billNo,
           voucher_type: voucherTypeLabel,
           description: voucherTypeLabel,
-          linked_voucher_ids: selectedVoucherIds,
+          linked_voucher_ids: [],
           linked_chittai_ids: selectedChittaiIds,
-          linked_purchase_ids:
-            sourceType === "purchase" ? selectedPurchaseIds : [],
+          linked_purchase_ids: sourceType === "purchase" ? selectedPurchaseIds : [],
           linked_labour_ids: sourceType === "labour" ? selectedPurchaseIds : [],
+          linked_hallmark_expense_ids: (sourceType === "hallmark" || sourceType === "expense") ? selectedPurchaseIds : [],
           source_type: sourceType,
           taxable_value:
             parseFloat(document.getElementById("billTaxable").value) || 0,

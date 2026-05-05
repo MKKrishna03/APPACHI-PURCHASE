@@ -632,6 +632,56 @@
         </div>
       </div>
 
+      <!-- Hallmark + Expenses -->
+      <div class="data-grid" style="margin-bottom:24px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Hallmark Bills</span>
+            <span class="card-badge" id="hallmarkCount">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Bill No</th>
+                  <th>Date</th>
+                  <th>Taxable Amt</th>
+                  <th>Tax Amt</th>
+                  <th>Net Payable</th>
+                  <th>Entered By</th>
+                </tr>
+              </thead>
+              <tbody id="hallmarkTable">
+                <tr><td colspan="6" class="loading">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Expense Bills</span>
+            <span class="card-badge" id="expenseCount">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Bill No</th>
+                  <th>Date</th>
+                  <th>Taxable Amt</th>
+                  <th>Tax Amt</th>
+                  <th>Net Payable</th>
+                  <th>Entered By</th>
+                </tr>
+              </thead>
+              <tbody id="expenseTable">
+                <tr><td colspan="6" class="loading">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Transactions + Chittai -->
       <div class="data-grid">
         <div class="card">
@@ -1313,6 +1363,31 @@
               )
               .join("")
           : `<tr><td colspan="5" class="empty-state">No chittai records</td></tr>`;
+
+        // Hallmark + Expenses
+        const hmexAll = await fetch(`/api/hallmark-expenses/list?profile_id=${profileId}`)
+          .then(r => r.json()).catch(() => []);
+
+        const hmRow = (h) => `<tr>
+          <td><span style="cursor:pointer;color:var(--accent);text-decoration:underline;" onclick="showBillPopup('hmex',${h.id},'${h.bill_no}')">${h.bill_no || "-"}</span></td>
+          <td>${h.date ? new Date(h.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : "-"}</td>
+          <td>₹${parseFloat(h.taxable_value || 0).toLocaleString("en-IN")}</td>
+          <td>₹${(parseFloat(h.cgst||0)+parseFloat(h.sgst||0)+parseFloat(h.igst||0)).toLocaleString("en-IN")}</td>
+          <td>₹${parseFloat(h.net_value || 0).toLocaleString("en-IN")}</td>
+          <td style="font-size:11px;color:var(--ink-3);">${h.created_by_name || "—"}</td>
+        </tr>`;
+
+        const hallmarkRows = hmexAll.filter(h => inRange(h.date) && (h.voucher_type || '').toLowerCase() === 'hallmark');
+        document.getElementById("hallmarkCount").textContent = hallmarkRows.length;
+        document.getElementById("hallmarkTable").innerHTML = hallmarkRows.length
+          ? hallmarkRows.map(hmRow).join("")
+          : `<tr><td colspan="6" class="empty-state">No hallmark bills</td></tr>`;
+
+        const expenseRows = hmexAll.filter(h => inRange(h.date) && (h.voucher_type || '').toLowerCase() === 'expenses');
+        document.getElementById("expenseCount").textContent = expenseRows.length;
+        document.getElementById("expenseTable").innerHTML = expenseRows.length
+          ? expenseRows.map(hmRow).join("")
+          : `<tr><td colspan="6" class="empty-state">No expense bills</td></tr>`;
       }
 
       async function loadCompanyName() {
@@ -1529,6 +1604,33 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             if (target.photo_url) html += bvSectionTitle('Bill Photo') + `<img src="${target.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${target.photo_url}','_blank')" />`;
             el.innerHTML = html;
             enteredBy.textContent = target.created_by_name ? 'Entered by: ' + target.created_by_name : '';
+          } else if (type === 'hmex') {
+            const res = await fetch(`/api/hallmark-expenses/${id}`);
+            const d = await res.json();
+            if (!d.entry) { el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Not found</div>'; return; }
+            const h = d.entry;
+            const items = d.items || [];
+            head.innerHTML = bvHead(h.voucher_type || 'Hallmark/Expense', h.bill_no || '—', h.date ? new Date(h.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : '-');
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+              ${bvField('Bill No', h.bill_no, '#2d6a4f')}
+              ${bvField('Date', h.date?new Date(h.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
+              ${h.description ? bvField('Description', h.description) : ''}
+              ${bvField('Net Payable', fmtAmt(h.net_value), '#2d6a4f')}
+            </div>`;
+            if (items.length) html += bvSectionTitle('Line Items') + bvItemsTable(items);
+            html += bvSectionTitle('Totals');
+            html += '<div>';
+            if (parseFloat(h.taxable_value)) html += bvTotalsRow('Taxable', fmtAmt(h.taxable_value));
+            if (parseFloat(h.cgst)) html += bvTotalsRow('CGST', fmtAmt(h.cgst));
+            if (parseFloat(h.sgst)) html += bvTotalsRow('SGST', fmtAmt(h.sgst));
+            if (parseFloat(h.igst)) html += bvTotalsRow('IGST', fmtAmt(h.igst));
+            if (parseFloat(h.round_off)) html += bvTotalsRow('Round Off', fmtAmt(h.round_off));
+            if (parseFloat(h.tds)) html += bvTotalsRow('TDS', fmtAmt(h.tds));
+            html += bvTotalsRow('Net Payable', fmtAmt(h.net_value), {bold:true, accent:'#2d6a4f'});
+            html += '</div>';
+            if (h.photo_url) html += bvSectionTitle('Bill Photo') + `<img src="${h.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${h.photo_url}','_blank')" />`;
+            el.innerHTML = html;
+            enteredBy.textContent = h.created_by_name ? 'Entered by: ' + h.created_by_name : '';
           }
           document.getElementById('billDeleteBtn').style.display = _canDelete ? 'inline-block' : 'none';
         } catch(e) {
@@ -1556,6 +1658,7 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
           });
         }
         else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
+        else if (_popupType === 'hmex') window.location.href = `/hmex?edit=${_popupId}`;
       }
 
       document.getElementById('billPopup').addEventListener('click', function(e) {

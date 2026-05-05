@@ -555,6 +555,12 @@ alias TEXT UNIQUE NOT NULL,
   await pool.query(
     `ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`,
   );
+  await pool.query(
+    `ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`,
+  );
 
   // Fix photo_urls columns that may have been created as JSON/JSONB in an earlier migration.
   for (const table of ["purchases", "labour", "chittai", "hallmark_expenses"]) {
@@ -1484,9 +1490,10 @@ app.get("/api/tds-required/:profile_id", async (req, res) => {
   try {
     const { profile_id } = req.params;
     const now = new Date();
-    const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fyYear =
+      now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     const fyStart = `${fyYear}-04-01`;
-    const fyEnd   = `${fyYear + 1}-03-31`;
+    const fyEnd = `${fyYear + 1}-03-31`;
 
     const result = await pool.query(
       `SELECT tds FROM purchases
@@ -1498,7 +1505,7 @@ app.get("/api/tds-required/:profile_id", async (req, res) => {
          AND tds IS NOT NULL AND tds > 0
          AND date BETWEEN $2 AND $3
        LIMIT 1`,
-      [profile_id, fyStart, fyEnd]
+      [profile_id, fyStart, fyEnd],
     );
     res.json({ required: result.rows.length > 0 });
   } catch (err) {
@@ -1531,7 +1538,7 @@ app.get("/api/purchases/no-photo", async (req, res) => {
        LEFT JOIN profiles pr3 ON pr3.id = he.profile_id
        WHERE he.voucher_type IN ('Hallmark', 'Expenses')
          AND (he.photo_url IS NULL OR he.photo_url = '')
-       ORDER BY date DESC`
+       ORDER BY date DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1688,6 +1695,25 @@ app.post("/api/purchases", async (req, res) => {
           newRem,
           lid,
         ]);
+      }
+    }
+    if (
+      isNote &&
+      (req.body.source_type === "hallmark" || req.body.source_type === "expense") &&
+      req.body.linked_hallmark_expense_ids &&
+      req.body.linked_hallmark_expense_ids.length
+    ) {
+      for (const hid of req.body.linked_hallmark_expense_ids) {
+        const cur = await pool.query(
+          `SELECT COALESCE(remaining_value, net_value) AS rem FROM hallmark_expenses WHERE id=$1`,
+          [hid],
+        );
+        const currentRem = parseFloat(cur.rows[0]?.rem || 0);
+        const newRem = currentRem - parseFloat(net_value || 0);
+        await pool.query(
+          `UPDATE hallmark_expenses SET remaining_value=$1 WHERE id=$2`,
+          [newRem, hid],
+        );
       }
     }
 
@@ -2366,6 +2392,12 @@ app.get("/reports/chittai", (req, res) =>
 app.get("/reports/purchase", (req, res) =>
   res.sendFile(path.join(__dirname, "prchsrpt.html")),
 );
+app.get("/reports/hallmark", (req, res) =>
+  res.sendFile(path.join(__dirname, "hmrpt.html")),
+);
+app.get("/reports/expense", (req, res) =>
+  res.sendFile(path.join(__dirname, "exprpt.html")),
+);
 app.get("/reports/tds", (req, res) =>
   res.sendFile(path.join(__dirname, "tds.html")),
 );
@@ -2411,6 +2443,35 @@ app.get("/api/linked-data/:type/:id", async (req, res) => {
       // no deep links for vouchers
     }
     if (type === "purchase") {
+      const vs = await pool.query(
+        `SELECT id, bill_no, total_value FROM vouchers WHERE linked_purchase_id=$1`,
+        [id],
+      );
+      vs.rows.forEach((v) =>
+        linked.push({
+          type: "voucher",
+          id: v.id,
+          label: `Payment Voucher: ${v.bill_no || "ID-" + v.id} ₹${v.total_value}`,
+        }),
+      );
+    }
+    if (type === "hallmark") {
+      const ph = await pool.query(
+        `SELECT photo_url, photo_urls FROM hallmark_expenses WHERE id=$1`,
+        [id],
+      );
+      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
+      await pool.query(
+        `UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`,
+        [id],
+      );
+      await pool.query(
+        `DELETE FROM hallmark_expense_items WHERE hallmark_expense_id=$1`,
+        [id],
+      );
+      await pool.query(`DELETE FROM hallmark_expenses WHERE id=$1`, [id]);
+    }
+    if (type === "hallmark") {
       const vs = await pool.query(
         `SELECT id, bill_no, total_value FROM vouchers WHERE linked_purchase_id=$1`,
         [id],
@@ -2749,7 +2810,11 @@ app.post("/api/upload-session/:token/upload", pickUploader, (req, res) => {
   const url = req.file.path;
   session.photo_urls.push(url);
   if (!session.photo_url) session.photo_url = url; // first photo = legacy field
-  res.json({ status: "SUCCESS", photo_url: url, count: session.photo_urls.length });
+  res.json({
+    status: "SUCCESS",
+    photo_url: url,
+    count: session.photo_urls.length,
+  });
 });
 
 app.post("/api/upload-session/:token/done", (req, res) => {
@@ -2895,6 +2960,18 @@ app.patch("/api/labour/:id/accounted", async (req, res) => {
       req.body.is_accounted,
       req.params.id,
     ]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/hallmark-expenses/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE hallmark_expenses SET is_accounted = $1 WHERE id = $2`,
+      [req.body.is_accounted, req.params.id],
+    );
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3468,30 +3545,39 @@ async function groqTextScan(prompt) {
 }
 
 async function groqVisionScan(prompt, mimeType, b64) {
-  const VISION_MODELS = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
+  const VISION_MODELS = [
+    "llama-3.2-90b-vision-preview",
+    "llama-3.2-11b-vision-preview",
+  ];
   let lastErr;
   for (const model of VISION_MODELS) {
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      const res = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  {
+                    type: "image_url",
+                    image_url: { url: `data:${mimeType};base64,${b64}` },
+                  },
+                ],
+              },
+            ],
+            temperature: 0,
+          }),
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
-              ],
-            },
-          ],
-          temperature: 0,
-        }),
-      });
+      );
       if (!res.ok) {
         const body = await res.text();
         if (res.status === 429) throw new Error(`429: ${body}`);
@@ -3515,10 +3601,19 @@ app.post("/api/ai-scan-text", async (req, res) => {
     const basePrompt = AI_TEXT_PROMPTS[form_type] || AI_TEXT_PROMPTS.purchase;
     const fullPrompt = basePrompt + ocr_text;
     const raw = await groqTextScan(fullPrompt);
-    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
+    const cleaned = raw
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/```$/i, "")
+      .trim();
     let fields;
-    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
-    console.log(`[AI-TEXT-SCAN] engine=groq form=${form_type} fields_keys=${Object.keys(fields).join(",")}`);
+    try {
+      fields = JSON.parse(cleaned);
+    } catch {
+      fields = {};
+    }
+    console.log(
+      `[AI-TEXT-SCAN] engine=groq form=${form_type} fields_keys=${Object.keys(fields).join(",")}`,
+    );
     res.json({ fields });
   } catch (err) {
     console.error("AI TEXT SCAN ERROR:", err.message);
@@ -3551,9 +3646,16 @@ app.post("/api/ai-scan", async (req, res) => {
     const b64 = buf.toString("base64");
 
     const raw = await groqVisionScan(prompt, mimeType, b64);
-    const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
+    const cleaned = raw
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/```$/i, "")
+      .trim();
     let fields;
-    try { fields = JSON.parse(cleaned); } catch { fields = {}; }
+    try {
+      fields = JSON.parse(cleaned);
+    } catch {
+      fields = {};
+    }
     res.json({ fields });
   } catch (err) {
     console.error("AI SCAN ERROR:", err.message);

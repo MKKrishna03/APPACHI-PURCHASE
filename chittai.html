@@ -1131,6 +1131,7 @@
       }
 
       function togglePayment() {
+        if (document.getElementById("chittaiEntryType").value === "against") return;
         const sec = document.getElementById("paymentSection"),
           btn = document.getElementById("addPayBtn");
         const isHidden =
