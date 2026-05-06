@@ -220,7 +220,7 @@ async function groqTextScan(prompt) {
 
 async function groqVisionScan(prompt, mimeType, b64) {
   const VISION_MODELS = [
-    "llama-3.2-90b-vision-preview",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
     "llama-3.2-11b-vision-preview",
   ];
   let lastErr;
