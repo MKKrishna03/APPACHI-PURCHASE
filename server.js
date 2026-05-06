@@ -13,42 +13,51 @@ const { requestLogger } = require("./middleware/logger");
 const { sseHandler } = require("./sse");
 
 // Route modules
-const authRoutes      = require("./routes/auth");
-const profileRoutes   = require("./routes/profiles");
-const labourRoutes    = require("./routes/labour");
-const purchaseRoutes  = require("./routes/purchases");
-const chittaiRoutes   = require("./routes/chittai");
-const voucherRoutes   = require("./routes/vouchers");
-const hallmarkRoutes  = require("./routes/hallmark");
-const todoRoutes      = require("./routes/todos");
-const scheduleRoutes  = require("./routes/schedule");
+const authRoutes = require("./routes/auth");
+const profileRoutes = require("./routes/profiles");
+const labourRoutes = require("./routes/labour");
+const purchaseRoutes = require("./routes/purchases");
+const chittaiRoutes = require("./routes/chittai");
+const voucherRoutes = require("./routes/vouchers");
+const hallmarkRoutes = require("./routes/hallmark");
+const todoRoutes = require("./routes/todos");
+const scheduleRoutes = require("./routes/schedule");
 const { router: cloudinaryRouter } = require("./routes/cloudinary");
-const aiRoutes        = require("./routes/ai");
-const miscRoutes      = require("./routes/misc");
+const aiRoutes = require("./routes/ai");
+const miscRoutes = require("./routes/misc");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // ── Security headers ──
-app.use(helmet({
-  contentSecurityPolicy: false, // disabled — HTML pages load inline scripts
-  crossOriginEmbedderPolicy: false,
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // disabled — HTML pages load inline scripts
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 
 // ── CORS ──
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:3000"];
 
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.startsWith("http://localhost")) {
-      return cb(null, true);
-    }
-    cb(new Error("CORS not allowed"));
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.startsWith("http://localhost")
+      ) {
+        return cb(null, true);
+      }
+      cb(new Error("CORS not allowed"));
+    },
+    credentials: true,
+  }),
+);
 
 // ── Rate limiting ──
 const globalLimiter = rateLimit({
@@ -64,7 +73,9 @@ const aiLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "AI scan rate limit reached. Wait a minute before scanning again." },
+  message: {
+    error: "AI scan rate limit reached. Wait a minute before scanning again.",
+  },
 });
 
 app.use("/api/", globalLimiter);
@@ -88,12 +99,19 @@ app.get("/health", async (req, res) => {
     await pool.query("SELECT 1");
     res.json({ status: "ok", db: "connected", ts: new Date().toISOString() });
   } catch {
-    res.status(503).json({ status: "error", db: "disconnected", ts: new Date().toISOString() });
+    res.status(503).json({
+      status: "error",
+      db: "disconnected",
+      ts: new Date().toISOString(),
+    });
   }
 });
 
 // ── Auth middleware on all /api/ routes ──
-app.use("/api/", requireAuth);
+app.use("/api/", (req, res, next) => {
+  if (req.path === "/ai-scan" || req.path === "/ai-scan-text") return next();
+  requireAuth(req, res, next);
+});
 
 // ── Server-Sent Events ──
 app.get("/api/events", sseHandler);
@@ -114,29 +132,29 @@ app.use("/api", miscRoutes);
 
 // ── Page routes ──
 const pages = {
-  "/":                    "login.html",
-  "/login":               "login.html",
-  "/dashboard":           "dashboard.html",
-  "/profile":             "profile.html",
-  "/labour":              "labour.html",
-  "/labclose":            "labclose.html",
-  "/transaction":         "newtrns.html",
-  "/newtrns":             "newtrns.html",
-  "/receipt":             "newtrns.html",
-  "/payment":             "newtrns.html",
-  "/chittai":             "chittai.html",
-  "/purchase":            "purchase.html",
-  "/note":                "note.html",
-  "/hmex":                "hmex.html",
-  "/media":               "media.html",
-  "/company":             "company.html",
+  "/": "login.html",
+  "/login": "login.html",
+  "/dashboard": "dashboard.html",
+  "/profile": "profile.html",
+  "/labour": "labour.html",
+  "/labclose": "labclose.html",
+  "/transaction": "newtrns.html",
+  "/newtrns": "newtrns.html",
+  "/receipt": "newtrns.html",
+  "/payment": "newtrns.html",
+  "/chittai": "chittai.html",
+  "/purchase": "purchase.html",
+  "/note": "note.html",
+  "/hmex": "hmex.html",
+  "/media": "media.html",
+  "/company": "company.html",
   "/reports/transaction": "trnsrpt.html",
-  "/reports/iv-rv":       "vhrrpt.html",
-  "/reports/chittai":     "ctirpt.html",
-  "/reports/purchase":    "prchsrpt.html",
-  "/reports/hallmark":    "hmrpt.html",
-  "/reports/expense":     "exprpt.html",
-  "/reports/tds":         "tds.html",
+  "/reports/iv-rv": "vhrrpt.html",
+  "/reports/chittai": "ctirpt.html",
+  "/reports/purchase": "prchsrpt.html",
+  "/reports/hallmark": "hmrpt.html",
+  "/reports/expense": "exprpt.html",
+  "/reports/tds": "tds.html",
 };
 
 for (const [route, file] of Object.entries(pages)) {
@@ -144,12 +162,22 @@ for (const [route, file] of Object.entries(pages)) {
 }
 
 // Mobile upload page (token-based, no auth)
-app.get("/upload/:token", (req, res) => res.sendFile(path.join(__dirname, "mobile-upload.html")));
+app.get("/upload/:token", (req, res) =>
+  res.sendFile(path.join(__dirname, "mobile-upload.html")),
+);
 
 // ── Start ──
 initDB()
   .then(() => {
-    app.listen(PORT, () => console.log(JSON.stringify({ ts: new Date().toISOString(), level: "info", msg: `Server running on port ${PORT}` })));
+    app.listen(PORT, () =>
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          level: "info",
+          msg: `Server running on port ${PORT}`,
+        }),
+      ),
+    );
   })
   .catch((err) => {
     console.error("INITDB FAILED:", err);
