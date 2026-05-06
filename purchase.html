@@ -2170,13 +2170,23 @@
         };
 
         try {
-          const res = await fetch("/api/purchases", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const res = editPurchaseId
+            ? await fetch(`/api/purchases/${editPurchaseId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              })
+            : await fetch("/api/purchases", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
           const result = await res.json();
           if (result.status === "SUCCESS") {
+            if (editPurchaseId) {
+              showMessage("Purchase updated successfully!", "success");
+              return;
+            }
             // Save hallmark voucher if checked
             if (document.getElementById("hallmarkToggle").checked) {
               const hmItems = [];
@@ -2288,6 +2298,8 @@
         }
       }
       let existingPurchaseBillNos = [];
+      let editPurchaseId = null;
+
       async function loadExistingPurchaseBillNos() {
         const res = await fetch("/api/purchases/list");
         const all = res.ok ? await res.json() : [];
@@ -2296,11 +2308,65 @@
           .map((p) => p.bill_no.trim().toLowerCase());
       }
       function checkDuplicatePurchaseBillNo(val) {
+        if (editPurchaseId) return;
         const msg = document.getElementById("purchaseBillNoDuplicateMsg");
         if (val && existingPurchaseBillNos.includes(val.trim().toLowerCase())) {
           msg.style.display = "block";
         } else {
           msg.style.display = "none";
+        }
+      }
+
+      async function loadEditPurchase(id) {
+        try {
+          const res = await fetch(`/api/purchases/${id}`);
+          if (!res.ok) { showMessage("Could not load purchase for editing", "error"); return; }
+          const { purchase: p, items } = await res.json();
+          editPurchaseId = id;
+
+          document.getElementById("companySelect").value = p.profile_id;
+          await onCompanyChange(true);
+
+          document.getElementById("billNo").value = p.bill_no || "";
+          document.getElementById("billDate").value = p.date ? p.date.split("T")[0] : "";
+
+          document.getElementById("itemsTable").innerHTML = "";
+          rowCount = 0;
+          if (items?.length) {
+            for (const item of items) {
+              addRow();
+              const idx = rowCount;
+              const row = document.getElementById(`row_${idx}`);
+              row.querySelector(".description").value = item.description || "";
+              row.querySelector(".quantity").value = parseFloat(item.quantity) || "";
+              row.querySelector(".rate").value = parseFloat(item.rate) || "";
+              row.querySelector(".tax-percent").value = parseFloat(item.tax_percent) || 0;
+              row.querySelector(".taxable").value = parseFloat(item.amount) || "";
+              calcRow(idx);
+            }
+          } else {
+            addRow();
+          }
+
+          // Set round_off before updateTotals (it uses round_off for total)
+          if (p.round_off != null) document.getElementById("billRoundOff").value = parseFloat(p.round_off).toFixed(2);
+          updateTotals();
+          // Restore TDS and Net from DB after updateTotals (which may auto-calculate TDS)
+          if (p.tds != null) document.getElementById("billTds").value = parseFloat(p.tds).toFixed(2);
+          if (p.net_value != null) document.getElementById("billNet").value = parseFloat(p.net_value).toFixed(2);
+
+          uploadedPhotoUrls = p.photo_urls?.length ? p.photo_urls : (p.photo_url ? [p.photo_url] : []);
+          renderPhotoSlots();
+
+          showPurchaseDetails();
+
+          const btn = document.querySelector("button[onclick='submitPurchase()']");
+          if (btn) btn.textContent = "Update Purchase →";
+
+          document.getElementById("purchaseBillNoDuplicateMsg").style.display = "none";
+          showMessage("Purchase loaded for editing", "success");
+        } catch (e) {
+          showMessage("Error loading purchase: " + e.message, "error");
         }
       }
 
@@ -2716,7 +2782,6 @@
         await loadTaxFormats();
         await loadTdsRates();
         loadDescriptions();
-        // Don't load sidebar until company selected
         document.getElementById("paymentsList").innerHTML =
           '<div class="no-data">Select a company first</div>';
         document.getElementById("chittaiList").innerHTML =
@@ -2724,10 +2789,13 @@
         document.getElementById("recentList").innerHTML =
           '<div class="no-data">Select a company first</div>';
         await loadExistingPurchaseBillNos();
-        addRow();
-        document.getElementById("billDate").value = new Date()
-          .toISOString()
-          .split("T")[0];
+        const _editId = new URLSearchParams(location.search).get("edit");
+        if (_editId) {
+          await loadEditPurchase(_editId);
+        } else {
+          addRow();
+          document.getElementById("billDate").value = new Date().toISOString().split("T")[0];
+        }
       };
       function getCurrentUser() {
         try {

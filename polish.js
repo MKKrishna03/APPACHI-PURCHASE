@@ -35,6 +35,34 @@
     }, duration);
   };
 
+  // ── FETCH INTERCEPTOR — attach JWT to all /api/ requests ──
+  (function () {
+    var _origFetch = window.fetch;
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (url.indexOf('/api/') !== -1) {
+        var token = localStorage.getItem('auth_token');
+        if (token) {
+          init = init || {};
+          init.headers = Object.assign({}, init.headers, { Authorization: 'Bearer ' + token });
+        }
+      }
+      return _origFetch.call(this, input, init).then(function (res) {
+        if (res.status === 401 && url.indexOf('/api/') !== -1) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_exp');
+          localStorage.removeItem('auth_device');
+          _origFetch('/api/auth/logout', { method: 'POST' }).catch(function () {});
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            window.location.href = '/login';
+          }
+        }
+        return res;
+      });
+    };
+  })();
+
   // ── SESSION EXPIRY WARNING ──
   function checkSessionExpiry() {
     try {

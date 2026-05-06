@@ -192,10 +192,11 @@
                 <th class="sortable" onclick="sortBy('paid')" style="text-align:right">Payment Amount<span class="si" id="si_paid">⇅</span></th>
                 <th style="text-align:center">Status</th>
                 <th>Entered By</th>
+                <th style="text-align:center">Edit</th>
               </tr>
             </thead>
             <tbody id="reportTable">
-              <tr><td colspan="11" class="loading-state">Select a date range to load data</td></tr>
+              <tr><td colspan="12" class="loading-state">Select a date range to load data</td></tr>
             </tbody>
             <tfoot id="reportFoot" style="display:none">
               <tr>
@@ -290,7 +291,7 @@
       function renderRows(){
         const tbody=document.getElementById('reportTable');
         const sorted=[...allRows].sort((a,b)=>{const va=getSortVal(a,sortCol),vb=getSortVal(b,sortCol);if(va<vb)return sortDir==='asc'?-1:1;if(va>vb)return sortDir==='asc'?1:-1;return 0;});
-        if(!sorted.length){tbody.innerHTML=`<tr><td colspan="11" class="empty-state">No expense records found</td></tr>`;renderPagination(0);return;}
+        if(!sorted.length){tbody.innerHTML=`<tr><td colspan="12" class="empty-state">No expense records found</td></tr>`;renderPagination(0);return;}
         const total=sorted.length;const totalPages=pageSize===0?1:Math.ceil(total/pageSize);if(currentPage>totalPages)currentPage=totalPages;
         const start=pageSize===0?0:(currentPage-1)*pageSize;const end=pageSize===0?total:Math.min(start+pageSize,total);const page=sorted.slice(start,end);
         tbody.innerHTML=page.map((row,i)=>`<tr>
@@ -305,6 +306,7 @@
           <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${inr(row.paid)}</td>
           <td style="text-align:center;"><span class="tag ${row.isPaid?'tag-paid':'tag-unpaid'}">${row.isPaid?'Paid':'Unpaid'}</span></td>
           <td style="font-size:11px;color:var(--ink-3);">${row.enteredBy||'—'}</td>
+          <td style="text-align:center;">${row.id?`<button onclick="window.location.href='/hmex?edit=${row.id}'" style="padding:3px 10px;font-size:11px;border:1px solid var(--accent);border-radius:5px;background:none;color:var(--accent);cursor:pointer;font-weight:600;">Edit</button>`:'—'}</td>
         </tr>`).join('');
         renderPagination(total);
       }
@@ -331,7 +333,7 @@
         const companyId=document.getElementById('companySelect').value;
         const payFilter=document.getElementById('payFilter').value;
         const tbody=document.getElementById('reportTable');
-        tbody.innerHTML=`<tr><td colspan="11" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML=`<tr><td colspan="12" class="loading-state">Loading...</td></tr>`;
         try{
           const [hmexRes,profileRes,voucherRes]=await Promise.all([
             fetch('/api/hallmark-expenses/list').then(r=>r.json()),
@@ -356,7 +358,7 @@
             const ids=(h.linked_voucher_ids||[]);
             const paid=ids.reduce((s,id)=>s+(voucherMap[id]||0),0);
             const isPaid=net>0&&paid>=net-0.01;
-            return {profile_id:h.profile_id,company,dateRaw:h.date||'',dateStr:fmtDate(h.date),bill_no:h.bill_no,taxable,gst,tds,net,paid,isPaid,enteredBy:h.created_by_name||h.created_by||'—'};
+            return {id:h.id,profile_id:h.profile_id,company,dateRaw:h.date||'',dateStr:fmtDate(h.date),bill_no:h.bill_no,taxable,gst,tds,net,paid,isPaid,enteredBy:h.created_by_name||h.created_by||'—'};
           });
 
           if(payFilter==='paid')allRows=allRows.filter(r=>r.isPaid);
@@ -364,7 +366,7 @@
 
           document.getElementById('rowCount').textContent=allRows.length;
 
-          if(!allRows.length){tbody.innerHTML=`<tr><td colspan="11" class="empty-state">No expense records found for selected range</td></tr>`;document.getElementById('reportFoot').style.display='none';updateSummary(0,0,0,0,0);return;}
+          if(!allRows.length){tbody.innerHTML=`<tr><td colspan="12" class="empty-state">No expense records found for selected range</td></tr>`;document.getElementById('reportFoot').style.display='none';updateSummary(0,0,0,0,0);return;}
 
           const totTaxable=allRows.reduce((s,r)=>s+r.taxable,0);
           const totGst=allRows.reduce((s,r)=>s+r.gst,0);
@@ -382,7 +384,7 @@
           updateSortIcons();renderRows();
           updateSummary(allRows.length,totTaxable,totGst,totNet,totTds);
         }catch(e){
-          document.getElementById('reportTable').innerHTML=`<tr><td colspan="11" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          document.getElementById('reportTable').innerHTML=`<tr><td colspan="12" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 

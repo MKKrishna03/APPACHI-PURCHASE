@@ -977,6 +977,15 @@
       .ri-card.tomorrow::before{ background: #52b788; }
       .ri-card.soon::before    { background: #1d6fa4; }
       .ri-card.future::before  { background: var(--border-strong); }
+      /* Status-based card tints */
+      .ri-card.todo-status-pending                { background: #f0f7ff; border-color: #c5dff5; }
+      .ri-card.todo-status-pending.overdue        { background: #fff2f2; border-color: #f5c8c8; }
+      .ri-card.todo-status-seen                   { background: #fffdf0; border-color: #f0e4b0; }
+      .ri-card.todo-status-done                   { background: #f6fdf7; border-color: #c5e0c8; }
+      .ri-card.todo-status-pending:hover          { background: #e4f1ff; border-color: #a8ccf0; }
+      .ri-card.todo-status-pending.overdue:hover  { background: #ffe8e8; border-color: #f0b0b0; }
+      .ri-card.todo-status-seen:hover             { background: #fff8e0; border-color: #e8d494; }
+      .ri-card.todo-status-done:hover             { background: #ecf8ed; border-color: #aed4b4; }
       .ri-card-top {
         display: flex;
         align-items: flex-start;
@@ -2281,11 +2290,19 @@ function doLogout() {
         }
       }
 
+      // ── Page-load fetch cache — deduplicates identical concurrent requests ──
+      const _dashCache = {};
+      function cachedFetch(url) {
+        if (!_dashCache[url]) {
+          _dashCache[url] = fetch(url).then(r => r.json()).catch(() => []);
+        }
+        return _dashCache[url];
+      }
+
       let companies = [];
 
       async function loadCompanies() {
-        const res = await fetch("/api/profiles/list");
-        companies = await res.json();
+        companies = await cachedFetch("/api/profiles/list");
         const companyList = document.getElementById("companyList");
         const companyCount = document.getElementById("companyCount");
         const receiptCompany = document.getElementById("receiptCompany");
@@ -2515,8 +2532,7 @@ function doLogout() {
       // ── Pending Vouchers ──
       async function loadPendingVouchers() {
         try {
-          const res = await fetch("/api/labour");
-          const bills = await res.json();
+          const bills = await cachedFetch("/api/labour");
           const issues = bills.filter(
             (b) => b.voucher_type === "ISSUE VOUCHER",
           );
@@ -2668,23 +2684,12 @@ function doLogout() {
         const el = document.getElementById("activityList");
         el.innerHTML = '<div class="empty-msg">Loading...</div>';
         try {
-          const [vRes, cRes, lRes, pRes] = await Promise.all([
-            fetch(`/api/vouchers/list`),
-            fetch(`/api/chittai/list/all`),
-            fetch(`/api/labour`),
-            fetch(`/api/purchases/list`),
+          const [vouchers, chittais, labourAll, purchasesAll] = await Promise.all([
+            cachedFetch('/api/vouchers/list'),
+            cachedFetch('/api/chittai/list/all'),
+            cachedFetch('/api/labour'),
+            cachedFetch('/api/purchases/list'),
           ]);
-          const vouchers = await vRes.json().catch(() => []);
-          const chittaisRaw = await cRes.text();
-          const chittais = (() => {
-            try {
-              return JSON.parse(chittaisRaw);
-            } catch (e) {
-              return [];
-            }
-          })();
-          const labourAll = await lRes.json().catch(() => []);
-          const purchasesAll = await pRes.json().catch(() => []);
           const all = [
             ...(Array.isArray(vouchers) ? vouchers : []).map((v) => ({
               label: v.voucher_type,
@@ -3292,7 +3297,14 @@ function doLogout() {
 
       loadTodoUsers();
       loadTodos();
-      setInterval(loadTodos, 30000);
+
+      // ── SSE real-time updates ──
+      (function connectSSE() {
+        const es = new EventSource('/api/events');
+        es.addEventListener('todo-update', () => pollTodos());
+        es.onerror = () => { es.close(); setTimeout(connectSSE, 5000); };
+      })();
+      setInterval(loadTodos, 60000); // fallback refresh every 60s
 
       // ── REAL-TIME POLLING FOR NEW MESSAGES ──
       let _lastTodoSnapshot = null;
@@ -3396,7 +3408,7 @@ function doLogout() {
         }, 5000);
       }
 
-      setInterval(pollTodos, 5000);
+      // polling replaced by SSE — see connectSSE above
 
       window.toggleTodoPanel = function () {
         document.getElementById("todoPanel").classList.toggle("open");
@@ -3594,30 +3606,39 @@ function doLogout() {
       };
 
       window.markTodoSeen = async function(id) {
-        console.log('markTodoSeen called', id);
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+        const prev = t.status;
+        t.status = 'seen'; t.seen_at = new Date().toISOString(); renderTodos();
         const res = await fetch('/api/todos/' + id, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'seen' })
         });
-        const data = await res.json();
-        console.log('markTodoSeen response', data);
-        loadTodos();
+        if (!res.ok) { t.status = prev; t.seen_at = null; renderTodos(); _toast('Failed to update', 'error'); }
       };
 
       window.markTodoDone = async function(id) {
-        await fetch('/api/todos/' + id, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+        const prev = t.status;
+        t.status = 'done'; t.done_at = new Date().toISOString(); renderTodos();
+        const res = await fetch('/api/todos/' + id, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'done' })
         });
-        loadTodos();
+        if (!res.ok) { t.status = prev; t.done_at = null; renderTodos(); _toast('Failed to mark done', 'error'); }
       };
 
       window.deleteTodo = async function(id) {
         if (!confirm("Delete this to-do?")) return;
-        await fetch('/api/todos/' + id, { method: 'DELETE' });
-        loadTodos();
+        const idx = todos.findIndex(t => t.id === id);
+        const removed = idx !== -1 ? todos.splice(idx, 1)[0] : null;
+        if (removed) renderTodos();
+        const res = await fetch('/api/todos/' + id, { method: 'DELETE' });
+        if (!res.ok) {
+          if (removed) { todos.splice(idx, 0, removed); renderTodos(); }
+          _toast('Failed to delete', 'error');
+        }
       };
 
       function fmt12Todo(timeStr) {
@@ -3756,7 +3777,7 @@ function doLogout() {
             const cardGlow = unseenForMe > 0 ? `box-shadow:0 0 0 2px #1d6fa4,0 4px 16px rgba(29,111,164,0.18);` : '';
 
             html += `
-              <div class="ri-card ${urg}" onclick="if(!event.target.closest('.ri-card-body') && !event.target.closest('button'))toggleTodoCard(${t.id})" ${priorityStripe.replace('style="', `style="${cardGlow}`)}>
+              <div class="ri-card ${urg} todo-status-${t.status}" onclick="if(!event.target.closest('.ri-card-body') && !event.target.closest('button'))toggleTodoCard(${t.id})" ${priorityStripe.replace('style="', `style="${cardGlow}`)}>
                 <div class="ri-card-top">
                   <div style="flex:1">
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
@@ -3993,9 +4014,9 @@ function doLogout() {
       async function loadPendingPurchasePayments() {
         try {
           const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
-            fetch("/api/purchases/list").then(r => r.json()),
-            fetch("/api/vouchers/list").then(r => r.json()),
-            fetch("/api/profile/all").then(r => r.json()),
+            cachedFetch("/api/purchases/list"),
+            cachedFetch("/api/vouchers/list"),
+            cachedFetch("/api/profile/all"),
           ]);
           const paidBillNos = new Set(
             vouchersRes.filter(v => v.entry_type === "against" && v.bill_no && (v.voucher_type === "Payment Voucher" || v.voucher_type === "Chittai Payment")).map(v => v.bill_no)
@@ -4063,9 +4084,9 @@ function doLogout() {
       async function loadPendingPurchasePaid() {
         try {
           const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
-            fetch("/api/purchases/list").then(r => r.json()),
-            fetch("/api/vouchers/list").then(r => r.json()),
-            fetch("/api/profile/all").then(r => r.json()),
+            cachedFetch("/api/purchases/list"),
+            cachedFetch("/api/vouchers/list"),
+            cachedFetch("/api/profile/all"),
           ]);
           const purchaseBillNos = new Set(purchasesRes.map(p => p.bill_no).filter(Boolean));
           const paymentVouchers = vouchersRes.filter(v =>
@@ -4135,9 +4156,9 @@ function doLogout() {
       async function loadPendingChittai() {
         try {
           const [vouchersRes, chittaisRes, profileRes] = await Promise.all([
-            fetch("/api/vouchers/list").then(r => r.json()),
-            fetch("/api/chittai/list/all").then(r => r.json()).catch(() => []),
-            fetch("/api/profile/all").then(r => r.json()),
+            cachedFetch("/api/vouchers/list"),
+            cachedFetch("/api/chittai/list/all"),
+            cachedFetch("/api/profile/all"),
           ]);
           const purchaseProfileIds = new Set(
             profileRes.map(p => String(p.id))
@@ -4212,15 +4233,39 @@ function doLogout() {
         renderPendingChittai(all.filter(b => (b.bill_no||"").toLowerCase().includes(f) || (b.company_name||"").toLowerCase().includes(f)));
       }
 
-      // ── Pending Bills for the Payments (payments NOT linked to any purchase, excluding labour) ──
+      // ── Pending Bills for the Payments (payments NOT linked to any purchase/hallmark/expense/labour bill) ──
       async function loadPendingBillsForPay() {
         try {
-          const [purchasesRes, vouchersRes, profileRes] = await Promise.all([
-            fetch("/api/purchases/list").then(r => r.json()),
-            fetch("/api/vouchers/list").then(r => r.json()),
-            fetch("/api/profile/all").then(r => r.json()),
+          const [purchasesRes, hmexRes, vouchersRes, profileRes] = await Promise.all([
+            cachedFetch("/api/purchases/list"),
+            cachedFetch("/api/hallmark-expenses/list"),
+            cachedFetch("/api/vouchers/list"),
+            cachedFetch("/api/profile/all"),
           ]);
-          // bill_no fallback (purchase entered using same bill_no as payment)
+
+          // Reverse lookup: voucher IDs linked FROM purchases
+          const linkedFromPurchase = new Set();
+          purchasesRes.forEach(p => {
+            if (p.linked_voucher_id) linkedFromPurchase.add(String(p.linked_voucher_id));
+            if (Array.isArray(p.linked_voucher_ids)) p.linked_voucher_ids.forEach(id => linkedFromPurchase.add(String(id)));
+          });
+
+          // Reverse lookup: voucher IDs linked FROM hallmark/expense bills
+          const linkedFromHmex = new Set();
+          hmexRes.forEach(h => {
+            if (h.linked_voucher_id) linkedFromHmex.add(String(h.linked_voucher_id));
+            if (Array.isArray(h.linked_voucher_ids)) h.linked_voucher_ids.forEach(id => linkedFromHmex.add(String(id)));
+          });
+
+          // Soft match: profile_id + rounded net_value — catches bills entered without explicit voucher link
+          const purchaseAmtKeys = new Set(
+            purchasesRes.map(p => `${p.profile_id}:${Math.round(parseFloat(p.net_value || p.total_value || 0))}`)
+          );
+          const hmexAmtKeys = new Set(
+            hmexRes.map(h => `${h.profile_id}:${Math.round(parseFloat(h.net_value || h.total_value || 0))}`)
+          );
+
+          // bill_no fallback
           const purchaseBillNos = new Set(purchasesRes.map(p => p.bill_no).filter(Boolean));
 
           const paymentVouchers = vouchersRes.filter(v => {
@@ -4228,10 +4273,19 @@ function doLogout() {
             const isPayment = vt === "payment voucher" || vt === "purchase payment voucher" || vt === "chittai payment";
             const isLabour = vt.includes("labour");
             if (!isPayment || isLabour) return false;
-            // omit if this voucher is linked to a purchase (vouchers.linked_purchase_id)
+            // directly linked to a purchase or hallmark bill
             if (v.linked_purchase_id) return false;
-            // omit if this payment's bill_no matches a purchase bill_no
+            // directly linked to a labour bill
+            if (v.linked_labour_id) return false;
+            // reverse lookup: purchase/hallmark stored this voucher's ID
+            if (linkedFromPurchase.has(String(v.id))) return false;
+            if (linkedFromHmex.has(String(v.id))) return false;
+            // bill_no match fallback
             if (v.bill_no && purchaseBillNos.has(v.bill_no)) return false;
+            // soft amount match: a purchase/hallmark bill exists for same company + same total
+            const amtKey = `${v.profile_id}:${Math.round(parseFloat(v.total_value || 0))}`;
+            if (purchaseAmtKeys.has(amtKey)) return false;
+            if (hmexAmtKeys.has(amtKey)) return false;
             return true;
           });
           paymentVouchers.forEach(v => {
@@ -4365,9 +4419,9 @@ function doLogout() {
           const fyEnd   = new Date(fyYear + 1, 2, 31, 23, 59, 59);
 
           const [purchases, labourAll, hallmarkAll] = await Promise.all([
-            fetch('/api/purchases/list').then(r => r.json()),
-            fetch('/api/labour').then(r => r.json()),
-            fetch('/api/hallmark-expenses/list').then(r => r.json()),
+            cachedFetch('/api/purchases/list'),
+            cachedFetch('/api/labour'),
+            cachedFetch('/api/hallmark-expenses/list'),
           ]);
 
           function inFY(dateStr) {

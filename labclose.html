@@ -1313,14 +1313,14 @@
               b.profile_id == companyId && b.voucher_type === "Receipt Voucher",
           );
           const qtyMap = {};
-          for (const bill of [...issueBills, ...receiptBills]) {
+          await Promise.all([...issueBills, ...receiptBills].map(async (bill) => {
             const r = await fetch(`/api/labour/${bill.id}`);
             const d = await r.json();
             qtyMap[bill.id] = d.items.reduce(
               (s, i) => s + (parseFloat(i.quantity) || 0),
               0,
             );
-          }
+          }));
           const receivedQty = {};
           receiptBills.forEach((b) => {
             if (!b.issue_number) return;

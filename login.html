@@ -710,6 +710,7 @@
           });
           const data = await res.json();
           if (data.status === "SUCCESS") {
+            if (data.token) localStorage.setItem("auth_token", data.token);
             setSession(data.user);
             window.location.href = "/";
           } else {

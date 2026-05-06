@@ -719,11 +719,12 @@
                 </th>
                 <th style="text-align: center">Status</th>
                 <th>Entered By</th>
+                <th style="text-align:center">Edit</th>
               </tr>
             </thead>
             <tbody id="reportTable">
               <tr>
-                <td colspan="10" class="loading-state">
+                <td colspan="12" class="loading-state">
                   Select a date range to load data
                 </td>
               </tr>
@@ -1181,7 +1182,7 @@
           return 0;
         });
         if (!sorted.length) {
-          tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No purchase records found</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="12" class="empty-state">No purchase records found</td></tr>`;
           renderPagination(0);
           return;
         }
@@ -1205,6 +1206,7 @@
           <td class="num" style="text-align:right;color:var(--accent);font-weight:600;">${inr(row.paid)}</td>
           <td style="text-align:center;"><span class="tag ${row.isPaid ? "tag-paid" : "tag-unpaid"}">${row.isPaid ? "Paid" : "Unpaid"}</span></td>
           <td style="font-size:11px;color:var(--ink-3);">${row.enteredBy || "—"}</td>
+          <td style="text-align:center;">${row.id ? `<button onclick="window.location.href='/purchase?edit=${row.id}'" style="padding:3px 10px;font-size:11px;border:1px solid var(--accent);border-radius:5px;background:none;color:var(--accent);cursor:pointer;font-weight:600;">Edit</button>` : "—"}</td>
         </tr>`,
           )
           .join("");
@@ -1281,7 +1283,7 @@
         const companyId = document.getElementById("companySelect").value;
         const payFilter = document.getElementById("payFilter").value;
         const tbody = document.getElementById("reportTable");
-        tbody.innerHTML = `<tr><td colspan="11" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="loading-state">Loading...</td></tr>`;
         try {
           const [purchasesRes, profileRes, voucherRes] = await Promise.all([
             fetch("/api/purchases/list").then((r) => r.json()),
@@ -1382,6 +1384,7 @@
             const paid = m.ids.reduce((s, id) => s + (paidMap[id] || 0), 0);
             const isPaid = m.net > 0 && paid >= m.net - 0.01;
             return {
+              id: m.main?.id,
               profile_id: m.profile_id,
               company,
               dateRaw: m.date || "",
@@ -1404,7 +1407,7 @@
           document.getElementById("rowCount").textContent = allRows.length;
 
           if (!allRows.length) {
-            tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No purchase records found for selected range</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="empty-state">No purchase records found for selected range</td></tr>`;
             document.getElementById("reportFoot").style.display = "none";
             updateSummary(0, 0, 0, 0, 0);
             return;
@@ -1434,7 +1437,7 @@
           );
         } catch (e) {
           document.getElementById("reportTable").innerHTML =
-            `<tr><td colspan="10" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+            `<tr><td colspan="12" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
