@@ -8,7 +8,10 @@
       }
     </style>
     <title>Transaction Report</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -552,7 +555,7 @@
         opacity: 0.4;
       }
     </style>
-      <link rel="stylesheet" href="/polish.css" />
+    <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="topbar">
@@ -702,9 +705,7 @@
                   onclick="sortBy('billValue')"
                   style="text-align: right"
                 >
-                  Labour Value<span class="si" id="si_billValue"
-                    >⇅</span
-                  >
+                  Labour Value<span class="si" id="si_billValue">⇅</span>
                 </th>
                 <th
                   class="sortable"
@@ -1178,6 +1179,7 @@
           .map((b) => {
             const billVal = b._billValue || 0;
             const payAmt = parseFloat(b.total_value || 0);
+            const hasBillVal = b._isChittai || !!b.linked_labour_id;
             const date = b.date
               ? (() => {
                   const d = new Date(
@@ -1186,9 +1188,9 @@
                   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
                 })()
               : "-";
-            const billValCell = b._isChittai
-              ? `<td style="font-family:'DM Mono',monospace;text-align:right;color:var(--ink-3);font-style:italic;">₹${Math.round(billVal).toLocaleString("en-IN")} <span style="font-size:10px;font-style:normal;background:var(--amber-light);color:var(--amber);border-radius:4px;padding:1px 5px;font-family:inherit;">ref</span></td>`
-              : `<td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>`;
+            const billValCell = hasBillVal
+              ? `<td style="font-family:'DM Mono',monospace;text-align:right;">₹${Math.round(billVal).toLocaleString("en-IN")}</td>`
+              : `<td style="text-align:right;color:var(--ink-3);">—</td>`;
             return `<tr><td class="mono">${b._billNo}</td><td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${b._pid}'">${b._companyName}</td><td>${date}</td>${billValCell}<td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;text-align:right;">₹${Math.round(payAmt).toLocaleString("en-IN")}</td><td><span class="tag tag-paid" style="font-size:10px;">${b.voucher_type || "Paid"}</span></td><td style="font-size:11px;color:var(--ink-3);">${b.created_by_name || b.created_by || "—"}</td></tr>`;
           })
           .join("");
@@ -1338,7 +1340,8 @@
 
           allRows = receipts;
           receipts.forEach((b) => {
-            if (!b._isChittai) totalBillValue += b._billValue || 0;
+            if (b._isChittai || b.linked_labour_id)
+              totalBillValue += b._billValue || 0;
             totalPayment += parseFloat(b.total_value || 0);
           });
           updateSortIcons();
@@ -1381,6 +1384,6 @@
       activePreset = 10;
       loadReport();
     </script>
-      <script src="/polish.js"></script>
+    <script src="/polish.js"></script>
   </body>
 </html>
