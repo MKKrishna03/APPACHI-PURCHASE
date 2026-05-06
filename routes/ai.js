@@ -219,10 +219,7 @@ async function groqTextScan(prompt) {
 }
 
 async function groqVisionScan(prompt, mimeType, b64) {
-  const VISION_MODELS = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "llama-3.2-11b-vision-preview",
-  ];
+  const VISION_MODELS = ["meta-llama/llama-4-scout-17b-16e-instruct"];
   let lastErr;
   for (const model of VISION_MODELS) {
     try {
