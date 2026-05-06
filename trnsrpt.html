@@ -639,6 +639,11 @@
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
+        <select id="paymentTypeSelect" onchange="loadReport()">
+          <option value="">— All Payment Types —</option>
+          <option value="neft">NEFT / RTGS</option>
+          <option value="cash">Cash</option>
+        </select>
       </div>
 
       <div class="summary-grid">
@@ -1179,7 +1184,11 @@
           .map((b) => {
             const billVal = b._billValue || 0;
             const payAmt = parseFloat(b.total_value || 0);
-            const hasBillVal = b._isChittai || !!b.linked_labour_id;
+            const isReceipt = (b.voucher_type || "")
+              .toLowerCase()
+              .includes("receipt");
+            const hasBillVal =
+              b._isChittai || !!b.linked_labour_id || isReceipt;
             const date = b.date
               ? (() => {
                   const d = new Date(
@@ -1279,6 +1288,17 @@
             );
           }
 
+          const paymentType =
+            document.getElementById("paymentTypeSelect").value;
+          if (paymentType) {
+            receipts = receipts.filter((b) => {
+              const desc = (b.description || "").toLowerCase();
+              if (paymentType === "neft") return desc.includes("neft");
+              if (paymentType === "cash") return desc.includes("cash");
+              return true;
+            });
+          }
+
           console.log(
             "Missing co rows:",
             receipts
@@ -1323,7 +1343,7 @@
                 ? parseFloat(
                     labour.bill_value_after_deduction || labour.total || 0,
                   )
-                : parseFloat(b.total_value || 0);
+                : parseFloat(b.bill_value || b.total_value || 0);
           });
 
           document.getElementById("rowCount").textContent = receipts.length;

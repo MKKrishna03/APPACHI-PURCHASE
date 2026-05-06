@@ -1647,15 +1647,7 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
         else if (_popupType === 'receipt') window.location.href = `/labclose?edit=${_popupId}`;
         else if (_popupType === 'purchase') window.location.href = `/purchase?edit=${_popupId}`;
         else if (_popupType === 'txn') {
-          // Check if it's a chittai payment — redirect to chittai edit instead
-          fetch('/api/vouchers/list').then(r=>r.json()).then(all => {
-            const v = all.find(x => x.id == _popupId);
-            if (v && v.linked_chittai_id) {
-              window.location.href = `/chittai?edit=${v.linked_chittai_id}`;
-            } else {
-              window.location.href = `/transaction?edit=${_popupId}`;
-            }
-          });
+          window.location.href = `/transaction?edit=${_popupId}`;
         }
         else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
         else if (_popupType === 'hmex') window.location.href = `/hmex?edit=${_popupId}`;
