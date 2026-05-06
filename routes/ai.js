@@ -219,28 +219,39 @@ async function groqTextScan(prompt) {
 }
 
 async function groqVisionScan(prompt, mimeType, b64) {
-  const VISION_MODELS = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
+  const VISION_MODELS = [
+    "llama-3.2-90b-vision-preview",
+    "llama-3.2-11b-vision-preview",
+  ];
   let lastErr;
   for (const model of VISION_MODELS) {
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
+      const res = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  {
+                    type: "image_url",
+                    image_url: { url: `data:${mimeType};base64,${b64}` },
+                  },
+                ],
+              },
             ],
-          }],
-          temperature: 0,
-        }),
-      });
+            temperature: 0,
+          }),
+        },
+      );
       if (!res.ok) {
         const body = await res.text();
         if (res.status === 429) throw new Error(`429: ${body}`);
@@ -258,8 +269,15 @@ async function groqVisionScan(prompt, mimeType, b64) {
 }
 
 function parseJSON(raw) {
-  const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
-  try { return JSON.parse(cleaned); } catch { return {}; }
+  const cleaned = raw
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return {};
+  }
 }
 
 router.post("/ai-scan-text", async (req, res) => {
@@ -269,25 +287,38 @@ router.post("/ai-scan-text", async (req, res) => {
     const basePrompt = AI_TEXT_PROMPTS[form_type] || AI_TEXT_PROMPTS.purchase;
     const raw = await groqTextScan(basePrompt + ocr_text);
     const fields = parseJSON(raw);
-    logger.info("ai-text-scan", { form_type, keys: Object.keys(fields).join(",") });
+    logger.info("ai-text-scan", {
+      form_type,
+      keys: Object.keys(fields).join(","),
+    });
     res.json({ fields });
   } catch (err) {
     logger.error("ai-text-scan-error", { message: err.message });
     const is429 = err.message?.includes("429");
     res.status(is429 ? 429 : 500).json({
-      error: is429 ? "AI quota exceeded. Try again in a few minutes." : err.message,
+      error: is429
+        ? "AI quota exceeded. Try again in a few minutes."
+        : err.message,
     });
   }
 });
 
 router.post("/ai-scan", async (req, res) => {
   try {
+    console.log(
+      "GROQ KEY:",
+      process.env.GROQ_API_KEY?.slice(0, 15),
+      "length:",
+      process.env.GROQ_API_KEY?.length,
+    );
     const { image_url, form_type } = req.body;
-    if (!image_url) return res.status(400).json({ error: "image_url required" });
+    if (!image_url)
+      return res.status(400).json({ error: "image_url required" });
     const prompt = AI_SCAN_PROMPTS[form_type] || AI_SCAN_PROMPTS.purchase;
 
     const imgResp = await fetch(image_url);
-    if (!imgResp.ok) return res.status(400).json({ error: "Could not fetch image" });
+    if (!imgResp.ok)
+      return res.status(400).json({ error: "Could not fetch image" });
     const contentType = imgResp.headers.get("content-type") || "image/jpeg";
     const mimeType = contentType.startsWith("image/png")
       ? "image/png"
@@ -304,7 +335,9 @@ router.post("/ai-scan", async (req, res) => {
     logger.error("ai-scan-error", { message: err.message });
     const is429 = err.message?.includes("429");
     res.status(is429 ? 429 : 500).json({
-      error: is429 ? "AI quota exceeded. Try again in a few minutes." : err.message,
+      error: is429
+        ? "AI quota exceeded. Try again in a few minutes."
+        : err.message,
     });
   }
 });
