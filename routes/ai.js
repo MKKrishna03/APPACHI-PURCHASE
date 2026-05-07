@@ -3,8 +3,32 @@ const { logger } = require("../middleware/logger");
 
 const router = express.Router();
 
-const GST_CHECK = `IMPORTANT: Verify that the GST number of the buyer/recipient (our GSTIN) on the bill matches 33ACSPN6014B1ZV. Set a field "gst_valid": true if it matches, false if it does not match or is missing.`;
-const GST_CHECK_TEXT = `IMPORTANT: Verify that the buyer/recipient GSTIN on the bill matches 33ACSPN6014B1ZV. Set a field "gst_valid": true if it matches, false if not found or different.`;
+const OUR_GST = "33ACSPN6014B1ZV";
+
+// Normalise a GST string for comparison — strip spaces, uppercase
+function normaliseGST(s) {
+  if (!s) return "";
+  return s.replace(/\s/g, "").toUpperCase();
+}
+
+// Check if an extracted GST string matches ours (with tolerance for common OCR errors: O vs 0, I vs 1)
+function gstMatches(extracted) {
+  const a = normaliseGST(extracted);
+  const b = normaliseGST(OUR_GST);
+  if (!a) return false;
+  if (a === b) return true;
+  // Allow up to 2 character differences for OCR noise
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) diff++;
+    if (diff > 2) return false;
+  }
+  return true;
+}
+
+const GST_CHECK = `Also extract the buyer/recipient GSTIN from the bill (the one in the "Bill To" / buyer address block, NOT the supplier GSTIN). Put it in a field called "buyer_gstin". Return it exactly as printed.`;
+const GST_CHECK_TEXT = `Also extract the buyer/recipient GSTIN from the bill (the "Bill To" party, NOT the vendor/supplier GSTIN). Put it in a field called "buyer_gstin". Return it exactly as printed.`;
 
 const AI_SCAN_PROMPTS = {
   purchase: `You are a bill/invoice OCR assistant. Extract fields from this bill image and return ONLY valid JSON (no markdown, no explanation).
@@ -13,6 +37,7 @@ Return this structure:
   "bill_no": "",
   "date": "YYYY-MM-DD or empty",
   "supplier_name": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
@@ -21,7 +46,6 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. ${GST_CHECK} Extract all jewellery line items you can see.`,
@@ -32,6 +56,7 @@ Return this structure:
   "receipt_bill_no": "",
   "date": "YYYY-MM-DD or empty",
   "party_name": "",
+  "buyer_gstin": "",
   "taxable_total": null,
   "cgst": null,
   "sgst": null,
@@ -40,7 +65,6 @@ Return this structure:
   "total": null,
   "tds": null,
   "bill_value_after_deduction": null,
-  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"labour_charge":null,"amount":null}]
 }
 Use null for missing numbers. ${GST_CHECK}`,
@@ -51,6 +75,7 @@ Return this structure:
   "chittai_no": "",
   "date": "YYYY-MM-DD or empty",
   "party_name": "",
+  "buyer_gstin": "",
   "weight": null,
   "rate": null,
   "value": null,
@@ -58,8 +83,7 @@ Return this structure:
   "rnd": null,
   "total": null,
   "tds": null,
-  "rtgs_amount": null,
-  "gst_valid": false
+  "rtgs_amount": null
 }
 Use null for missing numbers. "rnd" is round-off/rounding amount if present. ${GST_CHECK}`,
 
@@ -69,6 +93,7 @@ Return this structure:
   "bill_no": "",
   "date": "YYYY-MM-DD or empty",
   "party_name": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
@@ -77,7 +102,6 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. ${GST_CHECK}`,
@@ -88,6 +112,7 @@ Return this structure:
   "bill_no": "",
   "date": "YYYY-MM-DD or empty",
   "party_name": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
@@ -96,7 +121,6 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. ${GST_CHECK}`,
@@ -111,13 +135,13 @@ Return this structure:
   "vendor_name": "",
   "vendor_gstin": "",
   "our_gstin": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
   "igst": null,
   "total": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. date format: YYYY-MM-DD. Extract all jewellery line items you can see. ${GST_CHECK_TEXT}
@@ -131,13 +155,13 @@ Return this structure:
   "date": "",
   "vendor_name": "",
   "vendor_gstin": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
   "igst": null,
   "total": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
@@ -151,6 +175,7 @@ Return this structure:
   "date": "",
   "vendor_name": "",
   "vendor_gstin": "",
+  "buyer_gstin": "",
   "gross_wt": null,
   "less_wt": null,
   "net_wt": null,
@@ -158,8 +183,7 @@ Return this structure:
   "amount": null,
   "advance": null,
   "balance": null,
-  "rnd": null,
-  "gst_valid": false
+  "rnd": null
 }
 Use null for missing numbers. date format: YYYY-MM-DD. "rnd" is round-off amount if present. ${GST_CHECK_TEXT}
 
@@ -173,13 +197,13 @@ Return this structure:
   "vendor_name": "",
   "vendor_gstin": "",
   "our_gstin": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
   "igst": null,
   "total": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
@@ -194,13 +218,13 @@ Return this structure:
   "vendor_name": "",
   "vendor_gstin": "",
   "our_gstin": "",
+  "buyer_gstin": "",
   "taxable_value": null,
   "cgst": null,
   "sgst": null,
   "igst": null,
   "total": null,
   "net_value": null,
-  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
 Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
@@ -290,16 +314,26 @@ function parseJSON(raw) {
   }
 }
 
+// Backend resolves gst_valid by checking buyer_gstin / our_gstin extracted by AI
+function resolveGSTValid(fields) {
+  const candidates = [fields.buyer_gstin, fields.our_gstin].filter(Boolean);
+  fields.gst_valid =
+    candidates.length > 0 && candidates.some((g) => gstMatches(g));
+  return fields;
+}
+
 router.post("/ai-scan-text", async (req, res) => {
   try {
     const { ocr_text, form_type } = req.body;
     if (!ocr_text) return res.status(400).json({ error: "ocr_text required" });
     const basePrompt = AI_TEXT_PROMPTS[form_type] || AI_TEXT_PROMPTS.purchase;
     const raw = await groqTextScan(basePrompt + ocr_text);
-    const fields = parseJSON(raw);
+    const fields = resolveGSTValid(parseJSON(raw));
     logger.info("ai-text-scan", {
       form_type,
       keys: Object.keys(fields).join(","),
+      buyer_gstin: fields.buyer_gstin,
+      gst_valid: fields.gst_valid,
     });
     res.json({ fields });
   } catch (err) {
@@ -339,7 +373,12 @@ router.post("/ai-scan", async (req, res) => {
     const b64 = buf.toString("base64");
 
     const raw = await groqVisionScan(prompt, mimeType, b64);
-    const fields = parseJSON(raw);
+    const fields = resolveGSTValid(parseJSON(raw));
+    logger.info("ai-scan", {
+      form_type,
+      buyer_gstin: fields.buyer_gstin,
+      gst_valid: fields.gst_valid,
+    });
     res.json({ fields });
   } catch (err) {
     logger.error("ai-scan-error", { message: err.message });
