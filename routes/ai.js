@@ -3,6 +3,9 @@ const { logger } = require("../middleware/logger");
 
 const router = express.Router();
 
+const GST_CHECK = `IMPORTANT: Verify that the GST number of the buyer/recipient (our GSTIN) on the bill matches 33ACSPN6014B1ZV. Set a field "gst_valid": true if it matches, false if it does not match or is missing.`;
+const GST_CHECK_TEXT = `IMPORTANT: Verify that the buyer/recipient GSTIN on the bill matches 33ACSPN6014B1ZV. Set a field "gst_valid": true if it matches, false if not found or different.`;
+
 const AI_SCAN_PROMPTS = {
   purchase: `You are a bill/invoice OCR assistant. Extract fields from this bill image and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -18,9 +21,10 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers. Extract all jewellery line items you can see.`,
+Use null for missing numbers. ${GST_CHECK} Extract all jewellery line items you can see.`,
 
   labclose: `You are a labour receipt OCR assistant. Extract fields from this receipt image and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -36,9 +40,10 @@ Return this structure:
   "total": null,
   "tds": null,
   "bill_value_after_deduction": null,
+  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"labour_charge":null,"amount":null}]
 }
-Use null for missing numbers.`,
+Use null for missing numbers. ${GST_CHECK}`,
 
   chittai: `You are a chittai/advance slip OCR assistant. Extract fields from this slip image and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -53,9 +58,10 @@ Return this structure:
   "rnd": null,
   "total": null,
   "tds": null,
-  "rtgs_amount": null
+  "rtgs_amount": null,
+  "gst_valid": false
 }
-Use null for missing numbers. "rnd" is round-off/rounding amount if present.`,
+Use null for missing numbers. "rnd" is round-off/rounding amount if present. ${GST_CHECK}`,
 
   hallmark: `You are a hallmark expense bill OCR assistant. Extract fields from this bill image and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -71,9 +77,10 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers.`,
+Use null for missing numbers. ${GST_CHECK}`,
 
   note: `You are a credit/debit note OCR assistant. Extract fields from this note image and return ONLY valid JSON (no markdown, no explanation).
 Return this structure:
@@ -89,9 +96,10 @@ Return this structure:
   "total_value": null,
   "tds": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers.`,
+Use null for missing numbers. ${GST_CHECK}`,
 };
 
 const AI_TEXT_PROMPTS = {
@@ -109,9 +117,10 @@ Return this structure:
   "igst": null,
   "total": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers. date format: YYYY-MM-DD. Extract all jewellery line items you can see.
+Use null for missing numbers. date format: YYYY-MM-DD. Extract all jewellery line items you can see. ${GST_CHECK_TEXT}
 
 OCR TEXT:
 `,
@@ -128,9 +137,10 @@ Return this structure:
   "igst": null,
   "total": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers. date format: YYYY-MM-DD.
+Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
 
 OCR TEXT:
 `,
@@ -148,9 +158,10 @@ Return this structure:
   "amount": null,
   "advance": null,
   "balance": null,
-  "rnd": null
+  "rnd": null,
+  "gst_valid": false
 }
-Use null for missing numbers. date format: YYYY-MM-DD. "rnd" is round-off amount if present.
+Use null for missing numbers. date format: YYYY-MM-DD. "rnd" is round-off amount if present. ${GST_CHECK_TEXT}
 
 OCR TEXT:
 `,
@@ -168,9 +179,10 @@ Return this structure:
   "igst": null,
   "total": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers. date format: YYYY-MM-DD.
+Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
 
 OCR TEXT:
 `,
@@ -188,9 +200,10 @@ Return this structure:
   "igst": null,
   "total": null,
   "net_value": null,
+  "gst_valid": false,
   "items": [{"description":"","huid":"","pcs":null,"gross_wt":null,"less_wt":null,"net_wt":null,"rate":null,"amount":null}]
 }
-Use null for missing numbers. date format: YYYY-MM-DD.
+Use null for missing numbers. date format: YYYY-MM-DD. ${GST_CHECK_TEXT}
 
 OCR TEXT:
 `,
