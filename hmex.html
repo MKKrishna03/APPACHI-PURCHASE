@@ -8,7 +8,10 @@
       }
     </style>
     <title>Hallmark / Expenses</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -700,7 +703,7 @@
         color: var(--green);
       }
     </style>
-      <link rel="stylesheet" href="/polish.css" />
+    <link rel="stylesheet" href="/polish.css" />
   </head>
   <body>
     <div class="sidebar">
@@ -1249,10 +1252,38 @@
             >
               📸 Bill Photo (Optional)
             </div>
-            <div id="photoSlotsRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
-            <div id="aiScanArea" style="display:none;margin-bottom:8px;">
-              <button type="button" id="aiScanBtn" onclick="runAIScan()" style="padding:7px 14px;background:var(--accent,#1a6b3a);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🤖 AI Scan</button>
-              <span id="aiScanStatus" style="font-size:12px;color:var(--ink-3);margin-left:8px;"></span>
+            <div
+              id="photoSlotsRow"
+              style="
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 6px;
+              "
+            ></div>
+            <div id="aiScanArea" style="display: none; margin-bottom: 8px">
+              <button
+                type="button"
+                id="aiScanBtn"
+                onclick="runAIScan()"
+                style="
+                  padding: 7px 14px;
+                  background: var(--accent, #1a6b3a);
+                  color: #fff;
+                  border: none;
+                  border-radius: var(--radius);
+                  cursor: pointer;
+                  font-family: inherit;
+                  font-size: 13px;
+                  font-weight: 600;
+                "
+              >
+                🤖 AI Scan
+              </button>
+              <span
+                id="aiScanStatus"
+                style="font-size: 12px; color: var(--ink-3); margin-left: 8px"
+              ></span>
             </div>
             <div
               id="photoAddArea"
@@ -2250,7 +2281,9 @@
                   items: hmItems,
                   created_by: getCurrentUser()?.id || null,
                   photo_url: uploadedPhotoUrls[0] || null,
-          photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
+                  photo_urls: uploadedPhotoUrls.length
+                    ? uploadedPhotoUrls
+                    : null,
                 };
                 await fetch("/api/purchases", {
                   method: "POST",
@@ -2323,18 +2356,25 @@
       async function loadEditHmex(id) {
         try {
           const res = await fetch(`/api/hallmark-expenses/${id}`);
-          if (!res.ok) { showMessage("Could not load entry for editing", "error"); return; }
+          if (!res.ok) {
+            showMessage("Could not load entry for editing", "error");
+            return;
+          }
           const { entry: p, items } = await res.json();
           editHmexId = id;
 
-          const type = (p.voucher_type || "").toLowerCase().includes("hallmark") ? "hallmark" : "expenses";
+          const type = (p.voucher_type || "").toLowerCase().includes("hallmark")
+            ? "hallmark"
+            : "expenses";
           selectNoteType(type);
 
           document.getElementById("companySelect").value = p.profile_id;
           onCompanyChange(true);
 
           document.getElementById("billNo").value = p.bill_no || "";
-          document.getElementById("billDate").value = p.date ? p.date.split("T")[0] : "";
+          document.getElementById("billDate").value = p.date
+            ? p.date.split("T")[0]
+            : "";
 
           document.getElementById("itemsTable").innerHTML = "";
           rowCount = 0;
@@ -2344,30 +2384,48 @@
               const idx = rowCount;
               const row = document.getElementById(`row_${idx}`);
               row.querySelector(".description").value = item.description || "";
-              row.querySelector(".quantity").value = parseFloat(item.quantity) || "";
+              row.querySelector(".quantity").value =
+                parseFloat(item.quantity) || "";
               row.querySelector(".rate").value = parseFloat(item.rate) || "";
-              row.querySelector(".tax-percent").value = parseFloat(item.tax_percent) || 0;
-              row.querySelector(".taxable").value = parseFloat(item.amount) || "";
+              row.querySelector(".tax-percent").value =
+                parseFloat(item.tax_percent) || 0;
+              row.querySelector(".taxable").value =
+                parseFloat(item.amount) || "";
               calcRow(idx);
             }
           } else {
             addRow();
           }
 
-          if (p.round_off != null) document.getElementById("billRoundOff").value = parseFloat(p.round_off).toFixed(2);
+          if (p.round_off != null)
+            document.getElementById("billRoundOff").value = parseFloat(
+              p.round_off,
+            ).toFixed(2);
           updateTotals();
-          if (p.tds != null) document.getElementById("billTds").value = parseFloat(p.tds).toFixed(2);
-          if (p.net_value != null) document.getElementById("billNet").value = parseFloat(p.net_value).toFixed(2);
+          if (p.tds != null)
+            document.getElementById("billTds").value = parseFloat(
+              p.tds,
+            ).toFixed(2);
+          if (p.net_value != null)
+            document.getElementById("billNet").value = parseFloat(
+              p.net_value,
+            ).toFixed(2);
 
-          uploadedPhotoUrls = p.photo_urls?.length ? p.photo_urls : (p.photo_url ? [p.photo_url] : []);
+          uploadedPhotoUrls = p.photo_urls?.length
+            ? p.photo_urls
+            : p.photo_url
+              ? [p.photo_url]
+              : [];
           renderPhotoSlots();
 
           showPurchaseDetails();
 
           const btn = document.getElementById("submitBtn");
-          if (btn) btn.textContent = `Update ${type === "hallmark" ? "Hallmark" : "Expenses"} →`;
+          if (btn)
+            btn.textContent = `Update ${type === "hallmark" ? "Hallmark" : "Expenses"} →`;
 
-          document.getElementById("purchaseBillNoDuplicateMsg").style.display = "none";
+          document.getElementById("purchaseBillNoDuplicateMsg").style.display =
+            "none";
           showMessage("Entry loaded for editing", "success");
         } catch (e) {
           showMessage("Error loading entry: " + e.message, "error");
@@ -2377,14 +2435,19 @@
       // ── MULTI-PHOTO UPLOAD ──
       function renderPhotoSlots() {
         const row = document.getElementById("photoSlotsRow");
-        row.innerHTML = uploadedPhotoUrls.map((url, i) =>
-          `<div style="position:relative;display:inline-block">
-             <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i+1}" />
+        row.innerHTML = uploadedPhotoUrls
+          .map(
+            (url, i) =>
+              `<div style="position:relative;display:inline-block">
+             <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="Photo ${i + 1}" />
              <button type="button" onclick="removePhotoSlot(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger,#c0392b);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
-           </div>`
-        ).join("");
-        document.getElementById("photoAddArea").style.display = uploadedPhotoUrls.length >= 3 ? "none" : "flex";
-        document.getElementById("aiScanArea").style.display = uploadedPhotoUrls.length ? "block" : "none";
+           </div>`,
+          )
+          .join("");
+        document.getElementById("photoAddArea").style.display =
+          uploadedPhotoUrls.length >= 3 ? "none" : "flex";
+        document.getElementById("aiScanArea").style.display =
+          uploadedPhotoUrls.length ? "block" : "none";
       }
 
       function removePhotoSlot(i) {
@@ -2395,9 +2458,11 @@
       async function startPhoneUpload() {
         const billNo = document.getElementById("billNo").value.trim();
         const companySel = document.getElementById("companySelect");
-        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
         const bill_date = document.getElementById("billDate")?.value || null;
-        const folder = noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
+        const folder =
+          noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
 
         const res = await fetch("/api/upload-session", {
           method: "POST",
@@ -2452,16 +2517,23 @@
 
         const billNo = document.getElementById("billNo").value.trim();
         const companySel = document.getElementById("companySelect");
-        const company = companySel.options[companySel.selectedIndex]?.text || "";
+        const company =
+          companySel.options[companySel.selectedIndex]?.text || "";
         const bill_date = document.getElementById("billDate")?.value || null;
-        const folderName = noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
+        const folderName =
+          noteType === "hallmark" ? "hallmark_bills" : "expense_bills";
 
         try {
           showMessage("Uploading...", "success");
           const sessRes = await fetch("/api/upload-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bill_no: billNo, company, folder: folderName, bill_date }),
+            body: JSON.stringify({
+              bill_no: billNo,
+              company,
+              folder: folderName,
+              bill_date,
+            }),
           });
           const sessData = await sessRes.json();
           const token = sessData.token;
@@ -2479,9 +2551,15 @@
             uploadedPhotoUrls.push(upData.photo_url);
             renderPhotoSlots();
             showMessage("Photo uploaded ✓", "success");
-            setTimeout(() => { const m = document.getElementById("message"); m.style.display = "none"; }, 1500);
+            setTimeout(() => {
+              const m = document.getElementById("message");
+              m.style.display = "none";
+            }, 1500);
           } else {
-            showMessage("Upload failed: " + (upData.error || "unknown"), "error");
+            showMessage(
+              "Upload failed: " + (upData.error || "unknown"),
+              "error",
+            );
           }
         } catch (e) {
           showMessage("Upload error: " + e.message, "error");
@@ -2502,13 +2580,29 @@
           const res = await fetch("/api/ai-scan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_url: uploadedPhotoUrls[0], form_type: formType })
+            body: JSON.stringify({
+              image_url: uploadedPhotoUrls[0],
+              form_type: formType,
+            }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Scan failed");
-          applyAIScanFields(data.fields || {});
-          status.textContent = "✓ Fields filled";
-          setTimeout(() => { status.textContent = ""; }, 3000);
+          const fields = data.fields || {};
+          if (fields.gst_valid === false) {
+            status.textContent =
+              "❌ GST mismatch! Bill does not belong to our company (33ACSPN6014B1ZV). Please check the bill.";
+            status.style.color = "var(--danger)";
+            btn.disabled = false;
+            btn.textContent = "🤖 AI Scan";
+            return;
+          }
+          applyAIScanFields(fields);
+          status.textContent = "✓ Fields filled · GST verified ✓";
+          status.style.color = "var(--green)";
+          setTimeout(() => {
+            status.textContent = "";
+            status.style.color = "var(--ink-3)";
+          }, 4000);
         } catch (e) {
           status.textContent = "⚠ " + e.message;
         }
@@ -2527,9 +2621,11 @@
           if (f.taxable_value && f.cgst) {
             const pct = (f.cgst / f.taxable_value) * 200;
             const rates = [0, 1.5, 3, 5, 12, 18, 28];
-            inferredTaxPct = rates.reduce((a, b) => Math.abs(b - pct) < Math.abs(a - pct) ? b : a);
+            inferredTaxPct = rates.reduce((a, b) =>
+              Math.abs(b - pct) < Math.abs(a - pct) ? b : a,
+            );
           }
-          f.items.forEach(item => {
+          f.items.forEach((item) => {
             rowCount++;
             const tbody = document.getElementById("itemsTable");
             const row = document.createElement("tr");
@@ -2538,7 +2634,7 @@
             const rate = item.rate ?? "";
             row.innerHTML = `
               <td><input type="number" value="${rowCount}" readonly style="width:44px;"></td>
-              <td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList" value="${(item.description||"").replace(/"/g,"&quot;")}"></td>
+              <td><input type="text" class="description" placeholder="Description" style="min-width:120px;" list="descriptionList" value="${(item.description || "").replace(/"/g, "&quot;")}"></td>
               <td><input type="number" class="quantity" step="0.001" placeholder="0.00" oninput="calcRow(${rowCount})" style="width:90px;" value="${qty}"></td>
               <td><input type="number" class="rate" step="0.01" placeholder="0.00" oninput="calcRow(${rowCount})" style="width:90px;" value="${rate}"></td>
               <td><select class="tax-percent" onchange="calcRow(${rowCount})" style="width:80px;">${taxOptions(inferredTaxPct)}</select></td>
@@ -2547,12 +2643,15 @@
             tbody.appendChild(row);
             row._taxPct = inferredTaxPct;
             if (qty !== "" && rate !== "") {
-              row.querySelector(".taxable").value = (parseFloat(qty) * parseFloat(rate)).toFixed(2);
+              row.querySelector(".taxable").value = (
+                parseFloat(qty) * parseFloat(rate)
+              ).toFixed(2);
             }
           });
         }
 
-        if (f.round_off != null) document.getElementById("billRoundOff").value = f.round_off;
+        if (f.round_off != null)
+          document.getElementById("billRoundOff").value = f.round_off;
         if (f.tds != null) document.getElementById("billTds").value = f.tds;
         updateTotals();
       }
@@ -2710,11 +2809,21 @@
           accent: "#2d6a4f",
         });
         html += "</div>";
-        const photos = mainEntry.photo_urls?.length ? mainEntry.photo_urls : (mainEntry.photo_url ? [mainEntry.photo_url] : []);
+        const photos = mainEntry.photo_urls?.length
+          ? mainEntry.photo_urls
+          : mainEntry.photo_url
+            ? [mainEntry.photo_url]
+            : [];
         if (photos.length)
-          html += bvSectionTitle("Bill Photo") +
+          html +=
+            bvSectionTitle("Bill Photo") +
             `<div style="display:flex;gap:8px;flex-wrap:wrap;">` +
-            photos.map(u => `<img src="${u}" style="max-width:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("") +
+            photos
+              .map(
+                (u) =>
+                  `<img src="${u}" style="max-width:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${u}','_blank')" />`,
+              )
+              .join("") +
             `</div>`;
         el.innerHTML = html;
         enteredBy.textContent = mainEntry.created_by_name
@@ -2739,10 +2848,12 @@
           await loadEditHmex(_editId);
         } else {
           addRow();
-          document.getElementById("billDate").value = new Date().toISOString().split("T")[0];
+          document.getElementById("billDate").value = new Date()
+            .toISOString()
+            .split("T")[0];
         }
       };
     </script>
-      <script src="/polish.js"></script>
+    <script src="/polish.js"></script>
   </body>
 </html>
