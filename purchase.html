@@ -782,6 +782,30 @@
               >
                 ⚠ This bill number already exists.
               </div>
+              <label
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 7px;
+                  margin-top: 10px;
+                  cursor: pointer;
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: var(--ink-2);
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="billDataVerified"
+                  style="
+                    width: 15px;
+                    height: 15px;
+                    cursor: pointer;
+                    accent-color: var(--green);
+                  "
+                />
+                ✅ I have manually verified all bill data
+              </label>
             </div>
             <div class="form-group">
               <label class="field-label">Bill Date *</label>
@@ -2164,6 +2188,14 @@
           showMessage("Please enter bill number", "error");
           return;
         }
+        if (!document.getElementById("billDataVerified").checked) {
+          showMessage(
+            "Please manually verify all bill data before saving (check the box next to Bill Number)",
+            "error",
+          );
+          document.getElementById("billDataVerified").focus();
+          return;
+        }
         if (!billDate) {
           showMessage("Please enter bill date", "error");
           return;
@@ -2711,13 +2743,22 @@
 
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Scan failed");
-          applyAIScanFields(data.fields || {});
-          status.textContent = ocrText
-            ? "✓ Fields filled (OCR+AI)"
-            : "✓ Fields filled";
+          const fields = data.fields || {};
+          applyAIScanFields(fields);
+          if (fields.gst_valid === false) {
+            status.textContent =
+              "⚠ Fields filled · GST not matched — please verify the bill manually";
+            status.style.color = "var(--amber)";
+          } else {
+            status.textContent = ocrText
+              ? "✓ Fields filled · GST verified ✓ (OCR+AI)"
+              : "✓ Fields filled · GST verified ✓";
+            status.style.color = "var(--green)";
+          }
           setTimeout(() => {
             status.textContent = "";
-          }, 3000);
+            status.style.color = "var(--ink-3)";
+          }, 6000);
         } catch (e) {
           status.textContent = "⚠ " + e.message;
         }

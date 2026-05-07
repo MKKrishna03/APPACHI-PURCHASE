@@ -873,6 +873,30 @@
               >
                 ⚠ This bill number already exists.
               </div>
+              <label
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 7px;
+                  margin-top: 10px;
+                  cursor: pointer;
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: var(--ink-2);
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="billDataVerified"
+                  style="
+                    width: 15px;
+                    height: 15px;
+                    cursor: pointer;
+                    accent-color: var(--green);
+                  "
+                />
+                ✅ I have manually verified all bill data
+              </label>
             </div>
             <div class="form-group">
               <label class="field-label">Bill Date *</label>
@@ -2164,6 +2188,14 @@
           showMessage("Please attach a bill photo before saving", "error");
           return;
         }
+        if (!document.getElementById("billDataVerified").checked) {
+          showMessage(
+            "Please manually verify all bill data before saving (check the box next to Bill Number)",
+            "error",
+          );
+          document.getElementById("billDataVerified").focus();
+          return;
+        }
 
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, idx) => {
@@ -2588,21 +2620,19 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Scan failed");
           const fields = data.fields || {};
+          applyAIScanFields(fields);
           if (fields.gst_valid === false) {
             status.textContent =
-              "❌ GST mismatch! Bill does not belong to our company (33ACSPN6014B1ZV). Please check the bill.";
-            status.style.color = "var(--danger)";
-            btn.disabled = false;
-            btn.textContent = "🤖 AI Scan";
-            return;
+              "⚠ Fields filled · GST not matched — please verify the bill manually";
+            status.style.color = "var(--amber)";
+          } else {
+            status.textContent = "✓ Fields filled · GST verified ✓";
+            status.style.color = "var(--green)";
           }
-          applyAIScanFields(fields);
-          status.textContent = "✓ Fields filled · GST verified ✓";
-          status.style.color = "var(--green)";
           setTimeout(() => {
             status.textContent = "";
             status.style.color = "var(--ink-3)";
-          }, 4000);
+          }, 6000);
         } catch (e) {
           status.textContent = "⚠ " + e.message;
         }
