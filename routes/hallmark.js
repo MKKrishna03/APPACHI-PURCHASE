@@ -7,10 +7,10 @@ router.get("/hallmark-expenses/list", async (req, res) => {
   const { profile_id } = req.query;
   try {
     const params = [];
-    let where = "";
+    let where = "WHERE he.deleted_at IS NULL";
     if (profile_id) {
       params.push(profile_id);
-      where = `WHERE he.profile_id=$1`;
+      where += ` AND he.profile_id=$1`;
     }
     const result = await pool.query(
       `SELECT he.*, u.name AS created_by_name FROM hallmark_expenses he LEFT JOIN auth_users u ON u.user_id::text = he.created_by ${where} ORDER BY he.created_at DESC`,
@@ -25,7 +25,7 @@ router.get("/hallmark-expenses/list", async (req, res) => {
 router.get("/hallmark-expenses/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
-    const p = await pool.query("SELECT * FROM hallmark_expenses WHERE id=$1", [req.params.id]);
+    const p = await pool.query("SELECT * FROM hallmark_expenses WHERE id=$1 AND deleted_at IS NULL", [req.params.id]);
     if (!p.rows[0]) return res.status(404).json({ error: "Not found" });
     const items = await pool.query(
       "SELECT * FROM hallmark_expense_items WHERE hallmark_expense_id=$1 ORDER BY sl_no",

@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "appachi-fallback-secret-change-in-production";
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required but not set.");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRY = "3d";
 
 // Routes that don't require authentication

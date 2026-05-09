@@ -495,6 +495,38 @@
         margin-top: 8px;
       }
 
+      /* ─── KPI PERIOD BAR ─── */
+      .kpi-period-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .kpi-period-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .kpi-period-select {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 5px 10px;
+        cursor: pointer;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .kpi-period-select:focus {
+        border-color: var(--accent-2);
+        box-shadow: 0 0 0 3px rgba(82,183,136,0.15);
+      }
+
       /* ─── KPI STRIP ─── */
       .kpi-strip {
         display: grid;
@@ -1586,30 +1618,38 @@
         </div>
       </div>
 
+      <!-- KPI Period Selector -->
+      <div class="kpi-period-bar">
+        <span class="kpi-period-label">Period</span>
+        <select id="kpiPeriodSelect" class="kpi-period-select">
+          <option value="fy">Full Year (FY)</option>
+        </select>
+      </div>
+
       <!-- KPI Summary Strip -->
       <div class="kpi-strip">
         <div class="kpi-tile">
-          <div class="kpi-label">Purchase Value (FY)</div>
+          <div class="kpi-label" id="kpiPurchaseLabel">Purchase Value (FY)</div>
           <div class="kpi-value" id="kpiPurchaseValue">₹0</div>
           <div class="kpi-sub" id="kpiPurchaseCount">0 bills</div>
         </div>
         <div class="kpi-tile kpi-blue">
-          <div class="kpi-label">Receipt Voucher Value (FY)</div>
+          <div class="kpi-label" id="kpiReceiptLabel">Receipt Voucher Value (FY)</div>
           <div class="kpi-value" id="kpiReceiptValue">₹0</div>
           <div class="kpi-sub" id="kpiReceiptCount">0 vouchers</div>
         </div>
         <div class="kpi-tile kpi-blue">
-          <div class="kpi-label">Hallmark Value (FY)</div>
+          <div class="kpi-label" id="kpiHallmarkLabel">Hallmark Value (FY)</div>
           <div class="kpi-value" id="kpiHallmarkValue">₹0</div>
           <div class="kpi-sub" id="kpiHallmarkCount">0 bills</div>
         </div>
         <div class="kpi-tile kpi-blue">
-          <div class="kpi-label">Expense Value (FY)</div>
+          <div class="kpi-label" id="kpiExpenseLabel">Expense Value (FY)</div>
           <div class="kpi-value" id="kpiExpenseValue">₹0</div>
           <div class="kpi-sub" id="kpiExpenseCount">0 bills</div>
         </div>
         <div class="kpi-tile">
-          <div class="kpi-label">TDS — All Bills (FY)</div>
+          <div class="kpi-label" id="kpiTdsLabel">TDS — All Bills (FY)</div>
           <div class="kpi-value" id="kpiTdsValue">₹0</div>
           <div class="kpi-sub" id="kpiTdsBills">0 bills with TDS</div>
         </div>
@@ -4430,44 +4470,91 @@ function doLogout() {
             return d >= fyStart && d <= fyEnd;
           }
 
-          const fyPurchases = purchases.filter(p => inFY(p.date));
-          const fyReceipts  = labourAll.filter(l => l.voucher_type === 'Receipt Voucher' && inFY(l.date));
-          const fyHallmark  = hallmarkAll.filter(h => h.voucher_type === 'Hallmark' && inFY(h.date));
-          const fyExpenses  = hallmarkAll.filter(h => h.voucher_type === 'Expenses' && inFY(h.date));
+          const fyPurchasesAll = purchases.filter(p => inFY(p.date));
+          const fyReceiptsAll  = labourAll.filter(l => l.voucher_type === 'Receipt Voucher' && inFY(l.date));
+          const fyHallmarkAll  = hallmarkAll.filter(h => h.voucher_type === 'Hallmark' && inFY(h.date));
+          const fyExpensesAll  = hallmarkAll.filter(h => h.voucher_type === 'Expenses' && inFY(h.date));
 
-          const totalPurchaseValue = fyPurchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
-          const totalReceiptValue  = fyReceipts.reduce((s, l) => s + parseFloat(l.total || 0), 0);
-          const totalHallmarkValue = fyHallmark.reduce((s, h) => s + parseFloat(h.net_value || h.total_value || 0), 0);
-          const totalExpenseValue  = fyExpenses.reduce((s, h) => s + parseFloat(h.net_value || h.total_value || 0), 0);
+          // Populate period dropdown with FY months
+          const sel = document.getElementById('kpiPeriodSelect');
+          if (sel && sel.options.length === 1) {
+            const fyMonthOrder = [3,4,5,6,7,8,9,10,11,0,1,2];
+            const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            fyMonthOrder.forEach(m => {
+              const yr = m >= 3 ? fyYear : fyYear + 1;
+              const opt = document.createElement('option');
+              opt.value = `${yr}-${String(m + 1).padStart(2, '0')}`;
+              opt.textContent = `${monthNames[m]} ${yr}`;
+              sel.appendChild(opt);
+            });
+          }
 
-          const combinedTds =
-            fyPurchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0) +
-            fyReceipts.reduce((s, l) => s + parseFloat(l.tds || 0), 0) +
-            fyHallmark.reduce((s, h) => s + parseFloat(h.tds || 0), 0) +
-            fyExpenses.reduce((s, h) => s + parseFloat(h.tds || 0), 0);
-          const tdsCount =
-            fyPurchases.filter(p => parseFloat(p.tds || 0) > 0).length +
-            fyReceipts.filter(l => parseFloat(l.tds || 0) > 0).length +
-            fyHallmark.filter(h => parseFloat(h.tds || 0) > 0).length +
-            fyExpenses.filter(h => parseFloat(h.tds || 0) > 0).length;
+          function filterByPeriod(arr, period) {
+            if (!period || period === 'fy') return arr;
+            const [yr, mo] = period.split('-').map(Number);
+            return arr.filter(x => {
+              if (!x.date) return false;
+              const d = new Date(x.date);
+              return d.getFullYear() === yr && (d.getMonth() + 1) === mo;
+            });
+          }
 
-          _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalPurchaseValue, 800);
-          document.getElementById('kpiPurchaseCount').textContent = `${fyPurchases.length} bills`;
-          _kpiCountCurrency(document.getElementById('kpiReceiptValue'), totalReceiptValue, 800);
-          document.getElementById('kpiReceiptCount').textContent = `${fyReceipts.length} vouchers`;
-          _kpiCountCurrency(document.getElementById('kpiHallmarkValue'), totalHallmarkValue, 800);
-          document.getElementById('kpiHallmarkCount').textContent = `${fyHallmark.length} bills`;
-          _kpiCountCurrency(document.getElementById('kpiExpenseValue'), totalExpenseValue, 800);
-          document.getElementById('kpiExpenseCount').textContent = `${fyExpenses.length} bills`;
-          _kpiCountCurrency(document.getElementById('kpiTdsValue'), combinedTds, 800);
-          document.getElementById('kpiTdsBills').textContent = `${tdsCount} bills with TDS`;
+          function getPeriodSuffix(period) {
+            if (!period || period === 'fy') return '(FY)';
+            const [yr, mo] = period.split('-').map(Number);
+            const short = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `— ${short[mo - 1]} ${yr}`;
+          }
 
-          // Monthly chart: April→March for current FY
+          function renderKpiValues(period) {
+            const suffix    = getPeriodSuffix(period);
+            const purchases = filterByPeriod(fyPurchasesAll, period);
+            const receipts  = filterByPeriod(fyReceiptsAll,  period);
+            const hallmark  = filterByPeriod(fyHallmarkAll,  period);
+            const expenses  = filterByPeriod(fyExpensesAll,  period);
+
+            const totalPurchaseValue = purchases.reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
+            const totalReceiptValue  = receipts.reduce((s, l)  => s + parseFloat(l.total || 0), 0);
+            const totalHallmarkValue = hallmark.reduce((s, h)  => s + parseFloat(h.net_value || h.total_value || 0), 0);
+            const totalExpenseValue  = expenses.reduce((s, h)  => s + parseFloat(h.net_value || h.total_value || 0), 0);
+            const combinedTds =
+              purchases.reduce((s, p) => s + parseFloat(p.tds || 0), 0) +
+              receipts.reduce((s, l)  => s + parseFloat(l.tds || 0), 0) +
+              hallmark.reduce((s, h)  => s + parseFloat(h.tds || 0), 0) +
+              expenses.reduce((s, h)  => s + parseFloat(h.tds || 0), 0);
+            const tdsCount =
+              purchases.filter(p => parseFloat(p.tds || 0) > 0).length +
+              receipts.filter(l  => parseFloat(l.tds || 0) > 0).length +
+              hallmark.filter(h  => parseFloat(h.tds || 0) > 0).length +
+              expenses.filter(h  => parseFloat(h.tds || 0) > 0).length;
+
+            document.getElementById('kpiPurchaseLabel').textContent = `Purchase Value ${suffix}`;
+            document.getElementById('kpiReceiptLabel').textContent  = `Receipt Voucher Value ${suffix}`;
+            document.getElementById('kpiHallmarkLabel').textContent = `Hallmark Value ${suffix}`;
+            document.getElementById('kpiExpenseLabel').textContent  = `Expense Value ${suffix}`;
+            document.getElementById('kpiTdsLabel').textContent      = `TDS — All Bills ${suffix}`;
+
+            _kpiCountCurrency(document.getElementById('kpiPurchaseValue'), totalPurchaseValue, 600);
+            document.getElementById('kpiPurchaseCount').textContent = `${purchases.length} bills`;
+            _kpiCountCurrency(document.getElementById('kpiReceiptValue'), totalReceiptValue, 600);
+            document.getElementById('kpiReceiptCount').textContent  = `${receipts.length} vouchers`;
+            _kpiCountCurrency(document.getElementById('kpiHallmarkValue'), totalHallmarkValue, 600);
+            document.getElementById('kpiHallmarkCount').textContent = `${hallmark.length} bills`;
+            _kpiCountCurrency(document.getElementById('kpiExpenseValue'), totalExpenseValue, 600);
+            document.getElementById('kpiExpenseCount').textContent  = `${expenses.length} bills`;
+            _kpiCountCurrency(document.getElementById('kpiTdsValue'), combinedTds, 600);
+            document.getElementById('kpiTdsBills').textContent      = `${tdsCount} bills with TDS`;
+          }
+
+          if (sel) sel.addEventListener('change', () => renderKpiValues(sel.value));
+          renderKpiValues('fy');
+
+          // Monthly chart: April→March for current FY (always full FY, not filtered)
           const months      = [3,4,5,6,7,8,9,10,11,0,1,2];
           const monthLabels = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
           const monthData   = months.map(m => {
             const yr = m >= 3 ? fyYear : fyYear + 1;
-            return fyPurchases
+            return fyPurchasesAll
               .filter(p => { const d = new Date(p.date); return d.getMonth() === m && d.getFullYear() === yr; })
               .reduce((s, p) => s + parseFloat(p.net_value || p.total_value || 0), 0);
           });

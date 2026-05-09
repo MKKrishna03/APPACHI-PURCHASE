@@ -15,8 +15,9 @@ router.get("/todos", async (req, res) => {
               t.priority, t.photo, t.replies, t.seen_at, t.done_at, t.created_at
        FROM todos t
        LEFT JOIN auth_users u ON u.user_id = t.receiver
-       WHERE t.receiver='all' OR t.receiver=$1 OR t.giver=$1
-          OR t.giver=(SELECT name FROM auth_users WHERE user_id=$1)
+       WHERE t.deleted_at IS NULL
+         AND (t.receiver='all' OR t.receiver=$1 OR t.giver=$1
+          OR t.giver=(SELECT name FROM auth_users WHERE user_id=$1))
        ORDER BY t.created_at DESC`,
       [user_id],
     );

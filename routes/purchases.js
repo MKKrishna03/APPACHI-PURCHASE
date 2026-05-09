@@ -6,11 +6,11 @@ const router = express.Router();
 router.get("/purchases/list", async (req, res) => {
   const { profile_id, unlinked_only } = req.query;
   try {
-    let where = "";
+    let where = "WHERE p.deleted_at IS NULL";
     const params = [];
     if (profile_id) {
       params.push(profile_id);
-      where = `WHERE p.profile_id = $1`;
+      where += ` AND p.profile_id = $1`;
     }
     const result = await pool.query(
       `SELECT p.*, u.name AS created_by_name FROM purchases p LEFT JOIN auth_users u ON u.user_id::text = p.created_by ${where} ORDER BY p.created_at DESC`,
@@ -20,7 +20,7 @@ router.get("/purchases/list", async (req, res) => {
 
     if (unlinked_only === "true") {
       const vRes = await pool.query(
-        `SELECT linked_purchase_id, SUM(total_value::numeric) as paid FROM vouchers WHERE linked_purchase_id IS NOT NULL GROUP BY linked_purchase_id`,
+        `SELECT linked_purchase_id, SUM(total_value::numeric) as paid FROM vouchers WHERE linked_purchase_id IS NOT NULL AND deleted_at IS NULL GROUP BY linked_purchase_id`,
       );
       const paidMap = {};
       vRes.rows.forEach((r) => { paidMap[parseInt(r.linked_purchase_id)] = parseFloat(r.paid || 0); });
@@ -28,6 +28,8 @@ router.get("/purchases/list", async (req, res) => {
         `SELECT p.id, COALESCE(SUM(v.total_value::numeric), 0) as paid
          FROM purchases p LEFT JOIN vouchers v ON v.bill_no = p.bill_no AND v.profile_id = p.profile_id
            AND v.entry_type = 'against' AND v.voucher_type IN ('Payment Voucher','Receipt Voucher','Chittai Payment')
+           AND v.deleted_at IS NULL
+         WHERE p.deleted_at IS NULL
          GROUP BY p.id`,
       );
       billRes.rows.forEach((r) => {
@@ -51,19 +53,19 @@ router.get("/purchases/no-photo", async (req, res) => {
       `SELECT p.id, p.profile_id, p.bill_no, p.date, p.net_value, p.total_value,
               COALESCE(pr.alias, pr.company_name) AS company_name, 'purchase' AS source
        FROM purchases p LEFT JOIN profiles pr ON pr.id = p.profile_id
-       WHERE (p.photo_url IS NULL OR p.photo_url = '') AND (p.voucher_type IS NULL OR p.voucher_type != 'Hallmark Voucher')
+       WHERE (p.photo_url IS NULL OR p.photo_url = '') AND (p.voucher_type IS NULL OR p.voucher_type != 'Hallmark Voucher') AND p.deleted_at IS NULL
        UNION ALL
        SELECT l.id, l.profile_id, l.receipt_bill_no AS bill_no, l.date,
               l.bill_value_after_deduction AS net_value, l.total AS total_value,
               COALESCE(pr2.alias, pr2.company_name, l.company_name) AS company_name, 'receipt_voucher' AS source
        FROM labour l LEFT JOIN profiles pr2 ON pr2.id = l.profile_id
-       WHERE l.voucher_type = 'Receipt Voucher' AND (l.photo_url IS NULL OR l.photo_url = '')
+       WHERE l.voucher_type = 'Receipt Voucher' AND (l.photo_url IS NULL OR l.photo_url = '') AND l.deleted_at IS NULL
        UNION ALL
        SELECT he.id, he.profile_id, he.bill_no, he.date, he.net_value, he.total_value,
               COALESCE(pr3.alias, pr3.company_name) AS company_name,
               CASE WHEN he.voucher_type = 'Hallmark' THEN 'hallmark' ELSE 'expenses' END AS source
        FROM hallmark_expenses he LEFT JOIN profiles pr3 ON pr3.id = he.profile_id
-       WHERE he.voucher_type IN ('Hallmark', 'Expenses') AND (he.photo_url IS NULL OR he.photo_url = '')
+       WHERE he.voucher_type IN ('Hallmark', 'Expenses') AND (he.photo_url IS NULL OR he.photo_url = '') AND he.deleted_at IS NULL
        ORDER BY date DESC`,
     );
     res.json(result.rows);
@@ -75,7 +77,7 @@ router.get("/purchases/no-photo", async (req, res) => {
 router.get("/purchases/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
-    const p = await pool.query("SELECT * FROM purchases WHERE id=$1", [req.params.id]);
+    const p = await pool.query("SELECT * FROM purchases WHERE id=$1 AND deleted_at IS NULL", [req.params.id]);
     if (!p.rows[0]) return res.status(404).json({ error: "Not found" });
     const items = await pool.query("SELECT * FROM purchase_items WHERE purchase_id=$1 ORDER BY sl_no", [req.params.id]);
     res.json({ purchase: p.rows[0], items: items.rows });
@@ -201,9 +203,9 @@ router.get("/tds-required/:profile_id", async (req, res) => {
     const fyStart = `${fyYear}-04-01`;
     const fyEnd = `${fyYear + 1}-03-31`;
     const result = await pool.query(
-      `SELECT tds FROM purchases WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3
+      `SELECT tds FROM purchases WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
        UNION ALL
-       SELECT tds FROM labour WHERE profile_id=$1 AND voucher_type='Receipt Voucher' AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3
+       SELECT tds FROM labour WHERE profile_id=$1 AND voucher_type='Receipt Voucher' AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
        LIMIT 1`,
       [profile_id, fyStart, fyEnd],
     );

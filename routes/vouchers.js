@@ -50,17 +50,17 @@ router.get("/vouchers/list", async (req, res) => {
   const { profile_id, voucher_type, unlinked_only } = req.query;
   try {
     const params = [];
-    let where = "";
+    let where = "WHERE v.deleted_at IS NULL";
     if (profile_id && profile_id !== "undefined" && profile_id !== "null") {
       params.push(profile_id);
-      where += `${where ? " AND" : " WHERE"} v.profile_id = $${params.length}`;
+      where += ` AND v.profile_id = $${params.length}`;
     }
     if (voucher_type) {
       params.push(`%${voucher_type}%`);
-      where += `${where ? " AND" : " WHERE"} v.voucher_type ILIKE $${params.length}`;
+      where += ` AND v.voucher_type ILIKE $${params.length}`;
     }
     if (unlinked_only === "true") {
-      where += `${where ? " AND" : " WHERE"} linked_labour_id IS NULL AND linked_chittai_id IS NULL AND linked_purchase_id IS NULL AND v.voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
+      where += ` AND linked_labour_id IS NULL AND linked_chittai_id IS NULL AND linked_purchase_id IS NULL AND v.voucher_type NOT IN ('Payment Voucher', 'Receipt Voucher', 'Chittai Payment')`;
     }
     const result = await pool.query(
       `SELECT v.id, v.profile_id, v.voucher_type, v.date, v.bill_no, v.total_value, v.entry_type,

@@ -700,6 +700,9 @@
       }
 
       async function submitLabourVoucher() {
+        const btn = document.querySelector('.btn[onclick="submitLabourVoucher()"]');
+        if (btn?.disabled) return;
+
         const companyAlias = document.getElementById("companySelect").value;
         const date = document.getElementById("date").value;
         const issueNumber = document.getElementById("issueNumber").value;
@@ -729,6 +732,8 @@
           alert("Company not found");
           return;
         }
+
+        if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
         try {
           const res = await fetch("/api/labour", {
             method: "POST",
@@ -748,9 +753,13 @@
             if (window._toast) _toast("Labour Voucher saved!", "success");
             if (window._markFormClean) _markFormClean();
             setTimeout(() => location.reload(), 800);
-          } else alert(result.error || "Failed to create voucher");
+          } else {
+            alert(result.error || "Failed to create voucher");
+            if (btn) { btn.disabled = false; btn.textContent = "Submit Voucher"; }
+          }
         } catch (err) {
           alert(err.message);
+          if (btn) { btn.disabled = false; btn.textContent = "Submit Voucher"; }
         }
       }
       let existingIssueNos = [];

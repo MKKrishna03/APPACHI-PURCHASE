@@ -3,7 +3,7 @@ const { logger } = require("../middleware/logger");
 
 const router = express.Router();
 
-const OUR_GST = "33ACSPN6014B1ZV";
+const OUR_GST = process.env.OUR_GSTIN;
 
 // Normalise a GST string for comparison — strip spaces, uppercase
 function normaliseGST(s) {
@@ -349,12 +349,6 @@ router.post("/ai-scan-text", async (req, res) => {
 
 router.post("/ai-scan", async (req, res) => {
   try {
-    console.log(
-      "GROQ KEY:",
-      process.env.GROQ_API_KEY?.slice(0, 15),
-      "length:",
-      process.env.GROQ_API_KEY?.length,
-    );
     const { image_url, form_type } = req.body;
     if (!image_url)
       return res.status(400).json({ error: "image_url required" });

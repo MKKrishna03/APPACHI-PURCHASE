@@ -7,14 +7,14 @@ router.get("/labour/list", async (req, res) => {
   const { profile_id, voucher_type } = req.query;
   try {
     const params = [];
-    let where = "";
+    let where = "WHERE l.deleted_at IS NULL";
     if (profile_id) {
       params.push(profile_id);
-      where += `${where ? " AND" : " WHERE"} l.profile_id = $${params.length}`;
+      where += ` AND l.profile_id = $${params.length}`;
     }
     if (voucher_type) {
       params.push(voucher_type);
-      where += `${where ? " AND" : " WHERE"} l.voucher_type ILIKE $${params.length}`;
+      where += ` AND l.voucher_type ILIKE $${params.length}`;
     }
     const result = await pool.query(
       `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.receipt_bill_no,
@@ -40,7 +40,8 @@ router.get("/labour/rv-references", async (req, res) => {
     const result = await pool.query(
       `SELECT id, receipt_bill_no, issue_number, date FROM labour
        WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1 AND issue_number IS NOT NULL
-         AND (issue_number = $2 OR issue_number LIKE $3 OR issue_number LIKE $4 OR issue_number LIKE $5)`,
+         AND (issue_number = $2 OR issue_number LIKE $3 OR issue_number LIKE $4 OR issue_number LIKE $5)
+         AND deleted_at IS NULL`,
       [profile_id, issue_number, `${issue_number},%`, `%,${issue_number}`, `%,${issue_number},%`],
     );
     res.json(result.rows);
@@ -53,10 +54,10 @@ router.get("/labour/unlinked-receipts", async (req, res) => {
   const { profile_id } = req.query;
   if (!profile_id) return res.status(400).json({ error: "profile_id required" });
   try {
-    const linkedIds = await pool.query(`SELECT linked_labour_id FROM vouchers WHERE linked_labour_id IS NOT NULL`);
+    const linkedIds = await pool.query(`SELECT linked_labour_id FROM vouchers WHERE linked_labour_id IS NOT NULL AND deleted_at IS NULL`);
     const linkedSet = linkedIds.rows.map((r) => r.linked_labour_id);
     const result = await pool.query(
-      `SELECT id, issue_number, receipt_bill_no, date FROM labour WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1`,
+      `SELECT id, issue_number, receipt_bill_no, date FROM labour WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1 AND deleted_at IS NULL`,
       [profile_id],
     );
     res.json(result.rows.filter((r) => !linkedSet.includes(r.id)));
@@ -68,7 +69,7 @@ router.get("/labour/unlinked-receipts", async (req, res) => {
 router.get("/labour/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
-    const labourResult = await pool.query("SELECT * FROM labour WHERE id = $1", [req.params.id]);
+    const labourResult = await pool.query("SELECT * FROM labour WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
     if (!labourResult.rows[0]) return res.status(404).json({ error: "Labour not found" });
     const itemsResult = await pool.query(
       "SELECT * FROM labour_items WHERE labour_id = $1 ORDER BY sl_no",
@@ -88,11 +89,13 @@ router.get("/labour", async (req, res) => {
                    THEN (SELECT iv.labour_item_type FROM labour iv
                          WHERE UPPER(iv.voucher_type) = 'ISSUE VOUCHER'
                            AND (l.issue_number = iv.issue_number OR l.issue_number LIKE '%' || iv.issue_number || '%')
+                           AND iv.deleted_at IS NULL
                          LIMIT 1)
                    ELSE l.labour_item_type
               END AS effective_item_type
        FROM labour l
        LEFT JOIN auth_users u ON u.user_id::text = l.created_by
+       WHERE l.deleted_at IS NULL
        ORDER BY l.created_at DESC`,
     );
     res.json(result.rows);
@@ -144,7 +147,7 @@ router.put("/labour/:id/with-cascade", async (req, res) => {
     let updated_rv_count = 0;
     if (old_issue_number && issue_number && old_issue_number !== issue_number) {
       const rvs = await client.query(
-        `SELECT id, issue_number FROM labour WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1 AND issue_number IS NOT NULL`,
+        `SELECT id, issue_number FROM labour WHERE voucher_type = 'Receipt Voucher' AND profile_id = $1 AND issue_number IS NOT NULL AND deleted_at IS NULL`,
         [profile_id],
       );
       for (const rv of rvs.rows) {

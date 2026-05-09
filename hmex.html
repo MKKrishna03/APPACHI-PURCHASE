@@ -1232,7 +1232,14 @@
               />
             </div>
             <div class="total-row">
-              <span class="total-label">TDS</span>
+              <span class="total-label" style="display:flex;align-items:center;gap:6px;">
+                TDS
+                <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink-3);cursor:pointer;">
+                  <input type="checkbox" id="autoTdsToggle" onchange="applyAutoTds()" style="width:auto;accent-color:var(--accent);cursor:pointer;">
+                  Auto (194Q)
+                </label>
+                <span id="tdsMandatoryBadge" style="display:none;font-size:10px;font-weight:700;color:#b5301e;background:#fdecea;border:1px solid #f5c6c6;border-radius:6px;padding:2px 8px;">TDS Mandatory</span>
+              </span>
               <input
                 type="number"
                 id="billTds"
@@ -1448,6 +1455,9 @@
       let taxFormats = [];
       let rowCount = 0;
       let selectedGstType = "CGST_SGST";
+      let tdsRates = {};
+      let tdsDefaultRate = 5;
+      let _tdsMandatory = false;
       let selectedVoucherId = null;
       let selectedChittaiId = null;
       let selectedVoucherData = null;
@@ -1932,7 +1942,46 @@
         document.getElementById("chittaiBanner").classList.remove("show");
       }
 
-      function onCompanyChange(reloadSidebar = true) {
+      async function loadTdsRates() {
+        try {
+          const res = await fetch("/api/tds?section=194Q");
+          const rates = await res.json();
+          tdsRates = {};
+          rates.forEach((r) => {
+            const pct = parseFloat(r.tds_percentage) || 0;
+            if (r.pan_4th_letter === "X") tdsDefaultRate = pct;
+            else tdsRates[r.pan_4th_letter] = pct;
+          });
+        } catch (e) {}
+      }
+
+      function applyAutoTds() {
+        const tdsInput = document.getElementById("billTds");
+        const toggle = document.getElementById("autoTdsToggle");
+        if (!toggle.checked) {
+          tdsInput.readOnly = false;
+          tdsInput.value = 0;
+          updateTotals();
+          return;
+        }
+        const companyId = document.getElementById("companySelect").value;
+        const company = companies.find((c) => String(c.id) === String(companyId));
+        if (!company) return;
+        const pan = (company.pan_number || "").toUpperCase().trim();
+        let rate;
+        if (!pan || pan.length < 4) {
+          rate = tdsDefaultRate;
+        } else {
+          const letter = pan.charAt(3);
+          rate = tdsRates[letter] !== undefined ? tdsRates[letter] : tdsDefaultRate;
+        }
+        const taxable = parseFloat(document.getElementById("billTaxable").value) || 0;
+        tdsInput.value = Math.ceil((taxable * rate) / 100);
+        tdsInput.readOnly = false;
+        updateTotals();
+      }
+
+      async function onCompanyChange(reloadSidebar = true) {
         const companyId = document.getElementById("companySelect").value;
         const btn = document.getElementById("createFreeBtn");
         if (!companyId) {
@@ -1958,6 +2007,18 @@
           selectedGstType === "CGST_SGST" ? "flex" : "none";
         document.getElementById("igstRow").style.display =
           selectedGstType === "IGST" ? "flex" : "none";
+
+        try {
+          const r = await fetch(`/api/tds-required/${companyId}`);
+          const data = await r.json();
+          _tdsMandatory = data.required;
+          const badge = document.getElementById("tdsMandatoryBadge");
+          if (badge) badge.style.display = _tdsMandatory ? "inline-block" : "none";
+          if (_tdsMandatory) {
+            const toggle = document.getElementById("autoTdsToggle");
+            if (toggle) { toggle.checked = true; applyAutoTds(); }
+          }
+        } catch (e) { _tdsMandatory = false; }
       }
 
       // ── TABLE ──
@@ -2152,6 +2213,23 @@
           parseFloat(document.getElementById("billRoundOff").value) || 0;
         const total = taxable + valueAdded + cgst + sgst + igst + roundOff;
         document.getElementById("billTotal").value = total.toFixed(2);
+
+        const tdsToggle = document.getElementById("autoTdsToggle");
+        if (tdsToggle && tdsToggle.checked) {
+          const companyId = document.getElementById("companySelect").value;
+          const company = companies.find((c) => String(c.id) === String(companyId));
+          if (company) {
+            const pan = (company.pan_number || "").toUpperCase().trim();
+            let rate;
+            if (!pan || pan.length < 4) {
+              rate = tdsDefaultRate;
+            } else {
+              const letter = pan.charAt(3);
+              rate = tdsRates[letter] !== undefined ? tdsRates[letter] : tdsDefaultRate;
+            }
+            document.getElementById("billTds").value = Math.ceil((taxable * rate) / 100);
+          }
+        }
 
         const tds = parseFloat(document.getElementById("billTds").value) || 0;
         const net = total - tds;
@@ -2430,18 +2508,23 @@
           }
 
           if (p.round_off != null)
-            document.getElementById("billRoundOff").value = parseFloat(
-              p.round_off,
-            ).toFixed(2);
+            document.getElementById("billRoundOff").value = parseFloat(p.round_off).toFixed(2);
           updateTotals();
+          // Restore all tax/total fields from DB — overrides updateTotals recalculation
+          if (p.taxable_value != null)
+            document.getElementById("billTaxable").value = parseFloat(p.taxable_value).toFixed(2);
+          if (p.cgst != null)
+            document.getElementById("billCgst").value = parseFloat(p.cgst).toFixed(2);
+          if (p.sgst != null)
+            document.getElementById("billSgst").value = parseFloat(p.sgst).toFixed(2);
+          if (p.igst != null)
+            document.getElementById("billIgst").value = parseFloat(p.igst).toFixed(2);
+          if (p.total_value != null)
+            document.getElementById("billTotal").value = parseFloat(p.total_value).toFixed(2);
           if (p.tds != null)
-            document.getElementById("billTds").value = parseFloat(
-              p.tds,
-            ).toFixed(2);
+            document.getElementById("billTds").value = parseFloat(p.tds).toFixed(2);
           if (p.net_value != null)
-            document.getElementById("billNet").value = parseFloat(
-              p.net_value,
-            ).toFixed(2);
+            document.getElementById("billNet").value = parseFloat(p.net_value).toFixed(2);
 
           uploadedPhotoUrls = p.photo_urls?.length
             ? p.photo_urls
@@ -2865,6 +2948,7 @@
       window.onload = async () => {
         await loadCompanies();
         await loadTaxFormats();
+        await loadTdsRates();
         loadDescriptions();
         document.getElementById("paymentsList").innerHTML =
           '<div class="no-data">Select a company first</div>';

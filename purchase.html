@@ -2453,19 +2453,25 @@
 
           // Set round_off before updateTotals (it uses round_off for total)
           if (p.round_off != null)
-            document.getElementById("billRoundOff").value = parseFloat(
-              p.round_off,
-            ).toFixed(2);
+            document.getElementById("billRoundOff").value = parseFloat(p.round_off).toFixed(2);
           updateTotals();
-          // Restore TDS and Net from DB after updateTotals (which may auto-calculate TDS)
+          // Restore all tax/total fields from DB — overrides updateTotals recalculation
+          // so values always match exactly what was saved, even if tax-percent select
+          // couldn't match the stored percentage.
+          if (p.taxable_value != null)
+            document.getElementById("billTaxable").value = parseFloat(p.taxable_value).toFixed(2);
+          if (p.cgst != null)
+            document.getElementById("billCgst").value = parseFloat(p.cgst).toFixed(2);
+          if (p.sgst != null)
+            document.getElementById("billSgst").value = parseFloat(p.sgst).toFixed(2);
+          if (p.igst != null)
+            document.getElementById("billIgst").value = parseFloat(p.igst).toFixed(2);
+          if (p.total_value != null)
+            document.getElementById("billTotal").value = parseFloat(p.total_value).toFixed(2);
           if (p.tds != null)
-            document.getElementById("billTds").value = parseFloat(
-              p.tds,
-            ).toFixed(2);
+            document.getElementById("billTds").value = parseFloat(p.tds).toFixed(2);
           if (p.net_value != null)
-            document.getElementById("billNet").value = parseFloat(
-              p.net_value,
-            ).toFixed(2);
+            document.getElementById("billNet").value = parseFloat(p.net_value).toFixed(2);
 
           uploadedPhotoUrls = p.photo_urls?.length
             ? p.photo_urls

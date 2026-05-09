@@ -166,6 +166,39 @@ app.get("/upload/:token", (req, res) =>
   res.sendFile(path.join(__dirname, "mobile-upload.html")),
 );
 
+// ── Global error handler ──
+// Express 5 async routes propagate thrown errors here automatically.
+// Routes with try/catch also call next(err) on failure.
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = status < 500 ? err.message : "Internal server error";
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      msg: err.message,
+      stack: err.stack,
+      method: req.method,
+      path: req.path,
+    }),
+  );
+  if (!res.headersSent) res.status(status).json({ error: message });
+});
+
+// ── Process-level crash guards ──
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    JSON.stringify({ ts: new Date().toISOString(), level: "error", msg: "Unhandled promise rejection", reason: String(reason) }),
+  );
+});
+
+process.on("uncaughtException", (err) => {
+  console.error(
+    JSON.stringify({ ts: new Date().toISOString(), level: "error", msg: "Uncaught exception", error: err.message, stack: err.stack }),
+  );
+  process.exit(1);
+});
+
 // ── Start ──
 initDB()
   .then(() => {

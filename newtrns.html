@@ -573,7 +573,10 @@
           openChittais.forEach((c) => {
             const o = document.createElement("option");
             o.value = c.chittai_no;
-            o.textContent = c.chittai_no;
+            const amt = Number.parseFloat(c.rtgs_amount || c.total || 0);
+            o.textContent = amt
+              ? `${c.chittai_no} — ₹${amt.toLocaleString("en-IN")}`
+              : c.chittai_no;
             o.dataset.amount = c.rtgs_amount || "";
             againstBillNo.appendChild(o);
           });
@@ -587,9 +590,11 @@
           }
           labourReceiptVouchers.forEach((lv) => {
             const o = document.createElement("option");
+            const billLabel = lv.receipt_bill_no || `ID-${lv.id}`;
             o.value = lv.receipt_bill_no || `ID-${lv.id}`;
-            o.textContent = lv.receipt_bill_no || `ID-${lv.id}`;
-            o.dataset.amount = "";
+            const amt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
+            o.textContent = amt ? `${billLabel} · ₹${amt.toLocaleString("en-IN")}` : billLabel;
+            o.dataset.amount = lv.bill_value_after_deduction || lv.total || "";
             againstBillNo.appendChild(o);
           });
           return;
@@ -621,8 +626,10 @@
         }
         filtered.forEach((v) => {
           const o = document.createElement("option");
-          o.value = v.bill_no || `ID-${v.id}`;
-          o.textContent = v.bill_no || `ID-${v.id}`;
+          const billLabel = v.bill_no || `ID-${v.id}`;
+          o.value = billLabel;
+          const amt = Number.parseFloat(v.total_value || 0);
+          o.textContent = amt ? `${billLabel} · ₹${amt.toLocaleString("en-IN")}` : billLabel;
           o.dataset.amount = v.total_value || "";
           againstBillNo.appendChild(o);
         });

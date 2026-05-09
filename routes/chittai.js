@@ -6,7 +6,7 @@ const router = express.Router();
 router.get("/chittai/list/all", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT c.*, u.name AS created_by_name FROM chittai c LEFT JOIN auth_users u ON u.user_id::text = c.created_by ORDER BY c.date DESC`,
+      `SELECT c.*, u.name AS created_by_name FROM chittai c LEFT JOIN auth_users u ON u.user_id::text = c.created_by WHERE c.deleted_at IS NULL ORDER BY c.date DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -19,7 +19,7 @@ router.get("/chittai/list", async (req, res) => {
   if (!profile_id) return res.json([]);
   try {
     const result = await pool.query(
-      `SELECT * FROM chittai WHERE profile_id = $1 AND (is_paid = $2 OR is_paid IS NULL) ORDER BY date DESC`,
+      `SELECT * FROM chittai WHERE profile_id = $1 AND (is_paid = $2 OR is_paid IS NULL) AND deleted_at IS NULL ORDER BY date DESC`,
       [profile_id, is_paid === "false" ? false : true],
     );
     res.json(result.rows);
@@ -32,7 +32,7 @@ router.get("/chittai/next-no", async (req, res) => {
   const { prefix } = req.query;
   try {
     const result = await pool.query(
-      `SELECT chittai_no FROM chittai WHERE chittai_no LIKE $1 ORDER BY chittai_no DESC LIMIT 1`,
+      `SELECT chittai_no FROM chittai WHERE chittai_no LIKE $1 AND deleted_at IS NULL ORDER BY chittai_no DESC LIMIT 1`,
       [`${prefix}%`],
     );
     if (!result.rows.length) return res.json({ chittai_no: `${prefix}001` });
