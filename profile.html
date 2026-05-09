@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
         visibility: hidden;
@@ -755,6 +756,14 @@
           cb.dataset.ledger = type;
           cb.style.cssText =
             "width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0;";
+          if (type === "LABOUR") {
+            cb.addEventListener("change", function () {
+              const isLabour = this.checked;
+              document.querySelectorAll("#formFields label span").forEach((s) => {
+                s.style.display = isLabour ? "none" : "";
+              });
+            });
+          }
           lbl.appendChild(cb);
           lbl.appendChild(document.createTextNode(type));
           ledgerWrap.appendChild(lbl);
@@ -883,8 +892,11 @@
       }
 
       function validateData(data) {
-        const missing = MANDATORY_FIELDS.filter((f) => !data[f]);
-        if (missing.length) return `Please fill: ${missing.join(", ")}`;
+        const hasLabour = Array.isArray(data["LEDGER_TYPES"]) && data["LEDGER_TYPES"].includes("LABOUR");
+        if (!hasLabour) {
+          const missing = MANDATORY_FIELDS.filter((f) => !data[f]);
+          if (missing.length) return `Please fill: ${missing.join(", ")}`;
+        }
         const cleanAlias = sanitiseAlias(data["ALIAS"] || "");
         if (!cleanAlias) return "Alias cannot be empty.";
         const anyBank = BANK_FIELDS.some((f) => data[f]);

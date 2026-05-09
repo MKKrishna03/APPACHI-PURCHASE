@@ -91,8 +91,10 @@ router.post("/purchases", async (req, res) => {
     profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
     round_off, total_value, tds, net_value, linked_voucher_ids, linked_chittai_ids, linked_purchase_ids,
   } = req.body;
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
         round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url,
         linked_purchase_ids, linked_voucher_ids, linked_chittai_ids, photo_urls)
@@ -112,40 +114,44 @@ router.post("/purchases", async (req, res) => {
     const purchaseId = result.rows[0].id;
     if (req.body.items?.length) {
       for (const item of req.body.items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO purchase_items (purchase_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [purchaseId, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent, item.amount],
         );
       }
     }
     if (linked_voucher_ids?.length) {
-      for (const vid of linked_voucher_ids) await pool.query(`UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`, [purchaseId, vid]);
+      for (const vid of linked_voucher_ids) await client.query(`UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`, [purchaseId, vid]);
     }
     if (linked_chittai_ids?.length) {
-      for (const cid of linked_chittai_ids) await pool.query(`UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`, [purchaseId, cid]);
+      for (const cid of linked_chittai_ids) await client.query(`UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`, [purchaseId, cid]);
     }
     const isNote = description === "Credit Note" || description === "Debit Note";
     if (isNote && req.body.source_type === "purchase" && linked_purchase_ids?.length) {
       for (const pid of linked_purchase_ids) {
-        const cur = await pool.query(`SELECT COALESCE(remaining_value, net_value, total_value) AS rem FROM purchases WHERE id=$1`, [pid]);
-        await pool.query(`UPDATE purchases SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), pid]);
+        const cur = await client.query(`SELECT COALESCE(remaining_value, net_value, total_value) AS rem FROM purchases WHERE id=$1`, [pid]);
+        await client.query(`UPDATE purchases SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), pid]);
       }
     }
     if (isNote && req.body.source_type === "labour" && req.body.linked_labour_ids?.length) {
       for (const lid of req.body.linked_labour_ids) {
-        const cur = await pool.query(`SELECT COALESCE(remaining_value, bill_value_after_deduction, total) AS rem FROM labour WHERE id=$1`, [lid]);
-        await pool.query(`UPDATE labour SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), lid]);
+        const cur = await client.query(`SELECT COALESCE(remaining_value, bill_value_after_deduction, total) AS rem FROM labour WHERE id=$1`, [lid]);
+        await client.query(`UPDATE labour SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), lid]);
       }
     }
     if (isNote && (req.body.source_type === "hallmark" || req.body.source_type === "expense") && req.body.linked_hallmark_expense_ids?.length) {
       for (const hid of req.body.linked_hallmark_expense_ids) {
-        const cur = await pool.query(`SELECT COALESCE(remaining_value, net_value) AS rem FROM hallmark_expenses WHERE id=$1`, [hid]);
-        await pool.query(`UPDATE hallmark_expenses SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), hid]);
+        const cur = await client.query(`SELECT COALESCE(remaining_value, net_value) AS rem FROM hallmark_expenses WHERE id=$1`, [hid]);
+        await client.query(`UPDATE hallmark_expenses SET remaining_value=$1 WHERE id=$2`, [parseFloat(cur.rows[0]?.rem || 0) - parseFloat(net_value || 0), hid]);
       }
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: purchaseId });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -155,25 +161,31 @@ router.put("/purchases/:id", async (req, res) => {
     date, bill_no, description, taxable_value, cgst, sgst, igst,
     round_off, total_value, tds, net_value, items, photo_url, photo_urls,
   } = req.body;
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query("BEGIN");
+    await client.query(
       `UPDATE purchases SET date=$1, bill_no=$2, description=$3, taxable_value=$4, cgst=$5, sgst=$6, igst=$7,
         round_off=$8, total_value=$9, tds=$10, net_value=$11, photo_url=$12, photo_urls=$13 WHERE id=$14`,
       [date, bill_no, description || "", taxable_value, cgst, sgst, igst, round_off, total_value, tds, net_value,
         photo_url || null, photo_urls?.length ? photo_urls : null, id],
     );
-    await pool.query(`DELETE FROM purchase_items WHERE purchase_id=$1`, [id]);
+    await client.query(`DELETE FROM purchase_items WHERE purchase_id=$1`, [id]);
     if (items?.length) {
       for (const item of items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO purchase_items (purchase_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [id, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent, item.amount],
         );
       }
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: parseInt(id) });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -190,26 +202,6 @@ router.patch("/purchases/:id/photo", async (req, res) => {
   try {
     await pool.query(`UPDATE purchases SET photo_url = $1 WHERE id = $2`, [req.body.photo_url || null, req.params.id]);
     res.json({ status: "SUCCESS" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get("/tds-required/:profile_id", async (req, res) => {
-  try {
-    const { profile_id } = req.params;
-    const now = new Date();
-    const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-    const fyStart = `${fyYear}-04-01`;
-    const fyEnd = `${fyYear + 1}-03-31`;
-    const result = await pool.query(
-      `SELECT tds FROM purchases WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
-       UNION ALL
-       SELECT tds FROM labour WHERE profile_id=$1 AND voucher_type='Receipt Voucher' AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
-       LIMIT 1`,
-      [profile_id, fyStart, fyEnd],
-    );
-    res.json({ required: result.rows.length > 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

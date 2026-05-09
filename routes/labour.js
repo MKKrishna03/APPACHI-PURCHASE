@@ -66,6 +66,28 @@ router.get("/labour/unlinked-receipts", async (req, res) => {
   }
 });
 
+router.get("/labour/mc-bill-issues", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number,
+              COALESCE(SUM(li.quantity::numeric), 0) AS total_weight,
+              p.address, p.city, p.pincode, p.pan_number, p.gst_number
+       FROM labour l
+       LEFT JOIN labour_items li ON li.labour_id = l.id
+       LEFT JOIN profiles p ON p.id = l.profile_id
+       WHERE l.voucher_type = 'ISSUE VOUCHER'
+         AND UPPER(l.labour_item_type) = 'OTHERS'
+         AND l.deleted_at IS NULL
+       GROUP BY l.id, l.profile_id, l.company_name, l.date, l.issue_number,
+                p.address, p.city, p.pincode, p.pan_number, p.gst_number
+       ORDER BY l.date DESC`,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/labour/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   try {
@@ -106,22 +128,28 @@ router.get("/labour", async (req, res) => {
 
 router.post("/labour", async (req, res) => {
   const { profile_id, company_name, date, issue_number, labour_item_type, items } = req.body;
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `INSERT INTO labour (profile_id, company_name, date, issue_number, labour_item_type, voucher_type, created_by)
        VALUES ($1, $2, $3, $4, $5, 'ISSUE VOUCHER', $6) RETURNING *`,
       [profile_id, company_name, date, issue_number, labour_item_type, req.body.created_by || null],
     );
     const labourId = result.rows[0].id;
     for (const item of items) {
-      await pool.query(
+      await client.query(
         `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
         [labourId, item.sl_no, item.description, item.quantity, item.rate, item.amount],
       );
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: labourId });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -175,14 +203,16 @@ router.put("/labour/:id", async (req, res) => {
     profile_id, company_name, date, issue_number, labour_item_type, items,
     receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction,
   } = req.body;
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     if (profile_id !== undefined) {
-      await pool.query(
+      await client.query(
         `UPDATE labour SET profile_id=$1, company_name=$2, date=$3, issue_number=$4, labour_item_type=$5 WHERE id=$6`,
         [profile_id, company_name, date, issue_number, labour_item_type, req.params.id],
       );
     } else {
-      await pool.query(
+      await client.query(
         `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls) WHERE id=$13`,
         [
           date, receipt_bill_no, taxable_total || null, cgst || null, sgst || null,
@@ -193,17 +223,21 @@ router.put("/labour/:id", async (req, res) => {
       );
     }
     if (items?.length) {
-      await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [req.params.id]);
+      await client.query(`DELETE FROM labour_items WHERE labour_id=$1`, [req.params.id]);
       for (const item of items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
           [req.params.id, item.sl_no, item.description, item.quantity, item.rate, item.amount],
         );
       }
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS" });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -223,18 +257,19 @@ router.post("/close-issue-voucher", async (req, res) => {
   } = req.body;
 
   if (labour_ids?.length) {
+    const client = await pool.connect();
     try {
       const firstRes = await pool.query("SELECT * FROM labour WHERE id = $1", [labour_ids[0]]);
       if (!firstRes.rows[0]) return res.status(404).json({ error: "Labour bill not found" });
       const labour = firstRes.rows[0];
-      await pool.query("INSERT INTO voucher_types (name) VALUES ($1) ON CONFLICT DO NOTHING", ["Receipt Voucher"]);
       const issueNumbers = await Promise.all(
         labour_ids.map(async (id) => {
           const r = await pool.query("SELECT issue_number FROM labour WHERE id = $1", [id]);
           return r.rows[0] ? r.rows[0].issue_number : id;
         }),
       );
-      const result = await pool.query(
+      await client.query("BEGIN");
+      const result = await client.query(
         `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
         [
@@ -248,27 +283,32 @@ router.post("/close-issue-voucher", async (req, res) => {
       const close_labour_id = result.rows[0].id;
       if (items?.length) {
         for (const item of items) {
-          await pool.query(
+          await client.query(
             `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
             [close_labour_id, item.sl_no, item.description, item.quantity, item.rate, item.amount],
           );
         }
       }
       if (payment_voucher_id) {
-        await pool.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
+        await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
       }
+      await client.query("COMMIT");
       return res.json({ status: "SUCCESS", id: close_labour_id });
     } catch (err) {
+      await client.query("ROLLBACK");
       return res.status(500).json({ error: err.message });
+    } finally {
+      client.release();
     }
   }
 
+  const client = await pool.connect();
   try {
     const labourResult = await pool.query("SELECT * FROM labour WHERE id = $1", [labour_id]);
     if (!labourResult.rows[0]) return res.status(404).json({ error: "Labour bill not found" });
     const labour = labourResult.rows[0];
-    await pool.query("INSERT INTO voucher_types (name) VALUES ($1) ON CONFLICT DO NOTHING", ["Receipt Voucher"]);
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [
@@ -282,7 +322,7 @@ router.post("/close-issue-voucher", async (req, res) => {
     const close_labour_id = result.rows[0].id;
     if (items?.length) {
       for (const item of items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
           [
             close_labour_id, item.sl_no, item.description,
@@ -293,11 +333,15 @@ router.post("/close-issue-voucher", async (req, res) => {
       }
     }
     if (payment_voucher_id) {
-      await pool.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
+      await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: close_labour_id });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

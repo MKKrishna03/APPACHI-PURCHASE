@@ -138,6 +138,10 @@ async function initDB() {
     );
   `);
 
+  await pool.query(
+    `INSERT INTO voucher_types (name) VALUES ('Create Issue Voucher'), ('Close Issue Voucher') ON CONFLICT DO NOTHING`,
+  );
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS todos (
       id SERIAL PRIMARY KEY,

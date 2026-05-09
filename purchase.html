@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
         visibility: hidden;
@@ -109,6 +110,31 @@
       .sidebar-body::-webkit-scrollbar-thumb {
         background: var(--surface-3);
         border-radius: 2px;
+      }
+      .entry-nav {
+        display: flex;
+        gap: 3px;
+        margin-top: 10px;
+      }
+      .entry-nav-btn {
+        flex: 1;
+        text-align: center;
+        padding: 5px 2px;
+        font-size: 10px;
+        font-weight: 600;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #fff;
+        background: #173a5e;
+        transition: background 0.15s;
+        letter-spacing: 0.02em;
+      }
+      .entry-nav-btn:hover {
+        background: #1e4e7e;
+      }
+      .entry-nav-btn.active {
+        background: #215f9a;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
       }
 
       .section-toggle {
@@ -646,6 +672,12 @@
       <div class="sidebar-header">
         <div class="sidebar-logo">Purchase Management</div>
         <div class="sidebar-title">Purchase Voucher</div>
+        <nav class="entry-nav">
+          <a href="/purchase" class="entry-nav-btn active">Purchase</a>
+          <a href="/hmex?type=hallmark" class="entry-nav-btn">Hallmark</a>
+          <a href="/hmex?type=expenses" class="entry-nav-btn">Expense</a>
+          <a href="/labour" class="entry-nav-btn">Labour</a>
+        </nav>
       </div>
       <div class="sidebar-body">
         <!-- Unlinked Payments -->
@@ -2188,6 +2220,10 @@
           showMessage("Please enter bill number", "error");
           return;
         }
+        if (!editPurchaseId && _isDupBillNo(billNo, companyId) &&
+            !confirm(`Bill number "${billNo}" already exists for this company. Save anyway?`)) {
+          return;
+        }
         if (!document.getElementById("billDataVerified").checked) {
           showMessage(
             "Please manually verify all bill data before saving (check the box next to Bill Number)",
@@ -2400,16 +2436,19 @@
         const all = res.ok ? await res.json() : [];
         existingPurchaseBillNos = all
           .filter((p) => p.bill_no)
-          .map((p) => p.bill_no.trim().toLowerCase());
+          .map((p) => ({ bill_no: p.bill_no.trim().toLowerCase(), profile_id: String(p.profile_id) }));
+      }
+      function _isDupBillNo(val, profileId) {
+        return existingPurchaseBillNos.some(
+          (e) => e.bill_no === val.trim().toLowerCase() && e.profile_id === String(profileId)
+        );
       }
       function checkDuplicatePurchaseBillNo(val) {
         if (editPurchaseId) return;
         const msg = document.getElementById("purchaseBillNoDuplicateMsg");
-        if (val && existingPurchaseBillNos.includes(val.trim().toLowerCase())) {
-          msg.style.display = "block";
-        } else {
-          msg.style.display = "none";
-        }
+        const companyId = document.getElementById("companySelect").value || "";
+        const isDup = val && _isDupBillNo(val, companyId);
+        msg.style.display = isDup ? "block" : "none";
       }
 
       async function loadEditPurchase(id) {
@@ -3079,8 +3118,8 @@
         const _orig = window.checkDuplicatePurchaseBillNo;
         window.checkDuplicatePurchaseBillNo = function (val) {
           _orig && _orig(val);
-          const isDup =
-            val && existingPurchaseBillNos.includes(val.trim().toLowerCase());
+          const companyId = document.getElementById("companySelect").value || "";
+          const isDup = val && _isDupBillNo(val, companyId);
           inp.style.borderColor = isDup ? "var(--danger,#c0392b)" : "";
           inp.style.boxShadow = isDup ? "0 0 0 3px rgba(192,57,43,0.15)" : "";
         };

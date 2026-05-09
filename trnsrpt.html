@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
         visibility: hidden;
@@ -669,7 +670,10 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">Payment Transactions</span>
-          <span class="card-badge" id="rowCount">0</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="card-badge" id="rowCount">0</span>
+            <button onclick="exportCSV()" style="padding:5px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink-2);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">⬇ CSV</button>
+          </div>
         </div>
         <div
           id="paginationBar"
@@ -1250,6 +1254,17 @@
         pageSize = parseInt(val);
         currentPage = 1;
         renderRows();
+      }
+      function exportCSV() {
+        const esc = (v) => { const s = String(v ?? ""); return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+        const headers = ["Date", "Company", "Voucher No", "Voucher Type", "Bill Value", "Payment"];
+        const lines = [headers.join(","), ...allRows.map((b) =>
+          [b.date ? b.date.slice(0,10) : "", b._companyName || "", b._billNo || "", b.voucher_type || "", b._billValue || 0, parseFloat(b.total_value || 0)].map(esc).join(",")
+        )];
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+        a.download = `transaction-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
       }
 
       async function loadReport() {

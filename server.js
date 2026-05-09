@@ -108,10 +108,7 @@ app.get("/health", async (req, res) => {
 });
 
 // ── Auth middleware on all /api/ routes ──
-app.use("/api/", (req, res, next) => {
-  if (req.path === "/ai-scan" || req.path === "/ai-scan-text") return next();
-  requireAuth(req, res, next);
-});
+app.use("/api/", requireAuth);
 
 // ── Server-Sent Events ──
 app.get("/api/events", sseHandler);
@@ -155,6 +152,7 @@ const pages = {
   "/reports/hallmark": "hmrpt.html",
   "/reports/expense": "exprpt.html",
   "/reports/tds": "tds.html",
+  "/mc": "mc.html",
 };
 
 for (const [route, file] of Object.entries(pages)) {

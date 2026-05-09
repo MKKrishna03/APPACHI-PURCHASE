@@ -26,16 +26,7 @@ router.post("/voucher-type", async (req, res) => {
   }
 });
 
-router.post("/seed-voucher-types", async (req, res) => {
-  try {
-    await pool.query(
-      "INSERT INTO voucher_types (name) VALUES ('Create Issue Voucher'), ('Close Issue Voucher') ON CONFLICT DO NOTHING",
-    );
-    res.json({ status: "SUCCESS", message: "Voucher types seeded" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 
 router.get("/labour-item-types", async (req, res) => {
   try {

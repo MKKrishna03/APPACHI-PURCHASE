@@ -1,6 +1,5 @@
 const express = require("express");
 const { pool } = require("../db");
-const { deleteAllPhotos } = require("./cloudinary");
 
 const router = express.Router();
 
@@ -58,9 +57,11 @@ router.get("/tds-required/:profile_id", async (req, res) => {
     const fyStart = `${fyYear}-04-01`;
     const fyEnd = `${fyYear + 1}-03-31`;
     const result = await pool.query(
-      `SELECT tds FROM purchases WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3
+      `SELECT tds FROM purchases WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
        UNION ALL
-       SELECT tds FROM labour WHERE profile_id=$1 AND voucher_type='Receipt Voucher' AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3
+       SELECT tds FROM labour WHERE profile_id=$1 AND voucher_type='Receipt Voucher' AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
+       UNION ALL
+       SELECT tds FROM hallmark_expenses WHERE profile_id=$1 AND tds IS NOT NULL AND tds>0 AND date BETWEEN $2 AND $3 AND deleted_at IS NULL
        LIMIT 1`,
       [profile_id, fyStart, fyEnd],
     );
@@ -110,81 +111,56 @@ router.get("/linked-data/:type/:id", async (req, res) => {
   }
 });
 
-// ── Delete entry ──
+// ── Delete entry (soft-delete: sets deleted_at, preserves data for recovery) ──
+
+async function softDeleteLinked(l) {
+  if (l.type === "voucher") {
+    await pool.query(`UPDATE vouchers SET deleted_at=NOW() WHERE id=$1`, [l.id]);
+  } else if (l.type === "receipt") {
+    await pool.query(`UPDATE labour SET deleted_at=NOW() WHERE id=$1`, [l.id]);
+  } else if (l.type === "purchase") {
+    await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [l.id]);
+    await pool.query(`UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [l.id]);
+    await pool.query(`UPDATE purchases SET deleted_at=NOW() WHERE id=$1`, [l.id]);
+  }
+}
+
+async function softDeleteById(type, id) {
+  if (type === "issue" || type === "receipt") {
+    await pool.query(`UPDATE labour SET deleted_at=NOW() WHERE id=$1`, [id]);
+  } else if (type === "txn") {
+    await pool.query(`UPDATE vouchers SET deleted_at=NOW() WHERE id=$1`, [id]);
+  } else if (type === "purchase") {
+    const group = await pool.query(
+      `SELECT id FROM purchases
+       WHERE bill_no=(SELECT bill_no FROM purchases WHERE id=$1)
+         AND profile_id=(SELECT profile_id FROM purchases WHERE id=$1)
+         AND deleted_at IS NULL`,
+      [id],
+    );
+    for (const row of group.rows) {
+      await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [row.id]);
+      await pool.query(`UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [row.id]);
+      await pool.query(`UPDATE purchases SET deleted_at=NOW() WHERE id=$1`, [row.id]);
+    }
+  } else if (type === "chittai") {
+    await pool.query(`UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`, [id]);
+    await pool.query(`UPDATE purchases SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`, [id]);
+    await pool.query(`UPDATE chittai SET deleted_at=NOW() WHERE id=$1`, [id]);
+  } else if (type === "hallmark") {
+    await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [id]);
+    await pool.query(`UPDATE hallmark_expenses SET deleted_at=NOW() WHERE id=$1`, [id]);
+  }
+}
 
 router.delete("/delete-entry", async (req, res) => {
   const { type, id, linked } = req.body;
   try {
     if (linked?.length) {
-      for (const l of linked) {
-        if (l.type === "voucher") await pool.query(`DELETE FROM vouchers WHERE id=$1`, [l.id]);
-        if (l.type === "receipt") {
-          const ph = await pool.query(`SELECT photo_url, photo_urls FROM labour WHERE id=$1`, [l.id]);
-          if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
-          await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [l.id]);
-          await pool.query(`DELETE FROM labour WHERE id=$1`, [l.id]);
-        }
-        if (l.type === "purchase") {
-          const ph = await pool.query(`SELECT photo_url, photo_urls FROM purchases WHERE id=$1`, [l.id]);
-          if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
-          await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [l.id]);
-          await pool.query(`UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [l.id]);
-          await pool.query(`DELETE FROM purchases WHERE id=$1`, [l.id]);
-        }
-      }
+      for (const l of linked) await softDeleteLinked(l);
     }
-
-    if (type === "issue" || type === "receipt") {
-      const ph = await pool.query(`SELECT photo_url, photo_urls FROM labour WHERE id=$1`, [id]);
-      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
-      await pool.query(`DELETE FROM labour_items WHERE labour_id=$1`, [id]);
-      await pool.query(`DELETE FROM labour WHERE id=$1`, [id]);
-    }
-    if (type === "txn") await pool.query(`DELETE FROM vouchers WHERE id=$1`, [id]);
-    if (type === "purchase") {
-      const group = await pool.query(
-        `SELECT id, photo_url, photo_urls FROM purchases WHERE bill_no=(SELECT bill_no FROM purchases WHERE id=$1) AND profile_id=(SELECT profile_id FROM purchases WHERE id=$1)`,
-        [id],
-      );
-      for (const row of group.rows) {
-        await deleteAllPhotos(row);
-        await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [row.id]);
-        await pool.query(`UPDATE chittai SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [row.id]);
-        await pool.query(`DELETE FROM purchase_items WHERE purchase_id=$1`, [row.id]);
-        await pool.query(`DELETE FROM purchases WHERE id=$1`, [row.id]);
-      }
-    }
-    if (type === "chittai") {
-      const ph = await pool.query(`SELECT photo_url, photo_urls FROM chittai WHERE id=$1`, [id]);
-      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
-      await pool.query(`UPDATE vouchers SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`, [id]);
-      await pool.query(`UPDATE purchases SET linked_chittai_id=NULL WHERE linked_chittai_id=$1`, [id]);
-      await pool.query(`DELETE FROM chittai WHERE id=$1`, [id]);
-    }
-    if (type === "hallmark") {
-      const ph = await pool.query(`SELECT photo_url, photo_urls FROM hallmark_expenses WHERE id=$1`, [id]);
-      if (ph.rows[0]) await deleteAllPhotos(ph.rows[0]);
-      await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [id]);
-      await pool.query(`DELETE FROM hallmark_expense_items WHERE hallmark_expense_id=$1`, [id]);
-      await pool.query(`DELETE FROM hallmark_expenses WHERE id=$1`, [id]);
-    }
+    await softDeleteById(type, id);
     res.json({ status: "SUCCESS" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Debug ──
-
-router.get("/debug/photo-urls-type", async (req, res) => {
-  try {
-    const r = await pool.query(`
-      SELECT table_name, column_name, udt_name, data_type
-      FROM information_schema.columns
-      WHERE column_name='photo_urls'
-      ORDER BY table_name
-    `);
-    res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

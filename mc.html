@@ -1,0 +1,1106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        visibility: hidden;
+      }
+    </style>
+    <title>MC Bill</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f5f5f0;
+        --surface: #ffffff;
+        --surface-2: #f9f9f6;
+        --ink: #1a1a2e;
+        --ink-2: #444466;
+        --ink-3: #8888aa;
+        --blue: #1d6fa4;
+        --amber: #b5620a;
+        --amber-light: #fef0d6;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-strong: rgba(0, 0, 0, 0.14);
+        --radius-lg: 16px;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "DM Sans", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 14px;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .topbar {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 28px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-shrink: 0;
+      }
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-3);
+        text-decoration: none;
+        padding: 5px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .back-btn:hover {
+        background: var(--surface-2);
+        color: var(--ink-2);
+      }
+      .topbar-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .topbar-sub {
+        font-size: 12px;
+        color: var(--ink-3);
+        margin-top: 1px;
+      }
+
+      .content {
+        flex: 1;
+        padding: 28px 28px 40px;
+        max-width: 980px;
+        width: 100%;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .card-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .card-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .card-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .badge-count {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 20px;
+        background: var(--amber-light);
+        color: var(--amber);
+      }
+
+      .btn-invoice {
+        display: none;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 16px;
+        background: #1a3a5c;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s;
+        letter-spacing: 0.02em;
+      }
+      .btn-invoice:hover {
+        background: #215f9a;
+      }
+      .btn-invoice.visible {
+        display: inline-flex;
+      }
+
+      .filters {
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .filter-input {
+        padding: 6px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        font-size: 12.5px;
+        font-family: inherit;
+        background: var(--surface);
+        color: var(--ink);
+        outline: none;
+      }
+      .filter-input:focus {
+        border-color: var(--blue);
+      }
+      .filter-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+      }
+      select.filter-input {
+        cursor: pointer;
+        padding-right: 28px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      thead th {
+        background: var(--surface-2);
+        color: var(--ink-3);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 10px 13px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      thead th:first-child {
+        width: 40px;
+        text-align: center;
+        padding: 10px 8px;
+      }
+      thead th:last-child {
+        text-align: center;
+      }
+      tbody tr:hover td {
+        background: var(--surface-2);
+      }
+      tbody td {
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--border);
+        color: var(--ink);
+        vertical-align: middle;
+      }
+      tbody td:first-child {
+        text-align: center;
+        padding: 10px 8px;
+      }
+      tbody td:last-child {
+        text-align: center;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+        accent-color: var(--blue);
+      }
+      .company-name {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .issue-no {
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        color: var(--ink-3);
+        margin-top: 2px;
+      }
+      .weight-cell {
+        font-family: "DM Mono", monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--blue);
+      }
+      .status-gen {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .status-new {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background: #e8edf2;
+        color: #374151;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+      .loading-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+
+      .summary-bar {
+        padding: 12px 20px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+      .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .summary-item .val {
+        font-family: "DM Mono", monospace;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--blue);
+      }
+
+      /* Modal */
+      dialog.inv-dialog {
+        width: 100%;
+        max-width: 440px;
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        border: none;
+        padding: 0;
+        overflow: hidden;
+      }
+      dialog.inv-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(3px);
+      }
+      .modal-hdr {
+        padding: 16px 20px 13px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: var(--ink-3);
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+      }
+      .modal-close:hover {
+        background: var(--surface-2);
+        color: var(--ink);
+      }
+      .modal-body {
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+      }
+      .field-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .field label {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .field input {
+        padding: 8px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--ink);
+        background: var(--surface);
+        outline: none;
+        width: 100%;
+      }
+      .field input:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(29, 111, 164, 0.1);
+      }
+      .field-hint {
+        font-size: 10px;
+        color: var(--ink-3);
+      }
+      .inv-preview {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 11px 13px;
+        font-size: 12px;
+        color: var(--ink-2);
+        line-height: 1.75;
+      }
+      .modal-footer {
+        padding: 12px 20px 15px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 9px;
+        justify-content: flex-end;
+      }
+      .btn-cancel {
+        padding: 7px 15px;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--ink-2);
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .btn-cancel:hover {
+        background: var(--surface-2);
+      }
+      .btn-generate {
+        padding: 7px 16px;
+        border: none;
+        border-radius: 7px;
+        background: #1a3a5c;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .btn-generate:hover {
+        background: #215f9a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <a href="/dashboard" class="back-btn">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Dashboard
+      </a>
+      <div>
+        <div class="topbar-title">MC Bill</div>
+        <div class="topbar-sub">Others — Issue Vouchers</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-title">Issue Vouchers</div>
+            <span class="badge-count" id="totalBadge">—</span>
+          </div>
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              flex-wrap: wrap;
+            "
+          >
+            <input
+              class="filter-input"
+              id="searchInput"
+              placeholder="Search company or issue no."
+              oninput="applyFilter()"
+              style="min-width: 190px"
+            />
+            <button
+              class="btn-invoice"
+              id="createInvoiceBtn"
+              onclick="openInvoiceModal()"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+              Create MC Invoice
+            </button>
+          </div>
+        </div>
+
+        <div class="filters">
+          <span class="filter-label">From</span>
+          <input
+            type="date"
+            class="filter-input"
+            id="fromDate"
+            onchange="applyFilter()"
+          />
+          <span class="filter-label">To</span>
+          <input
+            type="date"
+            class="filter-input"
+            id="toDate"
+            onchange="applyFilter()"
+          />
+          <select
+            class="filter-input"
+            id="companyFilter"
+            onchange="applyFilter()"
+            style="min-width: 160px"
+          >
+            <option value="">All Companies</option>
+          </select>
+          <select
+            class="filter-input"
+            id="generatedFilter"
+            onchange="applyFilter()"
+          >
+            <option value="">All Status</option>
+            <option value="not_generated">Not Generated</option>
+            <option value="generated">Generated</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    id="selectAll"
+                    title="Select all"
+                    onchange="toggleSelectAll(this.checked)"
+                  />
+                </th>
+                <th>Company / Issue No.</th>
+                <th>Issue Date</th>
+                <th>Weight (g)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="5" class="loading-state">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="summary-bar">
+          <div class="summary-item">
+            Selected: <span class="val" id="selCount">0</span>
+          </div>
+          <div class="summary-item">
+            Total Weight: <span class="val" id="selWeight">0.000</span> g
+          </div>
+          <div class="summary-item" style="color: var(--ink-3)">
+            Showing <span id="showingCount">0</span> of
+            <span id="totalCount">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoice Modal — only Date, Gold Rate, Percentage -->
+    <dialog id="invoiceDialog" class="inv-dialog" aria-labelledby="modalTitle">
+      <div class="modal-hdr">
+        <div class="modal-title" id="modalTitle">Create MC Invoice</div>
+        <button class="modal-close" onclick="closeInvoiceModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-3">
+          <div class="field">
+            <label for="invDate">Invoice Date</label>
+            <input type="date" id="invDate" oninput="refreshPreview()" />
+          </div>
+          <div class="field">
+            <label for="invGoldRate">Gold Rate (₹/10g)</label>
+            <input
+              type="number"
+              id="invGoldRate"
+              placeholder="e.g. 98770"
+              step="1"
+              min="0"
+              oninput="refreshPreview()"
+            />
+          </div>
+          <div class="field">
+            <label for="invPct">Percentage (%)</label>
+            <input
+              type="number"
+              id="invPct"
+              placeholder="3.5"
+              step="0.01"
+              min="0"
+              oninput="refreshPreview()"
+            />
+            <div class="field-hint">Default 3.5%</div>
+          </div>
+        </div>
+        <div class="field-3">
+          <div class="field">
+            <label for="invNo">Invoice Number</label>
+            <input
+              type="number"
+              id="invNo"
+              placeholder="e.g. 1"
+              step="1"
+              min="1"
+              oninput="refreshPreview()"
+            />
+          </div>
+          <div class="field">
+            <label for="invFineWeight">Fine Weight (g)</label>
+            <input
+              type="number"
+              id="invFineWeight"
+              placeholder="auto"
+              step="0.01"
+              min="0"
+              oninput="refreshPreview()"
+            />
+            <div class="field-hint">Leave blank to auto-calculate</div>
+          </div>
+        </div>
+        <div class="inv-preview" id="invPreview" style="color: var(--ink-3)">
+          Enter gold rate and percentage to preview.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeInvoiceModal()">Cancel</button>
+        <button class="btn-generate" onclick="generateInvoice()">
+          Generate &amp; Print →
+        </button>
+      </div>
+    </dialog>
+
+    <script>
+      (function () {
+        const u =
+          localStorage.getItem("auth_user") ||
+          sessionStorage.getItem("auth_user");
+        const exp = localStorage.getItem("auth_exp");
+        if (!u || (exp && Date.now() >= Number.parseInt(exp))) {
+          globalThis.location.replace("/login");
+        } else {
+          document.body.style.visibility = "visible";
+        }
+      })();
+
+      let allData = [];
+      let filteredData = [];
+
+      // ── Generated tracking ──
+      function getGeneratedIds() {
+        try {
+          return new Set(
+            JSON.parse(localStorage.getItem("mc_generated_ids") || "[]"),
+          );
+        } catch {
+          return new Set();
+        }
+      }
+      function markGenerated(ids) {
+        const s = getGeneratedIds();
+        ids.forEach((id) => s.add(String(id)));
+        localStorage.setItem("mc_generated_ids", JSON.stringify([...s]));
+      }
+      function isGenerated(id) {
+        return getGeneratedIds().has(String(id));
+      }
+
+      async function loadData() {
+        try {
+          const res = await fetch("/api/labour/mc-bill-issues");
+          allData = res.ok ? await res.json() : [];
+          populateCompanyDropdown();
+          applyFilter();
+        } catch {
+          document.getElementById("tableBody").innerHTML =
+            '<tr><td colspan="5" class="empty-state">Failed to load data.</td></tr>';
+        }
+      }
+
+      function populateCompanyDropdown() {
+        const companies = [
+          ...new Set(allData.map((r) => r.company_name).filter(Boolean)),
+        ].sort();
+        const sel = document.getElementById("companyFilter");
+        sel.innerHTML =
+          '<option value="">All Companies</option>' +
+          companies.map((c) => `<option value="${c}">${c}</option>`).join("");
+      }
+
+      function applyFilter() {
+        const q = (document.getElementById("searchInput").value || "")
+          .toLowerCase()
+          .trim();
+        const from = document.getElementById("fromDate").value;
+        const to = document.getElementById("toDate").value;
+        const company = document.getElementById("companyFilter").value;
+        const genF = document.getElementById("generatedFilter").value;
+        const genIds = getGeneratedIds();
+
+        filteredData = allData.filter((r) => {
+          if (
+            q &&
+            !(r.company_name || "").toLowerCase().includes(q) &&
+            !(r.issue_number || "").toLowerCase().includes(q)
+          )
+            return false;
+          if (from && r.date && r.date.slice(0, 10) < from) return false;
+          if (to && r.date && r.date.slice(0, 10) > to) return false;
+          if (company && r.company_name !== company) return false;
+          if (genF === "generated" && !genIds.has(String(r.id))) return false;
+          if (genF === "not_generated" && genIds.has(String(r.id)))
+            return false;
+          return true;
+        });
+        renderTable();
+      }
+
+      function renderTable() {
+        const tbody = document.getElementById("tableBody");
+        document.getElementById("totalBadge").textContent = allData.length;
+        document.getElementById("totalCount").textContent = allData.length;
+        document.getElementById("showingCount").textContent =
+          filteredData.length;
+
+        if (!filteredData.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" class="empty-state">No OTHERS issue vouchers found.</td></tr>';
+          updateSummary();
+          return;
+        }
+
+        tbody.innerHTML = filteredData
+          .map((r) => {
+            const dt = r.date
+              ? new Date(r.date).toLocaleDateString("en-GB")
+              : "—";
+            const wt = Number.parseFloat(r.total_weight || 0).toFixed(3);
+            const gen = isGenerated(r.id);
+            const badge = gen
+              ? '<span class="status-gen">Generated</span>'
+              : '<span class="status-new">Not Generated</span>';
+            return `<tr>
+            <td><input type="checkbox" class="row-chk"
+              data-id="${r.id}"
+              data-weight="${r.total_weight || 0}"
+              data-company="${(r.company_name || "").replaceAll('"', "&quot;")}"
+              data-issue="${(r.issue_number || "").replaceAll('"', "&quot;")}"
+              data-date="${r.date ? r.date.slice(0, 10) : ""}"
+              onchange="updateSummary()" /></td>
+            <td>
+              <div class="company-name">${r.company_name || "—"}</div>
+              <div class="issue-no">${r.issue_number || ""}</div>
+            </td>
+            <td>${dt}</td>
+            <td class="weight-cell">${wt} g</td>
+            <td>${badge}</td>
+          </tr>`;
+          })
+          .join("");
+        updateSummary();
+      }
+
+      function toggleSelectAll(checked) {
+        document.querySelectorAll(".row-chk").forEach((cb) => {
+          cb.checked = checked;
+        });
+        updateSummary();
+      }
+
+      function updateSummary() {
+        const checked = [...document.querySelectorAll(".row-chk:checked")];
+        const weight = checked.reduce(
+          (s, cb) => s + Number.parseFloat(cb.dataset.weight || 0),
+          0,
+        );
+        document.getElementById("selCount").textContent = checked.length;
+        document.getElementById("selWeight").textContent = weight.toFixed(3);
+        const all = document.querySelectorAll(".row-chk");
+        const sa = document.getElementById("selectAll");
+        if (sa) sa.checked = all.length > 0 && checked.length === all.length;
+        document
+          .getElementById("createInvoiceBtn")
+          .classList.toggle("visible", checked.length > 0);
+      }
+
+      // ── Invoice Modal ──
+      function openInvoiceModal() {
+        if (!document.querySelectorAll(".row-chk:checked").length) return;
+        document.getElementById("invDate").value = new Date()
+          .toISOString()
+          .slice(0, 10);
+        document.getElementById("invGoldRate").value =
+          localStorage.getItem("mc_last_gold_rate") || "";
+        document.getElementById("invPct").value =
+          localStorage.getItem("mc_last_pct") || "3.5";
+        const lastNo = Number.parseInt(
+          localStorage.getItem("mc_last_invoice_no") || "0",
+          10,
+        );
+        document.getElementById("invNo").value = lastNo + 1;
+        document.getElementById("invFineWeight").value = "";
+        refreshPreview();
+        document.getElementById("invoiceDialog").showModal();
+        setTimeout(() => document.getElementById("invGoldRate").focus(), 100);
+      }
+
+      function closeInvoiceModal() {
+        document.getElementById("invoiceDialog").close();
+      }
+
+      // Close on backdrop click (click lands on the <dialog> element itself)
+      document
+        .getElementById("invoiceDialog")
+        .addEventListener("click", (e) => {
+          if (e.target === document.getElementById("invoiceDialog"))
+            closeInvoiceModal();
+        });
+
+      function refreshPreview() {
+        const checked = [...document.querySelectorAll(".row-chk:checked")];
+        const totalWeight = checked.reduce(
+          (s, cb) => s + Number.parseFloat(cb.dataset.weight || 0),
+          0,
+        );
+        const goldRate =
+          Number.parseFloat(document.getElementById("invGoldRate").value) || 0;
+        const pct =
+          Number.parseFloat(document.getElementById("invPct").value) || 0;
+        const el = document.getElementById("invPreview");
+
+        if (!goldRate || !pct) {
+          el.style.color = "var(--ink-3)";
+          el.textContent = `${checked.length} voucher(s) · ${totalWeight.toFixed(3)} g — enter gold rate and percentage to preview.`;
+          return;
+        }
+        const ratePerGram = (pct / 100) * (goldRate / 10);
+        const subtotal = totalWeight * ratePerGram;
+        const rounded = Math.round(subtotal);
+        const roundOff = rounded - subtotal;
+        el.style.color = "var(--ink-2)";
+        const rows = checked
+          .map(
+            (cb) =>
+              `<div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:11.5px;padding:2px 0;"><span>${cb.dataset.issue || "—"}</span><span>${Number.parseFloat(cb.dataset.weight || 0).toFixed(3)} g</span></div>`,
+          )
+          .join("");
+        el.style.color = "var(--ink-2)";
+        el.innerHTML = `
+          <div style="margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--border);">${rows}</div>
+          <div><b>${checked.length}</b> voucher(s) &nbsp;·&nbsp; <b>${totalWeight.toFixed(3)} g</b></div>
+          <div style="margin-top:2px;">Rate: <b>₹${ratePerGram.toFixed(2)}/g</b> &nbsp;(${pct}% of ₹${Number(goldRate).toLocaleString("en-IN")}/10g)</div>
+          <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">
+            Making charges: <b>₹${subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+            &nbsp;·&nbsp; Round off: ₹${roundOff.toFixed(2)}
+            &nbsp;·&nbsp; <b style="color:#c0186a;">Total: ₹${rounded.toLocaleString("en-IN")}</b>
+          </div>`;
+      }
+
+      function generateInvoice() {
+        const invDate = document.getElementById("invDate").value;
+        const goldRate = Number.parseFloat(
+          document.getElementById("invGoldRate").value,
+        );
+        const pct = Number.parseFloat(document.getElementById("invPct").value);
+        const invNoInput = Number.parseInt(
+          document.getElementById("invNo").value,
+          10,
+        );
+        const fineWeightOverride = Number.parseFloat(
+          document.getElementById("invFineWeight").value,
+        );
+
+        if (!invDate) {
+          alert("Please enter invoice date.");
+          return;
+        }
+        if (!goldRate || goldRate <= 0) {
+          alert("Please enter a valid gold rate.");
+          return;
+        }
+        if (!pct || pct <= 0) {
+          alert("Please enter a valid percentage.");
+          return;
+        }
+
+        const checked = [...document.querySelectorAll(".row-chk:checked")];
+        if (!checked.length) {
+          alert("No vouchers selected.");
+          return;
+        }
+
+        // Sender info from profile data in allData
+        const firstId = Number.parseInt(checked[0].dataset.id, 10);
+        const profile = allData.find((r) => r.id === firstId) || {};
+        const senderName = profile.company_name || "—";
+        const senderCity = [profile.city, profile.pincode]
+          .filter(Boolean)
+          .join(" - ");
+        const senderPan = profile.pan_number || "";
+
+        const invNo = String(invNoInput || 1).padStart(2, "0");
+        localStorage.setItem("mc_last_gold_rate", String(goldRate));
+        localStorage.setItem("mc_last_pct", String(pct));
+        localStorage.setItem("mc_last_invoice_no", String(invNoInput || 1));
+
+        const ratePerGram = (pct / 100) * (goldRate / 10);
+        const vouchers = checked.map((cb) => ({
+          id: cb.dataset.id,
+          issue: cb.dataset.issue,
+          weight: Number.parseFloat(cb.dataset.weight || 0),
+        }));
+        const totalWeight = vouchers.reduce((s, v) => s + v.weight, 0);
+        const fineWeight = Math.round(((totalWeight * 99.9) / 92) * 100) / 100;
+        const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
+        const rounded = Math.round(subtotal);
+        const roundOff = parseFloat((rounded - subtotal).toFixed(2));
+
+        const fmtDate = (iso) => {
+          const [y, m, d] = iso.split("-");
+          return `${d}/${m}/${y}`;
+        };
+        const fmtAmt = (n) =>
+          n.toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        const footNote = `${pct}% RATE for ${Number(goldRate).toLocaleString("en-IN")} on ${fmtDate(invDate)} is ${ratePerGram.toFixed(2)}`;
+
+        const senderMetaHtml = [
+          senderCity,
+          senderPan ? `PAN - ${senderPan}` : "",
+        ]
+          .filter(Boolean)
+          .join("<br>");
+
+        // One line per voucher: issue number | weight
+        const voucherRows = "";
+
+        const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Invoice #${invNo} — ${senderName}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a2e;background:#fff;font-size:13px;}
+    .page{max-width:680px;margin:0 auto;padding:0 40px 44px;}
+    .accent{height:4px;background:linear-gradient(90deg,#2b4da5,#1d8fd4);margin-bottom:28px;}
+    .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+    .sender-name{font-size:20px;font-weight:900;color:#2b4da5;letter-spacing:-0.3px;}
+    .sender-meta{font-size:11px;color:#666;line-height:1.75;margin-top:5px;}
+    .inv-ref{text-align:right;}
+    .inv-ref-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;margin-bottom:2px;}
+    .inv-ref-no{font-size:18px;font-weight:900;color:#2b4da5;}
+    .inv-ref-date{font-size:11px;color:#666;margin-top:4px;}
+    hr.thin{border:none;border-top:1px solid #e4e4ed;margin:14px 0;}
+    .type-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.14em;color:#bbb;margin-bottom:12px;}
+    .billto-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#bbb;margin-bottom:5px;}
+    .billto-name{font-size:14px;font-weight:800;color:#1a1a2e;}
+    .billto-gstin{font-size:10.5px;color:#777;margin-top:2px;font-family:'Courier New',monospace;}
+    .billto-addr{font-size:11px;color:#666;margin-top:3px;line-height:1.6;}
+    table{width:100%;border-collapse:collapse;margin:18px 0 4px;}
+    thead th{border-top:2px solid #1a1a2e;border-bottom:1px solid #d0d0da;padding:7px 10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#555;text-align:left;}
+    th.r{text-align:right;}td.r{text-align:right;}
+    .mc-row td{background:#f5f5fb;font-weight:700;color:#1a1a2e;border-top:1px solid #d0d0da;border-bottom:1.5px solid #c0c0d0;}
+    .foot{font-size:10px;color:#999;font-style:italic;margin:7px 0 0;}
+    .totals-wrap{display:flex;justify-content:flex-end;margin-top:14px;}
+    .totals{width:210px;}
+    .tot-row{display:flex;justify-content:space-between;font-size:11.5px;color:#777;padding:3px 0;}
+    .tot-row span:last-child{font-family:'Courier New',monospace;}
+    .tot-final{display:flex;justify-content:space-between;align-items:baseline;border-top:1.5px solid #ddd;margin-top:6px;padding-top:9px;}
+    .tot-label{font-size:12px;font-weight:700;color:#555;}
+    .tot-value{font-size:24px;font-weight:900;color:#c0186a;line-height:1;}
+    .print-btn{margin-top:36px;display:inline-flex;align-items:center;gap:7px;padding:9px 22px;background:#1a3a5c;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .print-btn:hover{background:#215f9a;}
+    @media print{
+      .page{padding:0 24px 28px;max-width:none;}
+      .no-print{display:none!important;}
+      .accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .mc-row td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      @page{margin:8mm;size:A4;}
+    }
+  </style>
+</head>
+<body>
+  <div class="accent"></div>
+  <div class="page">
+
+    <div class="inv-header">
+      <div>
+        <div class="sender-name">${senderName}</div>
+        <div class="sender-meta">${senderMetaHtml}</div>
+      </div>
+      <div class="inv-ref">
+        <div class="inv-ref-eye">Invoice</div>
+        <div class="inv-ref-no">#${invNo}</div>
+        <div class="inv-ref-date">${fmtDate(invDate)}</div>
+      </div>
+    </div>
+
+    <hr class="thin"/>
+    <div class="type-eye">Job Work Invoice</div>
+
+    <div style="margin-bottom:20px;">
+      <div class="billto-eye">Invoice For</div>
+      <div class="billto-name">APPACHI JEWELLERY</div>
+      <div class="billto-gstin">PAN: 33ACSPN6014B1ZV</div>
+      <div class="billto-addr">Melur – 625106</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:46%">Description</th>
+          <th class="r">Qty</th>
+          <th class="r">Unit Price/gm</th>
+          <th class="r">Total Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${voucherRows}
+        <tr class="mc-row">
+          <td style="padding:8px 10px;font-size:12px;">JOB WORK GOLD ORNAMENTS</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;font-family:'Courier New',monospace;">${fineWeight.toFixed(2)}</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
+        </tr>
+        <tr class="mc-row">
+          <td style="padding:8px 10px;font-size:12px;">MAKING CHARGES</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;font-family:'Courier New',monospace;"></td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtAmt(ratePerGram)}</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtAmt(subtotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="foot">${footNote}</div>
+
+    <div class="totals-wrap">
+      <div class="totals">
+        <div class="tot-row"><span>Subtotal</span><span>₹${fmtAmt(subtotal)}</span></div>
+        <div class="tot-row"><span>Round off</span><span>₹${fmtAmt(roundOff)}</span></div>
+        <div class="tot-final">
+          <span class="tot-label">Total</span>
+          <span class="tot-value">₹${rounded.toLocaleString("en-IN")}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="no-print">
+      <button class="print-btn" onclick="window.print()">Print Invoice</button>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        // Mark selected vouchers as generated and refresh table
+        markGenerated(vouchers.map((v) => v.id));
+        closeInvoiceModal();
+        renderTable();
+
+        const w = window.open("", "_blank");
+        w.document.write(html);
+        w.document.close();
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>

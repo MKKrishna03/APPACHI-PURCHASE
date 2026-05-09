@@ -44,8 +44,10 @@ router.post("/hallmark-expenses", async (req, res) => {
     linked_voucher_id, linked_voucher_ids, linked_chittai_id, linked_chittai_ids,
     items, created_by, photo_url,
   } = req.body;
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `INSERT INTO hallmark_expenses
         (profile_id, date, bill_no, voucher_type, description, taxable_value, tax_percent,
          cgst, sgst, igst, round_off, total_value, tds, net_value, linked_voucher_id,
@@ -63,21 +65,25 @@ router.post("/hallmark-expenses", async (req, res) => {
     const entryId = result.rows[0].id;
     if (items?.length) {
       for (const item of items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO hallmark_expense_items (hallmark_expense_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [entryId, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent, item.amount],
         );
       }
     }
     if (linked_voucher_ids?.length) {
-      for (const vid of linked_voucher_ids) await pool.query(`UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`, [entryId, vid]);
+      for (const vid of linked_voucher_ids) await client.query(`UPDATE vouchers SET linked_purchase_id=$1 WHERE id=$2`, [entryId, vid]);
     }
     if (linked_chittai_ids?.length) {
-      for (const cid of linked_chittai_ids) await pool.query(`UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`, [entryId, cid]);
+      for (const cid of linked_chittai_ids) await client.query(`UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`, [entryId, cid]);
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: entryId });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -87,8 +93,10 @@ router.put("/hallmark-expenses/:id", async (req, res) => {
     date, bill_no, voucher_type, description, taxable_value, tax_percent,
     cgst, sgst, igst, round_off, total_value, tds, net_value, items, photo_url, photo_urls,
   } = req.body;
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query("BEGIN");
+    await client.query(
       `UPDATE hallmark_expenses SET date=$1, bill_no=$2, voucher_type=$3, description=$4, taxable_value=$5,
         tax_percent=$6, cgst=$7, sgst=$8, igst=$9, round_off=$10, total_value=$11, tds=$12, net_value=$13,
         photo_url=$14, photo_urls=$15 WHERE id=$16`,
@@ -96,18 +104,22 @@ router.put("/hallmark-expenses/:id", async (req, res) => {
         cgst, sgst, igst, round_off, total_value, tds, net_value,
         photo_url || null, photo_urls?.length ? photo_urls : null, id],
     );
-    await pool.query(`DELETE FROM hallmark_expense_items WHERE hallmark_expense_id=$1`, [id]);
+    await client.query(`DELETE FROM hallmark_expense_items WHERE hallmark_expense_id=$1`, [id]);
     if (items?.length) {
       for (const item of items) {
-        await pool.query(
+        await client.query(
           `INSERT INTO hallmark_expense_items (hallmark_expense_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [id, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent, item.amount],
         );
       }
     }
+    await client.query("COMMIT");
     res.json({ status: "SUCCESS", id: parseInt(id) });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

@@ -592,9 +592,12 @@
             const o = document.createElement("option");
             const billLabel = lv.receipt_bill_no || `ID-${lv.id}`;
             o.value = lv.receipt_bill_no || `ID-${lv.id}`;
-            const amt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
-            o.textContent = amt ? `${billLabel} · ₹${amt.toLocaleString("en-IN")}` : billLabel;
-            o.dataset.amount = lv.bill_value_after_deduction || lv.total || "";
+            const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
+            const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
+            const isPartial = balAmt < fullAmt - 0.01;
+            const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
+            o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
+            o.dataset.amount = balAmt || "";
             againstBillNo.appendChild(o);
           });
           return;
@@ -609,9 +612,14 @@
           }
           purchases.forEach((p) => {
             const o = document.createElement("option");
-            o.value = p.bill_no || `PUR-${p.id}`;
-            o.textContent = `${p.bill_no || `PUR-${p.id}`} · ₹${parseFloat(p.net_value || p.total_value || 0).toLocaleString("en-IN")}`;
-            o.dataset.amount = p.net_value || p.total_value || "";
+            const billLabel = p.bill_no || `PUR-${p.id}`;
+            o.value = billLabel;
+            const fullAmt = Number.parseFloat(p.net_value || p.total_value || 0);
+            const balAmt = p.remaining_value != null ? Number.parseFloat(p.remaining_value) : fullAmt;
+            const isPartial = balAmt < fullAmt - 0.01;
+            const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
+            o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
+            o.dataset.amount = balAmt || "";
             againstBillNo.appendChild(o);
           });
           return;
@@ -628,9 +636,12 @@
           const o = document.createElement("option");
           const billLabel = v.bill_no || `ID-${v.id}`;
           o.value = billLabel;
-          const amt = Number.parseFloat(v.total_value || 0);
-          o.textContent = amt ? `${billLabel} · ₹${amt.toLocaleString("en-IN")}` : billLabel;
-          o.dataset.amount = v.total_value || "";
+          const fullAmt = Number.parseFloat(v.total_value || 0);
+          const balAmt = v.remaining_value != null ? Number.parseFloat(v.remaining_value) : fullAmt;
+          const isPartial = balAmt < fullAmt - 0.01;
+          const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
+          o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
+          o.dataset.amount = balAmt || "";
           againstBillNo.appendChild(o);
         });
       }

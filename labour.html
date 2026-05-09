@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
         visibility: hidden;
@@ -299,8 +300,23 @@
         background: var(--surface);
         border-left: 1px solid var(--border);
         overflow-y: auto;
-        padding: 20px;
+        padding: 0;
         flex-shrink: 0;
+      }
+      .sidebar-nav-header {
+        background: linear-gradient(135deg, #1a3a5c 0%, #1d6fa4 100%);
+        padding: 14px 14px 12px;
+      }
+      .sidebar-nav-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.55);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+      }
+      .sidebar-body-inner {
+        padding: 20px;
       }
       .sidebar-title {
         font-size: 15px;
@@ -309,6 +325,30 @@
         margin-bottom: 15px;
         padding-bottom: 10px;
         border-bottom: 1px solid var(--border);
+      }
+      .entry-nav {
+        display: flex;
+        gap: 3px;
+      }
+      .entry-nav-btn {
+        flex: 1;
+        text-align: center;
+        padding: 5px 2px;
+        font-size: 10px;
+        font-weight: 600;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #fff;
+        background: #173a5e;
+        transition: background 0.15s;
+        letter-spacing: 0.02em;
+      }
+      .entry-nav-btn:hover {
+        background: #1e4e7e;
+      }
+      .entry-nav-btn.active {
+        background: #215f9a;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
       }
 
       .recent-card {
@@ -541,8 +581,19 @@
     </div>
 
     <div class="sidebar">
-      <div class="sidebar-title">Recent Entries (Last 5)</div>
-      <div id="recentEntriesList"><div class="no-recent">Loading...</div></div>
+      <div class="sidebar-nav-header">
+        <div class="sidebar-nav-label">Entry Type</div>
+        <nav class="entry-nav">
+          <a href="/purchase" class="entry-nav-btn">Purchase</a>
+          <a href="/hmex?type=hallmark" class="entry-nav-btn">Hallmark</a>
+          <a href="/hmex?type=expenses" class="entry-nav-btn">Expense</a>
+          <a href="/labour" class="entry-nav-btn active">Labour</a>
+        </nav>
+      </div>
+      <div class="sidebar-body-inner">
+        <div class="sidebar-title">Recent Entries (Last 5)</div>
+        <div id="recentEntriesList"><div class="no-recent">Loading...</div></div>
+      </div>
     </div>
 
     <script>
@@ -699,18 +750,7 @@
         calculateTotal();
       }
 
-      async function submitLabourVoucher() {
-        const btn = document.querySelector('.btn[onclick="submitLabourVoucher()"]');
-        if (btn?.disabled) return;
-
-        const companyAlias = document.getElementById("companySelect").value;
-        const date = document.getElementById("date").value;
-        const issueNumber = document.getElementById("issueNumber").value;
-        const labourItemType = document.getElementById("labourItemType").value;
-        if (!companyAlias || !date || !issueNumber || !labourItemType) {
-          alert("Please fill all required fields");
-          return;
-        }
+      function collectLabourItems() {
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, index) => {
           const quantity = parseFloat(row.querySelector(".quantity").value);
@@ -723,6 +763,25 @@
               amount: parseFloat(row.querySelector(".amount").value) || 0,
             });
         });
+        return items;
+      }
+      async function submitLabourVoucher() {
+        const btn = document.querySelector('.btn[onclick="submitLabourVoucher()"]');
+        if (btn?.disabled) return;
+
+        const companyAlias = document.getElementById("companySelect").value;
+        const date = document.getElementById("date").value;
+        const issueNumber = document.getElementById("issueNumber").value;
+        const labourItemType = document.getElementById("labourItemType").value;
+        if (!companyAlias || !date || !issueNumber || !labourItemType) {
+          alert("Please fill all required fields");
+          return;
+        }
+        if (existingIssueNos.includes(issueNumber.trim().toLowerCase()) &&
+            !confirm(`Issue number "${issueNumber}" already exists. Save anyway?`)) {
+          return;
+        }
+        const items = collectLabourItems();
         if (items.length === 0) {
           alert("Please add at least one line item");
           return;
