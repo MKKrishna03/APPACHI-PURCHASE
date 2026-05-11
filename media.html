@@ -980,6 +980,7 @@
       let companies = [];
       let filtered = [];
       let selected = new Set();
+      let _deleteMap = {};
       let currentLightbox = null;
       let retakePollInterval = null;
       let retakeToken = null;
@@ -1433,8 +1434,10 @@
           return;
         }
 
+        _deleteMap = {};
         container.innerHTML = `<div class="gallery" id="galleryGrid">${items
           .map((p, idx) => {
+            _deleteMap[idx] = { publicId: p.id, photoUrl: p.photo_url, dbId: p._dbId, labourDbId: p._labourDbId, hallmarkDbId: p._hallmarkDbId };
             const isSel = selected.has(String(p.id));
             const t = detectType(p);
             const meta = TYPE_META[t] || TYPE_META.other;
@@ -1444,7 +1447,7 @@
             return `<div class="photo-card ${isSel ? "selected" : ""}" data-id="${p.id}" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragover="onCardDragOver(event)" ondrop="onCardDrop(event,'${p.id}')" ondragend="onCardDragEnd()" onclick="openLightbox('${p.id}')">
                         <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
                         <button class="copy-link-btn" onclick="event.stopPropagation();copyPhotoLink('${p.photo_url}')" title="Copy photo link">🔗</button>
-                        ${window._canDeletePhotos ? `<button class="photo-del-btn" onclick="event.stopPropagation();deletePhoto(${JSON.stringify(p.id)},${JSON.stringify(p.photo_url)},${JSON.stringify({dbId:p._dbId,labourDbId:p._labourDbId,hallmarkDbId:p._hallmarkDbId})})" title="Delete photo">🗑</button>` : ""}
+                        ${window._canDeletePhotos ? `<button class="photo-del-btn" onclick="event.stopPropagation();deletePhoto(${idx})" title="Delete photo">🗑</button>` : ""}
                         <div class="drag-handle" title="Drag to reorder">⠿</div>
                         ${thumb}
                         <div class="photo-info">
@@ -2007,12 +2010,15 @@
       }
 
       // ── DELETE SINGLE PHOTO ──
-      async function deletePhoto(publicId, photoUrl, ids) {
+      async function deletePhoto(idx) {
+        const info = _deleteMap[idx];
+        if (!info) return;
         if (!confirm("Permanently delete this photo from Cloudinary?\nThis cannot be undone.")) return;
+        const { publicId, photoUrl, dbId, labourDbId, hallmarkDbId } = info;
         let db_id = null, db_table = null;
-        if (ids.dbId) { db_id = ids.dbId; db_table = "purchases"; }
-        else if (ids.labourDbId) { db_id = ids.labourDbId; db_table = "labour"; }
-        else if (ids.hallmarkDbId) { db_id = ids.hallmarkDbId; db_table = "hallmark_expenses"; }
+        if (dbId) { db_id = dbId; db_table = "purchases"; }
+        else if (labourDbId) { db_id = labourDbId; db_table = "labour"; }
+        else if (hallmarkDbId) { db_id = hallmarkDbId; db_table = "hallmark_expenses"; }
         try {
           const res = await fetch("/api/cloudinary/photo", {
             method: "DELETE",
