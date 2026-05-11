@@ -748,14 +748,13 @@
         </div>
         <div class="field-3">
           <div class="field">
-            <label for="invNo">Invoice Number</label>
+            <label for="invNo">Invoice No.</label>
             <input
               type="number"
               id="invNo"
-              placeholder="e.g. 1"
-              step="1"
-              min="1"
-              oninput="refreshPreview()"
+              readonly
+              tabindex="-1"
+              style="background:var(--surface-2);cursor:default;color:var(--ink);font-family:'DM Mono',monospace;font-weight:600;"
             />
           </div>
           <div class="field">
@@ -799,23 +798,28 @@
       let allData = [];
       let filteredData = [];
 
-      // ── Generated tracking ──
-      function getGeneratedIds() {
-        try {
-          return new Set(
-            JSON.parse(localStorage.getItem("mc_generated_ids") || "[]"),
-          );
-        } catch {
-          return new Set();
-        }
-      }
-      function markGenerated(ids) {
-        const s = getGeneratedIds();
-        ids.forEach((id) => s.add(String(id)));
-        localStorage.setItem("mc_generated_ids", JSON.stringify([...s]));
-      }
+      // ── Generated tracking (DB-backed via mc_receipt_id in allData) ──
       function isGenerated(id) {
-        return getGeneratedIds().has(String(id));
+        const row = allData.find((r) => String(r.id) === String(id));
+        return !!(row?.mc_receipt_id);
+      }
+      function markGenerated(ids, receiptId, extras = {}) {
+        ids.forEach((id) => {
+          const row = allData.find((r) => String(r.id) === String(id));
+          if (row) Object.assign(row, { mc_receipt_id: receiptId }, extras);
+        });
+      }
+      async function unmarkGenerated(ids) {
+        const receiptId = allData.find((r) => String(r.id) === String(ids[0]))?.mc_receipt_id;
+        if (receiptId) {
+          try {
+            await fetch(`/api/labour/${receiptId}`, { method: "DELETE" });
+          } catch (e) {
+            console.warn("[MC] Delete receipt failed:", e.message);
+          }
+          allData.forEach((row) => { if (row.mc_receipt_id === receiptId) row.mc_receipt_id = null; });
+        }
+        ids.forEach((id) => removeMcBillData(id));
       }
 
       async function loadData() {
@@ -848,7 +852,6 @@
         const to = document.getElementById("toDate").value;
         const company = document.getElementById("companyFilter").value;
         const genF = document.getElementById("generatedFilter").value;
-        const genIds = getGeneratedIds();
 
         filteredData = allData.filter((r) => {
           if (
@@ -860,9 +863,8 @@
           if (from && r.date && r.date.slice(0, 10) < from) return false;
           if (to && r.date && r.date.slice(0, 10) > to) return false;
           if (company && r.company_name !== company) return false;
-          if (genF === "generated" && !genIds.has(String(r.id))) return false;
-          if (genF === "not_generated" && genIds.has(String(r.id)))
-            return false;
+          if (genF === "generated" && !isGenerated(r.id)) return false;
+          if (genF === "not_generated" && isGenerated(r.id)) return false;
           return true;
         });
         renderTable();
@@ -956,20 +958,26 @@
         document.getElementById("invDate").value = new Date()
           .toISOString()
           .slice(0, 10);
-        document.getElementById("invGoldRate").value =
-          localStorage.getItem("mc_last_gold_rate") || "";
-        document.getElementById("invPct").value =
-          localStorage.getItem("mc_last_pct") || "3.5";
-        // Per-company invoice number
+        // Per-company invoice number derived from DB (allData)
         const _firstChecked = [...document.querySelectorAll(".row-chk:checked")][0];
         const _invCompany = _firstChecked?.dataset.company || "";
         let _suggestNo;
         if (_editingId) {
-          // Edit: restore the same number used when originally generated
-          const _stored = getMcBillData(_editingId);
-          _suggestNo = _stored?.invNo ?? (Number.parseInt(localStorage.getItem(mcInvKey(_invCompany)) || "0", 10) + 1);
+          // Edit: restore exact number, gold rate, pct from DB via allData
+          const _editRow = allData.find((r) => String(r.id) === String(_editingId));
+          _suggestNo = Number.parseInt((_editRow?.mc_receipt_bill_no || "").replace("MC/", "") || "0", 10) || 1;
+          document.getElementById("invGoldRate").value = _editRow?.mc_gold_rate || localStorage.getItem("mc_last_gold_rate") || "";
+          document.getElementById("invPct").value = _editRow?.mc_pct || localStorage.getItem("mc_last_pct") || "3.5";
         } else {
-          _suggestNo = Number.parseInt(localStorage.getItem(mcInvKey(_invCompany)) || "0", 10) + 1;
+          // New: next number = max existing MC number for this company + 1
+          const _maxNo = Math.max(0, ...allData
+            .filter((r) => r.company_name === _invCompany && r.mc_receipt_bill_no)
+            .map((r) => Number.parseInt((r.mc_receipt_bill_no || "").replace("MC/", "") || "0", 10))
+          );
+          _suggestNo = _maxNo + 1;
+          const _defaultPct = /namachivayam/i.test(_invCompany) ? "3" : "3.5";
+          document.getElementById("invGoldRate").value = localStorage.getItem("mc_last_gold_rate") || "";
+          document.getElementById("invPct").value = localStorage.getItem(`mc_last_pct_${_invCompany}`) || _defaultPct;
         }
         document.getElementById("invNo").value = _suggestNo;
         document.getElementById("invFineWeight").value = "";
@@ -1088,8 +1096,7 @@
         const invNo = String(invNoInput || 1).padStart(2, "0");
         const _company = checked[0]?.dataset.company || "";
         localStorage.setItem("mc_last_gold_rate", String(goldRate));
-        localStorage.setItem("mc_last_pct", String(pct));
-        localStorage.setItem(mcInvKey(_company), String(invNoInput || 1));
+        localStorage.setItem(`mc_last_pct_${_company}`, String(pct));
 
         const ratePerGram = (pct / 100) * (goldRate / 10);
         const vouchers = checked.map((cb) => ({
@@ -1103,144 +1110,11 @@
         const rounded = Math.round(subtotal);
         const roundOff = parseFloat((rounded - subtotal).toFixed(2));
 
-        const fmtDate = (iso) => {
-          const [y, m, d] = iso.split("-");
-          return `${d}/${m}/${y}`;
-        };
-        const fmtAmt = (n) =>
-          n.toLocaleString("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
-        const footNote = `${pct}% RATE for ${Number(goldRate).toLocaleString("en-IN")} on ${fmtDate(invDate)} is ${ratePerGram.toFixed(2)}`;
-
-        const senderMetaHtml = [
-          senderCity,
-          senderPan ? `PAN - ${senderPan}` : "",
-        ]
-          .filter(Boolean)
-          .join("<br>");
-
-        // One line per voucher: issue number | weight
-        const voucherRows = "";
-
-        const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Invoice #${invNo} — ${senderName}</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a2e;background:#fff;font-size:13px;}
-    .page{max-width:680px;margin:0 auto;padding:0 40px 44px;}
-    .accent{height:4px;background:linear-gradient(90deg,#2b4da5,#1d8fd4);margin-bottom:28px;}
-    .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
-    .sender-name{font-size:20px;font-weight:900;color:#2b4da5;letter-spacing:-0.3px;}
-    .sender-meta{font-size:11px;color:#666;line-height:1.75;margin-top:5px;}
-    .inv-ref{text-align:right;}
-    .inv-ref-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;margin-bottom:2px;}
-    .inv-ref-no{font-size:18px;font-weight:900;color:#2b4da5;}
-    .inv-ref-date{font-size:11px;color:#666;margin-top:4px;}
-    hr.thin{border:none;border-top:1px solid #e4e4ed;margin:14px 0;}
-    .type-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.14em;color:#bbb;margin-bottom:12px;}
-    .billto-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#bbb;margin-bottom:5px;}
-    .billto-name{font-size:14px;font-weight:800;color:#1a1a2e;}
-    .billto-gstin{font-size:10.5px;color:#777;margin-top:2px;font-family:'Courier New',monospace;}
-    .billto-addr{font-size:11px;color:#666;margin-top:3px;line-height:1.6;}
-    table{width:100%;border-collapse:collapse;margin:18px 0 4px;}
-    thead th{border-top:2px solid #1a1a2e;border-bottom:1px solid #d0d0da;padding:7px 10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#555;text-align:left;}
-    th.r{text-align:right;}td.r{text-align:right;}
-    .mc-row td{background:#f5f5fb;font-weight:700;color:#1a1a2e;border-top:1px solid #d0d0da;border-bottom:1.5px solid #c0c0d0;}
-    .foot{font-size:10px;color:#999;font-style:italic;margin:7px 0 0;}
-    .totals-wrap{display:flex;justify-content:flex-end;margin-top:14px;}
-    .totals{width:210px;}
-    .tot-row{display:flex;justify-content:space-between;font-size:11.5px;color:#777;padding:3px 0;}
-    .tot-row span:last-child{font-family:'Courier New',monospace;}
-    .tot-final{display:flex;justify-content:space-between;align-items:baseline;border-top:1.5px solid #ddd;margin-top:6px;padding-top:9px;}
-    .tot-label{font-size:12px;font-weight:700;color:#555;}
-    .tot-value{font-size:24px;font-weight:900;color:#c0186a;line-height:1;}
-    .print-btn{margin-top:36px;display:inline-flex;align-items:center;gap:7px;padding:9px 22px;background:#1a3a5c;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
-    .print-btn:hover{background:#215f9a;}
-    @media print{
-      .page{padding:0 24px 28px;max-width:none;}
-      .no-print{display:none!important;}
-      .accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      .mc-row td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      @page{margin:8mm;size:A4;}
-    }
-  </style>
-</head>
-<body>
-  <div class="accent"></div>
-  <div class="page">
-
-    <div class="inv-header">
-      <div>
-        <div class="sender-name">${senderName}</div>
-        <div class="sender-meta">${senderMetaHtml}</div>
-      </div>
-      <div class="inv-ref">
-        <div class="inv-ref-eye">Invoice</div>
-        <div class="inv-ref-no">#${invNo}</div>
-        <div class="inv-ref-date">${fmtDate(invDate)}</div>
-      </div>
-    </div>
-
-    <hr class="thin"/>
-    <div class="type-eye">Job Work Invoice</div>
-
-    <div style="margin-bottom:20px;">
-      <div class="billto-eye">Invoice For</div>
-      <div class="billto-name">APPACHI JEWELLERY</div>
-      <div class="billto-gstin">PAN: 33ACSPN6014B1ZV</div>
-      <div class="billto-addr">Melur – 625106</div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th style="width:46%">Description</th>
-          <th class="r">Qty</th>
-          <th class="r">Unit Price/gm</th>
-          <th class="r">Total Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${voucherRows}
-        <tr class="mc-row">
-          <td style="padding:8px 10px;font-size:12px;">JOB WORK GOLD ORNAMENTS</td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;font-family:'Courier New',monospace;">${fineWeight.toFixed(2)}</td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
-        </tr>
-        <tr class="mc-row">
-          <td style="padding:8px 10px;font-size:12px;">MAKING CHARGES</td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;font-family:'Courier New',monospace;"></td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtAmt(ratePerGram)}</td>
-          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtAmt(subtotal)}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="foot">${footNote}</div>
-
-    <div class="totals-wrap">
-      <div class="totals">
-        <div class="tot-row"><span>Subtotal</span><span>₹${fmtAmt(subtotal)}</span></div>
-        <div class="tot-row"><span>Round off</span><span>₹${fmtAmt(roundOff)}</span></div>
-        <div class="tot-final">
-          <span class="tot-label">Total</span>
-          <span class="tot-value">₹${rounded.toLocaleString("en-IN")}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="no-print">
-      <button class="print-btn" onclick="window.print()">Print Invoice</button>
-    </div>
-  </div>
-</body>
-</html>`;
+        const html = buildBillHtml({
+          senderName, senderCity, senderPan,
+          invNo, invDate, fineWeight, ratePerGram,
+          subtotal, roundOff, rounded, goldRate, pct,
+        });
 
         // ── Save bill photo + create/update receipt voucher ──
         const genBtn = document.querySelector(
@@ -1262,8 +1136,11 @@
           subtotal,
           roundOff,
           rounded,
+          goldRate,
+          pct,
           photoUrl: null,
         };
+        let _finalReceiptId = null;
 
         try {
           // 1. Capture & upload bill photo
@@ -1287,7 +1164,10 @@
                   receiptId: stored.receiptId,
                   photoUrl: billParams.photoUrl || stored.photoUrl,
                   invNo: billParams.invNo,
+                  goldRate: billParams.goldRate,
+                  pct: billParams.pct,
                 });
+                _finalReceiptId = stored.receiptId;
               } catch (e) {
                 console.warn("[MC] Receipt update failed:", e.message);
               }
@@ -1296,11 +1176,14 @@
             // 2b. New: create receipt voucher, store IDs for all selected vouchers
             try {
               const receiptId = await saveReceiptVoucher(voucherIds, billParams);
+              _finalReceiptId = receiptId;
               voucherIds.forEach((id) =>
                 setMcBillData(id, {
                   receiptId,
                   photoUrl: billParams.photoUrl,
                   invNo: billParams.invNo,
+                  goldRate: billParams.goldRate,
+                  pct: billParams.pct,
                 }),
               );
             } catch (e) {
@@ -1314,8 +1197,12 @@
           }
         }
 
-        // Mark as generated, close modal, refresh table, open print
-        markGenerated(voucherIds);
+        // Mark as generated (DB-backed via allData), close modal, refresh table, open print
+        if (_finalReceiptId) markGenerated(voucherIds, _finalReceiptId, {
+          mc_receipt_bill_no: `MC/${String(invNoInput || 1).padStart(2, "0")}`,
+          mc_gold_rate: goldRate,
+          mc_pct: pct,
+        });
         closeInvoiceModal();
         renderTable();
 
@@ -1330,37 +1217,32 @@
       let _viewIsGenerated = false;
 
       async function openViewDialog(id) {
+        // Generated row → open the actual MC bill in a new window
+        if (isGenerated(id)) {
+          await openMcBillWindow(id);
+          return;
+        }
+        // Not-generated row → show issue voucher details popup
         _viewId = id;
+        _viewIsGenerated = false;
         const row = allData.find((r) => r.id === id);
         if (!row) return;
-        _viewIsGenerated = isGenerated(id);
-
-        document.getElementById("vdTitle").textContent = _viewIsGenerated
-          ? "MC Bill"
-          : "Issue Voucher";
+        document.getElementById("vdTitle").textContent = "Issue Voucher";
         document.getElementById("vdSubtitle").textContent =
           `${row.company_name || ""} · ${row.issue_number || ""}`;
-        document.getElementById("vdActionBtn").textContent = _viewIsGenerated
-          ? "Edit MC Bill →"
-          : "Edit Issue Voucher →";
-
+        document.getElementById("vdActionBtn").textContent = "Edit Issue Voucher →";
         const vdBody = document.getElementById("vdBody");
         vdBody.innerHTML =
           '<div style="text-align:center;padding:28px;color:var(--ink-3);">Loading…</div>';
         document.getElementById("viewDialog").showModal();
-
-        if (_viewIsGenerated) {
-          renderViewBody(row);
-        } else {
-          try {
-            const res = await fetch(`/api/labour/${id}`);
-            if (!res.ok) throw new Error();
-            const d = await res.json();
-            renderIssueVoucherView(d);
-          } catch {
-            vdBody.innerHTML =
-              '<div style="color:#c0186a;padding:16px;">Failed to load details.</div>';
-          }
+        try {
+          const res = await fetch(`/api/labour/${id}`);
+          if (!res.ok) throw new Error();
+          const d = await res.json();
+          renderIssueVoucherView(d);
+        } catch {
+          vdBody.innerHTML =
+            '<div style="color:#c0186a;padding:16px;">Failed to load details.</div>';
         }
       }
 
@@ -1552,20 +1434,6 @@
         openInvoiceModal();
       }
 
-      function unmarkGenerated(ids) {
-        const s = getGeneratedIds();
-        ids.forEach((id) => {
-          s.delete(String(id));
-          removeMcBillData(id);
-        });
-        localStorage.setItem("mc_generated_ids", JSON.stringify([...s]));
-      }
-
-      // Per-company invoice number key
-      function mcInvKey(company) {
-        return `mc_inv_no_${(company || "default").replace(/\s+/g, "_").toLowerCase()}`;
-      }
-
       // ── MC Bill data helpers (receipt voucher id + photo url per issue id) ──
       function getMcBillData(id) {
         try {
@@ -1647,8 +1515,163 @@
         return d.photo_url;
       }
 
-      async function saveReceiptVoucher(labourIds, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl }) {
+      function buildBillHtml({ senderName, senderCity, senderPan, invNo, invDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct }) {
+        const fmtD = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+        const fmtA = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const footNote = pct && goldRate
+          ? `${pct}% RATE for ${Number(goldRate).toLocaleString("en-IN")} on ${fmtD(invDate)} is ${Number(ratePerGram).toFixed(2)}`
+          : `Rate: ₹${Number(ratePerGram).toFixed(2)}/g`;
+        const senderMeta = [senderCity, senderPan ? `PAN - ${senderPan}` : ""].filter(Boolean).join("<br>");
+        const invNoStr = String(invNo).padStart(2, "0");
+        return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Invoice #${invNoStr} — ${senderName}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a2e;background:#fff;font-size:13px;}
+    .page{max-width:680px;margin:0 auto;padding:0 40px 44px;}
+    .accent{height:4px;background:linear-gradient(90deg,#2b4da5,#1d8fd4);margin-bottom:28px;}
+    .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+    .sender-name{font-size:20px;font-weight:900;color:#2b4da5;letter-spacing:-0.3px;}
+    .sender-meta{font-size:11px;color:#666;line-height:1.75;margin-top:5px;}
+    .inv-ref{text-align:right;}
+    .inv-ref-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;margin-bottom:2px;}
+    .inv-ref-no{font-size:18px;font-weight:900;color:#2b4da5;}
+    .inv-ref-date{font-size:11px;color:#666;margin-top:4px;}
+    hr.thin{border:none;border-top:1px solid #e4e4ed;margin:14px 0;}
+    .type-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.14em;color:#bbb;margin-bottom:12px;}
+    .billto-eye{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#bbb;margin-bottom:5px;}
+    .billto-name{font-size:14px;font-weight:800;color:#1a1a2e;}
+    .billto-gstin{font-size:10.5px;color:#777;margin-top:2px;font-family:'Courier New',monospace;}
+    .billto-addr{font-size:11px;color:#666;margin-top:3px;line-height:1.6;}
+    table{width:100%;border-collapse:collapse;margin:18px 0 4px;}
+    thead th{border-top:2px solid #1a1a2e;border-bottom:1px solid #d0d0da;padding:7px 10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#555;text-align:left;}
+    th.r{text-align:right;}td.r{text-align:right;}
+    .mc-row td{background:#f5f5fb;font-weight:700;color:#1a1a2e;border-top:1px solid #d0d0da;border-bottom:1.5px solid #c0c0d0;}
+    .foot{font-size:10px;color:#999;font-style:italic;margin:7px 0 0;}
+    .totals-wrap{display:flex;justify-content:flex-end;margin-top:14px;}
+    .totals{width:210px;}
+    .tot-row{display:flex;justify-content:space-between;font-size:11.5px;color:#777;padding:3px 0;}
+    .tot-row span:last-child{font-family:'Courier New',monospace;}
+    .tot-final{display:flex;justify-content:space-between;align-items:baseline;border-top:1.5px solid #ddd;margin-top:6px;padding-top:9px;}
+    .tot-label{font-size:12px;font-weight:700;color:#555;}
+    .tot-value{font-size:24px;font-weight:900;color:#c0186a;line-height:1;}
+    .print-btn{margin-top:36px;display:inline-flex;align-items:center;gap:7px;padding:9px 22px;background:#1a3a5c;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .print-btn:hover{background:#215f9a;}
+    @media print{
+      .page{padding:0 24px 28px;max-width:none;}
+      .no-print{display:none!important;}
+      .accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .mc-row td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      @page{margin:8mm;size:A4;}
+    }
+  </style>
+</head>
+<body>
+  <div class="accent"></div>
+  <div class="page">
+    <div class="inv-header">
+      <div>
+        <div class="sender-name">${senderName}</div>
+        <div class="sender-meta">${senderMeta}</div>
+      </div>
+      <div class="inv-ref">
+        <div class="inv-ref-eye">Invoice</div>
+        <div class="inv-ref-no">#${invNoStr}</div>
+        <div class="inv-ref-date">${fmtD(invDate)}</div>
+      </div>
+    </div>
+    <hr class="thin"/>
+    <div class="type-eye">Job Work Invoice</div>
+    <div style="margin-bottom:20px;">
+      <div class="billto-eye">Invoice For</div>
+      <div class="billto-name">APPACHI JEWELLERY</div>
+      <div class="billto-gstin">PAN: 33ACSPN6014B1ZV</div>
+      <div class="billto-addr">Melur – 625106</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:46%">Description</th>
+          <th class="r">Qty</th>
+          <th class="r">Unit Price/gm</th>
+          <th class="r">Total Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="mc-row">
+          <td style="padding:8px 10px;font-size:12px;">JOB WORK GOLD ORNAMENTS</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;font-family:'Courier New',monospace;">${Number(fineWeight).toFixed(2)}</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
+        </tr>
+        <tr class="mc-row">
+          <td style="padding:8px 10px;font-size:12px;">MAKING CHARGES</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;"></td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtA(ratePerGram)}</td>
+          <td style="padding:8px 10px;font-size:12px;text-align:right;">₹${fmtA(subtotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="foot">${footNote}</div>
+    <div class="totals-wrap">
+      <div class="totals">
+        <div class="tot-row"><span>Subtotal</span><span>₹${fmtA(subtotal)}</span></div>
+        <div class="tot-row"><span>Round off</span><span>₹${fmtA(roundOff)}</span></div>
+        <div class="tot-final">
+          <span class="tot-label">Total</span>
+          <span class="tot-value">₹${Math.round(rounded).toLocaleString("en-IN")}</span>
+        </div>
+      </div>
+    </div>
+    <div class="no-print">
+      <button class="print-btn" onclick="window.print()">Print Invoice</button>
+    </div>
+  </div>
+</body>
+</html>`;
+      }
+
+      async function openMcBillWindow(id) {
+        const row = allData.find((r) => r.id === id);
+        const billData = getMcBillData(id);
+        const receiptId = row?.mc_receipt_id || billData?.receiptId;
+        if (!receiptId) {
+          alert("No saved MC bill found for this voucher.");
+          return;
+        }
+        try {
+          const res = await fetch(`/api/labour/${receiptId}`);
+          if (!res.ok) throw new Error();
+          const d = await res.json();
+          const l = d.labour;
+          const items = d.items || [];
+          const invDate = (l.date || new Date().toISOString()).slice(0, 10);
+          const invNo = (l.receipt_bill_no || "").replace("MC/", "") || "01";
+          const fineWeight = Number.parseFloat(items[0]?.quantity || 0);
+          const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
+          const subtotal = Number.parseFloat(l.taxable_total ?? items[0]?.amount ?? 0);
+          const rounded = Number.parseFloat(l.total || 0);
+          const roundOff = Number.parseFloat(l.round_off || 0);
+          const goldRate = Number(l.gold_rate) || billData?.goldRate || 0;
+          const pct = Number(l.mc_pct) || billData?.pct || 0;
+          const senderName = row?.company_name || l.company_name || "—";
+          const senderCity = [row?.city, row?.pincode].filter(Boolean).join(" - ");
+          const senderPan = row?.pan_number || "";
+          const html = buildBillHtml({ senderName, senderCity, senderPan, invNo, invDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct });
+          const w = window.open("", "_blank");
+          w.document.write(html);
+          w.document.close();
+        } catch {
+          alert("Failed to load MC bill data.");
+        }
+      }
+
+      async function saveReceiptVoucher(labourIds, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
         const payload = {
+          is_mc: true,
           labour_ids: labourIds.map(Number),
           closing_date: invDate,
           bill_no: `MC/${String(invNo).padStart(2, "0")}`,
@@ -1658,6 +1681,8 @@
           tds: 0,
           bill_value_after_deduction: rounded,
           photo_url: photoUrl || null,
+          gold_rate: goldRate || null,
+          mc_pct: pct || null,
           items: [
             {
               sl_no: 1,
@@ -1678,7 +1703,7 @@
         return (await res.json()).id;
       }
 
-      async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl }) {
+      async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
         const payload = {
           date: invDate,
           receipt_bill_no: `MC/${String(invNo).padStart(2, "0")}`,
@@ -1688,6 +1713,8 @@
           tds: 0,
           bill_value_after_deduction: rounded,
           photo_url: photoUrl || null,
+          gold_rate: goldRate || null,
+          mc_pct: pct || null,
           items: [
             {
               sl_no: 1,
@@ -1707,7 +1734,7 @@
         if (!res.ok) throw new Error("Failed to update receipt voucher");
       }
 
-      function confirmDeleteMcBill(id, e) {
+      async function confirmDeleteMcBill(id, e) {
         e.stopPropagation();
         if (
           !confirm(
@@ -1715,7 +1742,7 @@
           )
         )
           return;
-        unmarkGenerated([id]);
+        await unmarkGenerated([id]);
         renderTable();
       }
 

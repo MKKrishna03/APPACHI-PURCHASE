@@ -427,6 +427,9 @@ async function initDB() {
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_receipt_id INTEGER REFERENCES labour(id)`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS gold_rate NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_pct NUMERIC`);
 
   // ── Soft delete columns ──
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
