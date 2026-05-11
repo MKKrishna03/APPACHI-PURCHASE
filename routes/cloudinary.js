@@ -280,6 +280,29 @@ router.delete("/cloudinary/delete-unlinked", async (req, res) => {
   }
 });
 
+router.delete("/cloudinary/photo", async (req, res) => {
+  const { photo_url, public_id, db_id, db_table } = req.body;
+  if (!photo_url && !public_id) return res.status(400).json({ error: "photo_url or public_id required" });
+  const VALID_TABLES = new Set(["purchases", "labour", "hallmark_expenses", "chittai"]);
+  try {
+    if (photo_url) {
+      await deleteCloudinaryPhoto(photo_url);
+    } else {
+      const isPdf = /\.pdf$/i.test(public_id);
+      await cloudinaryPkg.uploader.destroy(public_id, { resource_type: isPdf ? "raw" : "image", invalidate: true });
+    }
+    if (db_id && db_table && VALID_TABLES.has(db_table)) {
+      const url = photo_url;
+      await pool.query(`UPDATE ${db_table} SET photo_url = NULL WHERE id = $1 AND photo_url = $2`, [db_id, url]);
+      await pool.query(`UPDATE ${db_table} SET photo_urls = array_remove(photo_urls, $1::text) WHERE id = $2 AND photo_urls IS NOT NULL`, [url, db_id]);
+    }
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    logger.error("cloudinary-photo-delete", { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch("/cloudinary/move-photo", async (req, res) => {
   const { public_id, target_folder } = req.body;
   if (!public_id || !target_folder) return res.status(400).json({ error: "public_id and target_folder required" });

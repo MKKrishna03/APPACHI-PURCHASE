@@ -288,6 +288,28 @@
         border-color: var(--accent);
         color: #fff;
       }
+      .photo-del-btn {
+        position: absolute;
+        top: 8px;
+        right: 36px;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        background: rgba(255,255,255,0.95);
+        border: 1.5px solid rgba(181,48,30,0.35);
+        color: var(--danger);
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.15s;
+        padding: 0;
+        line-height: 1;
+      }
+      .photo-card:hover .photo-del-btn { opacity: 1; }
 
       .empty-state {
         text-align: center;
@@ -703,6 +725,7 @@
             class="btn btn-danger"
             onclick="deleteUnlinked()"
             id="deleteUnlinkedBtn"
+            style="display:none"
           >
             🗑 Delete Unlinked from Cloudinary
           </button>
@@ -936,6 +959,21 @@
         } else {
           document.body.style.visibility = "visible";
         }
+      })();
+
+      // ── Permission: only admin & user 16 can delete photos ──
+      (function applyDeletePermission() {
+        try {
+          const u = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");
+          const me = u ? JSON.parse(u) : null;
+          const uid = String(me?.user_id || me?.id || "");
+          const allowed = (uid === "admin" || uid === "16");
+          if (allowed) {
+            const btn = document.getElementById("deleteUnlinkedBtn");
+            if (btn) btn.style.display = "";
+          }
+          window._canDeletePhotos = allowed;
+        } catch { window._canDeletePhotos = false; }
       })();
 
       let allPurchases = [];
@@ -1406,6 +1444,7 @@
             return `<div class="photo-card ${isSel ? "selected" : ""}" data-id="${p.id}" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragover="onCardDragOver(event)" ondrop="onCardDrop(event,'${p.id}')" ondragend="onCardDragEnd()" onclick="openLightbox('${p.id}')">
                         <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
                         <button class="copy-link-btn" onclick="event.stopPropagation();copyPhotoLink('${p.photo_url}')" title="Copy photo link">🔗</button>
+                        ${window._canDeletePhotos ? `<button class="photo-del-btn" onclick="event.stopPropagation();deletePhoto(${JSON.stringify(p.id)},${JSON.stringify(p.photo_url)},${JSON.stringify({dbId:p._dbId,labourDbId:p._labourDbId,hallmarkDbId:p._hallmarkDbId})})" title="Delete photo">🗑</button>` : ""}
                         <div class="drag-handle" title="Drag to reorder">⠿</div>
                         ${thumb}
                         <div class="photo-info">
@@ -1965,6 +2004,32 @@
         retakePurchaseId = null;
         _finishRetakeProgress();
         document.getElementById("qrModal").classList.remove("show");
+      }
+
+      // ── DELETE SINGLE PHOTO ──
+      async function deletePhoto(publicId, photoUrl, ids) {
+        if (!confirm("Permanently delete this photo from Cloudinary?\nThis cannot be undone.")) return;
+        let db_id = null, db_table = null;
+        if (ids.dbId) { db_id = ids.dbId; db_table = "purchases"; }
+        else if (ids.labourDbId) { db_id = ids.labourDbId; db_table = "labour"; }
+        else if (ids.hallmarkDbId) { db_id = ids.hallmarkDbId; db_table = "hallmark_expenses"; }
+        try {
+          const res = await fetch("/api/cloudinary/photo", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ photo_url: photoUrl, public_id: publicId, db_id, db_table }),
+          });
+          const data = await res.json();
+          if (data.status === "SUCCESS") {
+            showToast("Photo deleted from Cloudinary");
+            allPurchases = allPurchases.filter((p) => p.id !== publicId);
+            applyFilters();
+          } else {
+            showToast(data.error || "Delete failed", "error");
+          }
+        } catch (e) {
+          showToast("Delete failed: " + e.message, "error");
+        }
       }
 
       // ── DELETE UNLINKED ──
