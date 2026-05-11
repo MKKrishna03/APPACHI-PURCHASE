@@ -18,12 +18,22 @@ router.get("/labour/list", async (req, res) => {
     }
     const result = await pool.query(
       `SELECT l.id, l.profile_id, l.company_name, l.date, l.issue_number, l.receipt_bill_no,
-              l.voucher_type, l.bill_value_after_deduction, l.total, l.remaining_value,
+              l.voucher_type, l.bill_value_after_deduction, l.total, l.payment_voucher_id,
+              COALESCE(
+                l.remaining_value,
+                CASE WHEN l.payment_voucher_id IS NOT NULL
+                  THEN GREATEST(0::numeric,
+                    COALESCE(l.bill_value_after_deduction, l.total, 0)::numeric
+                    - COALESCE(pv.total_value, 0)::numeric)
+                  ELSE NULL
+                END
+              ) AS remaining_value,
               COALESCE(SUM(li.amount::numeric), 0) AS total_value
        FROM labour l
        LEFT JOIN labour_items li ON li.labour_id = l.id
+       LEFT JOIN vouchers pv ON pv.id = l.payment_voucher_id
        ${where}
-       GROUP BY l.id
+       GROUP BY l.id, pv.total_value
        ORDER BY l.created_at DESC`,
       params,
     );
@@ -202,6 +212,7 @@ router.put("/labour/:id", async (req, res) => {
   const {
     profile_id, company_name, date, issue_number, labour_item_type, items,
     receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction,
+    payment_voucher_id,
   } = req.body;
   const client = await pool.connect();
   try {
@@ -212,13 +223,31 @@ router.put("/labour/:id", async (req, res) => {
         [profile_id, company_name, date, issue_number, labour_item_type, req.params.id],
       );
     } else {
+      const newPvId = payment_voucher_id || null;
+      const cur = await client.query(`SELECT payment_voucher_id FROM labour WHERE id = $1`, [req.params.id]);
+      const oldPvId = cur.rows[0]?.payment_voucher_id || null;
+      if (oldPvId && String(oldPvId) !== String(newPvId)) {
+        await client.query(`UPDATE vouchers SET linked_labour_id = NULL WHERE id = $1`, [oldPvId]);
+      }
+      if (newPvId && String(newPvId) !== String(oldPvId)) {
+        await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [req.params.id, newPvId]);
+      }
+      let newRemaining = null;
+      if (newPvId) {
+        const pvRes = await client.query(`SELECT total_value FROM vouchers WHERE id = $1`, [newPvId]);
+        const pvAmt = parseFloat(pvRes.rows[0]?.total_value || 0);
+        const billAmt = parseFloat(bill_value_after_deduction ?? total ?? 0);
+        newRemaining = Math.max(0, billAmt - pvAmt);
+      } else {
+        newRemaining = parseFloat(bill_value_after_deduction ?? total ?? 0) || null;
+      }
       await client.query(
-        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls) WHERE id=$13`,
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls), payment_voucher_id=$13, remaining_value=$14 WHERE id=$15`,
         [
           date, receipt_bill_no, taxable_total || null, cgst || null, sgst || null,
           igst || null, round_off || null, total || null, tds || null,
           bill_value_after_deduction || null, req.body.photo_url || null,
-          req.body.photo_urls?.length ? req.body.photo_urls : null, req.params.id,
+          req.body.photo_urls?.length ? req.body.photo_urls : null, newPvId, newRemaining, req.params.id,
         ],
       );
     }
@@ -226,8 +255,8 @@ router.put("/labour/:id", async (req, res) => {
       await client.query(`DELETE FROM labour_items WHERE labour_id=$1`, [req.params.id]);
       for (const item of items) {
         await client.query(
-          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [req.params.id, item.sl_no, item.description, item.quantity, item.rate, item.amount],
+          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [req.params.id, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent ?? null, item.amount],
         );
       }
     }
@@ -270,26 +299,31 @@ router.post("/close-issue-voucher", async (req, res) => {
       );
       await client.query("BEGIN");
       const result = await client.query(
-        `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+        `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls, payment_voucher_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
         [
           labour.profile_id, labour.company_name, closing_date, issueNumbers.join(","),
-          "Receipt Voucher", req.body.bill_no || null, taxable_total || null, cgst || null,
-          sgst || null, igst || null, round_off || null, total || null, tds || null,
-          bill_value_after_deduction || null, req.body.created_by || null,
+          "Receipt Voucher", req.body.bill_no || null, taxable_total ?? null, cgst ?? null,
+          sgst ?? null, igst ?? null, round_off ?? null, total ?? null, tds ?? null,
+          bill_value_after_deduction ?? null, req.body.created_by || null,
           req.body.photo_url || null, req.body.photo_urls?.length ? req.body.photo_urls : null,
+          payment_voucher_id || null,
         ],
       );
       const close_labour_id = result.rows[0].id;
       if (items?.length) {
         for (const item of items) {
           await client.query(
-            `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
-            [close_labour_id, item.sl_no, item.description, item.quantity, item.rate, item.amount],
+            `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [close_labour_id, item.sl_no, item.description, item.quantity, item.rate, item.tax_percent ?? null, item.amount],
           );
         }
       }
       if (payment_voucher_id) {
+        const pvRes = await client.query(`SELECT total_value FROM vouchers WHERE id = $1`, [payment_voucher_id]);
+        const pvAmt = parseFloat(pvRes.rows[0]?.total_value || 0);
+        const billAmt = parseFloat(bill_value_after_deduction ?? total ?? 0);
+        await client.query(`UPDATE labour SET remaining_value = $1 WHERE id = $2`, [Math.max(0, billAmt - pvAmt), close_labour_id]);
         await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
       }
       await client.query("COMMIT");
@@ -309,30 +343,35 @@ router.post("/close-issue-voucher", async (req, res) => {
     const labour = labourResult.rows[0];
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      `INSERT INTO labour (profile_id, company_name, date, issue_number, voucher_type, receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction, created_by, photo_url, photo_urls, payment_voucher_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [
         labour.profile_id, labour.company_name, closing_date, labour.issue_number,
-        "Receipt Voucher", req.body.bill_no || null, taxable_total || null, cgst || null,
-        sgst || null, igst || null, round_off || null, total || null, tds || null,
-        bill_value_after_deduction || null, req.body.created_by || null,
+        "Receipt Voucher", req.body.bill_no || null, taxable_total ?? null, cgst ?? null,
+        sgst ?? null, igst ?? null, round_off ?? null, total ?? null, tds ?? null,
+        bill_value_after_deduction ?? null, req.body.created_by || null,
         req.body.photo_url || null, req.body.photo_urls?.length ? req.body.photo_urls : null,
+        payment_voucher_id || null,
       ],
     );
     const close_labour_id = result.rows[0].id;
     if (items?.length) {
       for (const item of items) {
         await client.query(
-          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, amount) VALUES ($1,$2,$3,$4,$5,$6)`,
+          `INSERT INTO labour_items (labour_id, sl_no, description, quantity, rate, tax_percent, amount) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [
             close_labour_id, item.sl_no, item.description,
             partial_qty && closing_type === "partial" ? partial_qty : item.quantity,
-            item.rate, item.amount,
+            item.rate, item.tax_percent ?? null, item.amount,
           ],
         );
       }
     }
     if (payment_voucher_id) {
+      const pvRes = await client.query(`SELECT total_value FROM vouchers WHERE id = $1`, [payment_voucher_id]);
+      const pvAmt = parseFloat(pvRes.rows[0]?.total_value || 0);
+      const billAmt = parseFloat(bill_value_after_deduction ?? total ?? 0);
+      await client.query(`UPDATE labour SET remaining_value = $1 WHERE id = $2`, [Math.max(0, billAmt - pvAmt), close_labour_id]);
       await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
     }
     await client.query("COMMIT");

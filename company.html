@@ -1648,7 +1648,7 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
         else if (_popupType === 'receipt') window.location.href = `/labclose?edit=${_popupId}`;
         else if (_popupType === 'purchase') window.location.href = `/purchase?edit=${_popupId}`;
         else if (_popupType === 'txn') {
-          window.location.href = `/transaction?edit=${_popupId}`;
+          window.location.href = `/transaction?edit=${_popupId}&from=${encodeURIComponent(location.href)}`;
         }
         else if (_popupType === 'chittai') window.location.href = `/chittai?edit=${_popupId}`;
         else if (_popupType === 'hmex') window.location.href = `/hmex?edit=${_popupId}`;

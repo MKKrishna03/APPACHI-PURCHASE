@@ -676,10 +676,11 @@
           onclick="toggleSection('payments')"
           style="margin-top: 8px"
         >
-          <span>Recent Payments</span>
+          <span>Link Payment Voucher <span style="font-size:10px;font-weight:400;color:var(--ink-3);">(optional)</span></span>
           <span class="section-icon" id="arrow_payments">▾</span>
         </button>
         <div class="section-body" id="body_payments">
+          <div style="font-size:11px;color:var(--ink-3);padding:4px 0 6px;">Select an unlinked payment to attach to this receipt.</div>
           <div id="recentPaymentsList"><div class="no-data">Loading…</div></div>
         </div>
       </div>
@@ -1131,6 +1132,7 @@
       let uploadToken = null;
       let uploadedPhotoUrls = [];
       let uploadPollInterval = null;
+      let _editMode = false;
       let tdsRates = {}; // { letter: percentage } loaded from DB for section 194C
       let tdsDefaultRate = 20; // fallback when PAN missing/invalid (for 194C)
 
@@ -1192,25 +1194,29 @@
             `/api/vouchers/list?voucher_type=Payment Voucher&profile_id=${companyId}`,
           );
           const data = await res.json();
-          const payments = data
-            .filter((v) => v.entry_type === "new")
-            .slice(0, 5);
+          const payments = data.filter(
+            (v) => v.linked_labour_id == null || v.id === selectedPaymentVoucherId,
+          );
           if (!payments.length) {
-            list.innerHTML = '<div class="no-data">No payments yet</div>';
+            list.innerHTML = '<div class="no-data">No unlinked payments</div>';
             return;
           }
           list.innerHTML = payments
-            .map(
-              (p) => `
-                              <div class="receipt-card" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
-                                <div class="receipt-card-head">
-                                  <div>
-                                    <div class="receipt-title">${p.bill_no || "—"}</div>
-                                    <div class="receipt-sub">${new Date(p.date).toLocaleDateString()} · ₹${parseFloat(p.total_value || 0).toFixed(2)}</div>
-                                  </div>
-                                </div>
-                              </div>`,
-            )
+            .map((p) => {
+              const isSelected = p.id === selectedPaymentVoucherId;
+              return `<div class="receipt-card${isSelected ? ' selected' : ''}" id="pay_${p.id}" onclick="selectPayment(${p.id})" style="cursor:pointer;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div>
+                    <div class="receipt-title" style="font-weight:600;">${p.voucher_no || p.bill_no || '—'}</div>
+                    <div class="receipt-sub" style="font-size:11px;color:var(--ink-3);margin-top:2px;">${p.date ? new Date(p.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}) : '—'}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-weight:700;color:var(--accent);">₹${parseFloat(p.total_value || 0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                    ${isSelected ? '<div style="font-size:10px;color:#2d6a4f;font-weight:700;margin-top:2px;">✓ Linked</div>' : ''}
+                  </div>
+                </div>
+              </div>`;
+            })
             .join("");
         } catch {
           list.innerHTML = '<div class="no-data">Error loading</div>';
@@ -1218,15 +1224,14 @@
       }
 
       function selectPayment(id) {
-        const card = document.getElementById(`pay_${id}`);
         if (selectedPaymentVoucherId === id) {
-          card.classList.remove("selected");
+          document.getElementById(`pay_${id}`)?.classList.remove("selected");
           selectedPaymentVoucherId = null;
         } else {
-          document
-            .querySelectorAll(".receipt-card")
-            .forEach((c) => c.classList.remove("selected"));
-          card.classList.add("selected");
+          if (selectedPaymentVoucherId) {
+            document.getElementById(`pay_${selectedPaymentVoucherId}`)?.classList.remove("selected");
+          }
+          document.getElementById(`pay_${id}`)?.classList.add("selected");
           selectedPaymentVoucherId = id;
         }
       }
@@ -1288,7 +1293,7 @@
         } catch(e) { _tdsMandatory = false; }
       }
 
-      async function loadCompanyLabourBills() {
+      async function loadCompanyLabourBills(excludeReceiptId = null) {
         const companyId = document.getElementById("companySelect").value;
         if (!companyId) return;
         checkTdsMandatory(companyId);
@@ -1311,7 +1316,8 @@
           );
           const receiptBills = allBills.filter(
             (b) =>
-              b.profile_id == companyId && b.voucher_type === "Receipt Voucher",
+              b.profile_id == companyId && b.voucher_type === "Receipt Voucher" &&
+              (excludeReceiptId == null || String(b.id) !== String(excludeReceiptId)),
           );
           const qtyMap = {};
           await Promise.all([...issueBills, ...receiptBills].map(async (bill) => {
@@ -1418,10 +1424,12 @@
           })
           .join(", ");
         document.getElementById("companyName").textContent = companyName || "";
-        document.getElementById("closingDate").value = "";
-        document.getElementById("receiptBillNo").value = "";
-        uploadedPhotoUrls = [];
-        renderPhotoSlots();
+        if (!_editMode) {
+          document.getElementById("closingDate").value = "";
+          document.getElementById("receiptBillNo").value = "";
+          uploadedPhotoUrls = [];
+          renderPhotoSlots();
+        }
         const company = companies.find(
           (c) =>
             String(c.id) === document.getElementById("companySelect").value,
@@ -1435,8 +1443,10 @@
           document.getElementById("gstType").textContent =
             "CGST 2.5% + SGST 2.5%";
         }
-        rowCount = 0;
-        loadLabourItems(labourId);
+        if (!_editMode) {
+          rowCount = 0;
+          loadLabourItems(labourId);
+        }
       }
 
       async function loadLabourItems(labourId) {
@@ -1460,6 +1470,7 @@
             return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description || ""}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><select class="tax-percent" onchange="calculateAmount(${index})" style="width:80px;">${taxOptions(item.tax_percent)}</select></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
           })
           .join("");
+        updateBillTotals();
       }
 
       function displayItems(items) {
@@ -1484,6 +1495,7 @@
             return `<tr id="row_${index}"><td><input type="number" value="${item.sl_no}" readonly style="width:44px;"></td><td><input type="text" class="description" value="${item.description}" style="min-width:120px;" list="descriptionList"></td><td><input type="number" class="quantity" step="0.01" value="${qty}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><input type="number" class="rate" step="0.01" value="${rate}" onchange="calculateAmount(${index})" style="width:80px;"></td><td><select class="tax-percent" onchange="calculateAmount(${index})" style="width:80px;">${taxOptions(item.tax_percent)}</select></td><td><input type="number" class="taxable" step="0.01" value="${taxable.toFixed(2)}" readonly style="width:80px;"></td><td><button class="btn-row-del" onclick="deleteRow(${index})">Del</button></td></tr>`;
           })
           .join("");
+        updateBillTotals();
       }
 
       function calculateAmount(rowIndex) {
@@ -1594,7 +1606,7 @@
           igst = 0;
         document.querySelectorAll("#itemsTable tr").forEach((row) => {
           const base = parseFloat(row.querySelector(".taxable")?.value) || 0;
-          const pct = row._taxPct || 0;
+          const pct = parseFloat(row.querySelector(".tax-percent")?.value) || 0;
           if (selectedGstType === "CGST_SGST") {
             cgst += (base * (pct / 2)) / 100;
             sgst += (base * (pct / 2)) / 100;
@@ -1828,30 +1840,33 @@
           const d = await res.json();
           const l = d.labour;
           document.getElementById("companySelect").value = l.profile_id;
-          await loadCompanyLabourBills();
+          if (l.payment_voucher_id) selectedPaymentVoucherId = l.payment_voucher_id;
+          await loadCompanyLabourBills(id);
           const issueRes = await fetch("/api/labour");
           const allBills = await issueRes.json();
-          const issueBill = allBills.find(
-            (b) =>
-              b.voucher_type === "ISSUE VOUCHER" &&
-              b.issue_number === l.issue_number &&
-              String(b.profile_id) === String(l.profile_id),
+          const issueNums = (l.issue_number || "").split(",").map(s => s.trim()).filter(Boolean);
+          const linkedBills = allBills.filter(b =>
+            b.voucher_type === "ISSUE VOUCHER" &&
+            String(b.profile_id) === String(l.profile_id) &&
+            issueNums.includes((b.issue_number || "").trim())
           );
-          if (issueBill && document.getElementById(`card_${issueBill.id}`)) {
-            selectLabourBill(
-              issueBill.id,
-              issueBill.issue_number,
-              issueBill.company_name,
-              issueBill.date,
-            );
-          } else {
+          let anySelected = false;
+          _editMode = true;
+          for (const bill of linkedBills) {
+            const card = document.getElementById(`card_${bill.id}`);
+            if (card) {
+              selectLabourBill(bill.id, bill.issue_number, bill.company_name, bill.date);
+              const radio = card.querySelector(`input[value="full"]`);
+              if (radio) { radio.checked = true; selectClosingOption(bill.id, "full"); }
+              anySelected = true;
+            }
+          }
+          _editMode = false;
+          if (!anySelected) {
             document.getElementById("billDetails").classList.add("show");
             document.getElementById("emptyState").style.display = "none";
-            document.getElementById("issueNumber").textContent =
-              l.issue_number || "";
-            document.getElementById("companyName").textContent =
-              l.company_name || "";
-            selectedLabourId = issueBill ? issueBill.id : null;
+            document.getElementById("issueNumber").textContent = l.issue_number || "";
+            document.getElementById("companyName").textContent = l.company_name || "";
           }
           document.getElementById("closingDate").value = l.date
             ? (() => {
@@ -1938,6 +1953,7 @@
             description: row.querySelector(".description").value || "",
             quantity: parseFloat(row.querySelector(".quantity").value) || 0,
             rate: parseFloat(row.querySelector(".rate").value) || 0,
+            tax_percent: parseFloat(row.querySelector(".tax-percent")?.value) || 0,
             amount: parseFloat(row.querySelector(".taxable").value) || 0,
           });
         });
@@ -1949,6 +1965,7 @@
               date: closingDate,
               receipt_bill_no: receiptBillNo,
               items,
+              payment_voucher_id: selectedPaymentVoucherId || null,
               photo_url: uploadedPhotoUrls[0] || null,
               photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
               taxable_total:

@@ -13,6 +13,7 @@
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>💎</text></svg>"
     />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap"
@@ -444,6 +445,105 @@
       .btn-generate:hover {
         background: #215f9a;
       }
+      .btn-view {
+        padding: 4px 11px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--blue);
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-view:hover {
+        background: var(--surface-2);
+      }
+      .btn-del-mc {
+        padding: 4px 10px;
+        border: 1px solid #fca5a5;
+        border-radius: 6px;
+        background: #fff5f5;
+        color: #dc2626;
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-del-mc:hover {
+        background: #fee2e2;
+      }
+      dialog.view-dialog {
+        width: 100%;
+        max-width: 620px;
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        border: none;
+        padding: 0;
+        overflow: hidden;
+      }
+      dialog.view-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(3px);
+      }
+      .vd-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .vd-items-table thead th {
+        padding: 6px 8px;
+        background: var(--surface-2);
+        color: var(--ink-3);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      .vd-items-table thead th:not(:first-child):not(:nth-child(2)) { text-align: right; }
+      .vd-items-table tbody td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border);
+        color: var(--ink);
+        vertical-align: middle;
+      }
+      .vd-items-table tbody td:not(:first-child):not(:nth-child(2)) {
+        text-align: right;
+        font-family: "DM Mono", monospace;
+      }
+      .vd-items-table tbody tr:last-child td { border-bottom: none; }
+      .vd-fields {
+        display: grid;
+        gap: 10px;
+      }
+      .vd-field label {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: block;
+        margin-bottom: 2px;
+      }
+      .vd-field .vd-val {
+        font-size: 13px;
+        color: var(--ink);
+      }
+      .vd-section-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--ink-3);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border);
+      }
     </style>
   </head>
   <body>
@@ -567,12 +667,13 @@
                 <th>Company / Issue No.</th>
                 <th>Issue Date</th>
                 <th>Weight (g)</th>
-                <th>Status</th>
+                <th style="text-align:center">Status</th>
+                <th>View</th>
               </tr>
             </thead>
             <tbody id="tableBody">
               <tr>
-                <td colspan="5" class="loading-state">Loading…</td>
+                <td colspan="6" class="loading-state">Loading…</td>
               </tr>
             </tbody>
           </table>
@@ -592,6 +693,22 @@
         </div>
       </div>
     </div>
+
+    <!-- View Dialog -->
+    <dialog id="viewDialog" class="view-dialog" aria-labelledby="vdTitle">
+      <div class="modal-hdr">
+        <div>
+          <div class="modal-title" id="vdTitle">MC Bill</div>
+          <div id="vdSubtitle" style="font-size:11px;color:var(--ink-3);margin-top:2px;"></div>
+        </div>
+        <button class="modal-close" onclick="closeViewDialog()">✕</button>
+      </div>
+      <div id="vdBody" class="modal-body" style="max-height:68vh;overflow-y:auto;"></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeViewDialog()">Close</button>
+        <button id="vdActionBtn" class="btn-generate" onclick="goEditFromView()">Edit →</button>
+      </div>
+    </dialog>
 
     <!-- Invoice Modal — only Date, Gold Rate, Percentage -->
     <dialog id="invoiceDialog" class="inv-dialog" aria-labelledby="modalTitle">
@@ -760,7 +877,7 @@
 
         if (!filteredData.length) {
           tbody.innerHTML =
-            '<tr><td colspan="5" class="empty-state">No OTHERS issue vouchers found.</td></tr>';
+            '<tr><td colspan="6" class="empty-state">No OTHERS issue vouchers found.</td></tr>';
           updateSummary();
           return;
         }
@@ -775,6 +892,14 @@
             const badge = gen
               ? '<span class="status-gen">Generated</span>'
               : '<span class="status-new">Not Generated</span>';
+            const editOnclick = gen
+              ? `editMcBill(${r.id})`
+              : `location.href='/labour?edit=${r.id}'`;
+            const actionCell = `<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
+                <button class="btn-view" onclick="openViewDialog(${r.id})">View</button>
+                <button class="btn-view" style="color:var(--amber);border-color:rgba(181,98,10,0.3);" onclick="${editOnclick}">Edit</button>
+                ${gen ? `<button class="btn-del-mc" onclick="confirmDeleteMcBill(${r.id}, event)">Delete</button>` : ""}
+              </div>`;
             return `<tr>
             <td><input type="checkbox" class="row-chk"
               data-id="${r.id}"
@@ -782,14 +907,16 @@
               data-company="${(r.company_name || "").replaceAll('"', "&quot;")}"
               data-issue="${(r.issue_number || "").replaceAll('"', "&quot;")}"
               data-date="${r.date ? r.date.slice(0, 10) : ""}"
-              onchange="updateSummary()" /></td>
+              onchange="updateSummary()"
+              ${gen ? 'disabled title="Already generated"' : ""} /></td>
             <td>
               <div class="company-name">${r.company_name || "—"}</div>
               <div class="issue-no">${r.issue_number || ""}</div>
             </td>
             <td>${dt}</td>
             <td class="weight-cell">${wt} g</td>
-            <td>${badge}</td>
+            <td style="text-align:center">${badge}</td>
+            <td>${actionCell}</td>
           </tr>`;
           })
           .join("");
@@ -798,22 +925,26 @@
 
       function toggleSelectAll(checked) {
         document.querySelectorAll(".row-chk").forEach((cb) => {
-          cb.checked = checked;
+          if (!cb.disabled) cb.checked = checked;
         });
         updateSummary();
       }
 
       function updateSummary() {
-        const checked = [...document.querySelectorAll(".row-chk:checked")];
+        const checked = [...document.querySelectorAll(".row-chk:checked")].filter(
+          (cb) => !cb.disabled,
+        );
         const weight = checked.reduce(
           (s, cb) => s + Number.parseFloat(cb.dataset.weight || 0),
           0,
         );
         document.getElementById("selCount").textContent = checked.length;
         document.getElementById("selWeight").textContent = weight.toFixed(3);
-        const all = document.querySelectorAll(".row-chk");
+        const selectable = document.querySelectorAll(".row-chk:not([disabled])");
         const sa = document.getElementById("selectAll");
-        if (sa) sa.checked = all.length > 0 && checked.length === all.length;
+        if (sa)
+          sa.checked =
+            selectable.length > 0 && checked.length === selectable.length;
         document
           .getElementById("createInvoiceBtn")
           .classList.toggle("visible", checked.length > 0);
@@ -829,19 +960,29 @@
           localStorage.getItem("mc_last_gold_rate") || "";
         document.getElementById("invPct").value =
           localStorage.getItem("mc_last_pct") || "3.5";
-        const lastNo = Number.parseInt(
-          localStorage.getItem("mc_last_invoice_no") || "0",
-          10,
-        );
-        document.getElementById("invNo").value = lastNo + 1;
+        // Per-company invoice number
+        const _firstChecked = [...document.querySelectorAll(".row-chk:checked")][0];
+        const _invCompany = _firstChecked?.dataset.company || "";
+        let _suggestNo;
+        if (_editingId) {
+          // Edit: restore the same number used when originally generated
+          const _stored = getMcBillData(_editingId);
+          _suggestNo = _stored?.invNo ?? (Number.parseInt(localStorage.getItem(mcInvKey(_invCompany)) || "0", 10) + 1);
+        } else {
+          _suggestNo = Number.parseInt(localStorage.getItem(mcInvKey(_invCompany)) || "0", 10) + 1;
+        }
+        document.getElementById("invNo").value = _suggestNo;
         document.getElementById("invFineWeight").value = "";
         refreshPreview();
         document.getElementById("invoiceDialog").showModal();
         setTimeout(() => document.getElementById("invGoldRate").focus(), 100);
       }
 
+      let _editingId = null;
+
       function closeInvoiceModal() {
         document.getElementById("invoiceDialog").close();
+        _editingId = null;
       }
 
       // Close on backdrop click (click lands on the <dialog> element itself)
@@ -892,7 +1033,7 @@
           </div>`;
       }
 
-      function generateInvoice() {
+      async function generateInvoice() {
         const invDate = document.getElementById("invDate").value;
         const goldRate = Number.parseFloat(
           document.getElementById("invGoldRate").value,
@@ -924,6 +1065,16 @@
           alert("No vouchers selected.");
           return;
         }
+        if (!_allowRegenerate) {
+          const alreadyGen = checked.filter((cb) => isGenerated(cb.dataset.id));
+          if (alreadyGen.length) {
+            alert(
+              `${alreadyGen.length} voucher(s) already have an MC bill generated.\nUse the Edit button to modify an existing bill.`,
+            );
+            return;
+          }
+        }
+        _allowRegenerate = false;
 
         // Sender info from profile data in allData
         const firstId = Number.parseInt(checked[0].dataset.id, 10);
@@ -935,9 +1086,10 @@
         const senderPan = profile.pan_number || "";
 
         const invNo = String(invNoInput || 1).padStart(2, "0");
+        const _company = checked[0]?.dataset.company || "";
         localStorage.setItem("mc_last_gold_rate", String(goldRate));
         localStorage.setItem("mc_last_pct", String(pct));
-        localStorage.setItem("mc_last_invoice_no", String(invNoInput || 1));
+        localStorage.setItem(mcInvKey(_company), String(invNoInput || 1));
 
         const ratePerGram = (pct / 100) * (goldRate / 10);
         const vouchers = checked.map((cb) => ({
@@ -1090,8 +1242,80 @@
 </body>
 </html>`;
 
-        // Mark selected vouchers as generated and refresh table
-        markGenerated(vouchers.map((v) => v.id));
+        // ── Save bill photo + create/update receipt voucher ──
+        const genBtn = document.querySelector(
+          '.btn-generate[onclick="generateInvoice()"]',
+        );
+        if (genBtn) {
+          genBtn.disabled = true;
+          genBtn.textContent = "Saving…";
+        }
+        const voucherIds = vouchers.map((v) => v.id);
+        const editId = _editingId;
+        _editingId = null;
+
+        const billParams = {
+          invDate,
+          invNo: invNoInput || 1,
+          fineWeight,
+          ratePerGram,
+          subtotal,
+          roundOff,
+          rounded,
+          photoUrl: null,
+        };
+
+        try {
+          // 1. Capture & upload bill photo
+          try {
+            const dataUrl = await captureBillAsImage(html);
+            billParams.photoUrl = await uploadMcBillPhoto(
+              dataUrl,
+              `mc_${String(invNoInput || 1).padStart(2, "0")}_${invDate.replace(/-/g, "")}`,
+            );
+          } catch (e) {
+            console.warn("[MC] Photo upload failed:", e.message);
+          }
+
+          if (editId) {
+            // 2a. Edit: update existing receipt voucher
+            const stored = getMcBillData(editId);
+            if (stored?.receiptId) {
+              try {
+                await updateReceiptVoucher(stored.receiptId, billParams);
+                setMcBillData(editId, {
+                  receiptId: stored.receiptId,
+                  photoUrl: billParams.photoUrl || stored.photoUrl,
+                  invNo: billParams.invNo,
+                });
+              } catch (e) {
+                console.warn("[MC] Receipt update failed:", e.message);
+              }
+            }
+          } else {
+            // 2b. New: create receipt voucher, store IDs for all selected vouchers
+            try {
+              const receiptId = await saveReceiptVoucher(voucherIds, billParams);
+              voucherIds.forEach((id) =>
+                setMcBillData(id, {
+                  receiptId,
+                  photoUrl: billParams.photoUrl,
+                  invNo: billParams.invNo,
+                }),
+              );
+            } catch (e) {
+              console.warn("[MC] Receipt create failed:", e.message);
+            }
+          }
+        } finally {
+          if (genBtn) {
+            genBtn.disabled = false;
+            genBtn.textContent = "Generate & Print →";
+          }
+        }
+
+        // Mark as generated, close modal, refresh table, open print
+        markGenerated(voucherIds);
         closeInvoiceModal();
         renderTable();
 
@@ -1099,6 +1323,424 @@
         w.document.write(html);
         w.document.close();
       }
+
+      // ── View Dialog ──
+      let _viewId = null;
+
+      let _viewIsGenerated = false;
+
+      async function openViewDialog(id) {
+        _viewId = id;
+        const row = allData.find((r) => r.id === id);
+        if (!row) return;
+        _viewIsGenerated = isGenerated(id);
+
+        document.getElementById("vdTitle").textContent = _viewIsGenerated
+          ? "MC Bill"
+          : "Issue Voucher";
+        document.getElementById("vdSubtitle").textContent =
+          `${row.company_name || ""} · ${row.issue_number || ""}`;
+        document.getElementById("vdActionBtn").textContent = _viewIsGenerated
+          ? "Edit MC Bill →"
+          : "Edit Issue Voucher →";
+
+        const vdBody = document.getElementById("vdBody");
+        vdBody.innerHTML =
+          '<div style="text-align:center;padding:28px;color:var(--ink-3);">Loading…</div>';
+        document.getElementById("viewDialog").showModal();
+
+        if (_viewIsGenerated) {
+          renderViewBody(row);
+        } else {
+          try {
+            const res = await fetch(`/api/labour/${id}`);
+            if (!res.ok) throw new Error();
+            const d = await res.json();
+            renderIssueVoucherView(d);
+          } catch {
+            vdBody.innerHTML =
+              '<div style="color:#c0186a;padding:16px;">Failed to load details.</div>';
+          }
+        }
+      }
+
+      function renderIssueVoucherView(d) {
+        const l = d.labour || {};
+        const items = d.items || [];
+        const fmtAmt = (n) =>
+          n == null
+            ? "—"
+            : Number(n).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+        const fmtDate = (s) =>
+          s ? new Date(s).toLocaleDateString("en-GB") : "—";
+
+        const itemRows = items
+          .map(
+            (it, i) => `<tr>
+            <td>${it.sl_no ?? i + 1}</td>
+            <td>${it.description || "—"}</td>
+            <td>${it.quantity ?? "—"}</td>
+            <td>${fmtAmt(it.rate)}</td>
+            <td>${fmtAmt(it.amount)}</td>
+          </tr>`,
+          )
+          .join("");
+
+        document.getElementById("vdBody").innerHTML = `
+          <div class="vd-fields" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="vd-field"><label>Company</label><div class="vd-val">${l.company_name || "—"}</div></div>
+            <div class="vd-field"><label>Issue No.</label><div class="vd-val">${l.issue_number || "—"}</div></div>
+            <div class="vd-field"><label>Date</label><div class="vd-val">${fmtDate(l.date)}</div></div>
+          </div>
+          <div class="vd-fields" style="grid-template-columns:1fr 1fr;">
+            <div class="vd-field"><label>Item Type</label><div class="vd-val">${l.labour_item_type || "—"}</div></div>
+            <div class="vd-field"><label>Voucher Type</label><div class="vd-val">${l.voucher_type || "—"}</div></div>
+          </div>
+          <div class="vd-section-label">Items</div>
+          ${
+            items.length
+              ? `<table class="vd-items-table">
+              <thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+              <tbody>${itemRows}</tbody>
+            </table>`
+              : '<div style="color:var(--ink-3);font-size:12px;">No items.</div>'
+          }
+          ${
+            l.total != null
+              ? `<div style="display:flex;justify-content:flex-end;gap:18px;font-size:12px;padding-top:6px;border-top:1px solid var(--border);">
+                ${l.taxable_total != null ? `<span>Taxable: <b style="font-family:'DM Mono',monospace;">₹${fmtAmt(l.taxable_total)}</b></span>` : ""}
+                ${l.cgst ? `<span>CGST: <b style="font-family:'DM Mono',monospace;">₹${fmtAmt(l.cgst)}</b></span>` : ""}
+                ${l.sgst ? `<span>SGST: <b style="font-family:'DM Mono',monospace;">₹${fmtAmt(l.sgst)}</b></span>` : ""}
+                ${l.igst ? `<span>IGST: <b style="font-family:'DM Mono',monospace;">₹${fmtAmt(l.igst)}</b></span>` : ""}
+                <span style="font-weight:700;">Total: <b style="font-family:'DM Mono',monospace;color:#c0186a;">₹${fmtAmt(l.total)}</b></span>
+              </div>`
+              : ""
+          }`;
+      }
+
+      function renderViewBody(row) {
+        const goldRate = Number.parseFloat(localStorage.getItem("mc_last_gold_rate") || "0");
+        const pct = Number.parseFloat(localStorage.getItem("mc_last_pct") || "3.5");
+        const dt = row.date
+          ? new Date(row.date).toLocaleDateString("en-GB")
+          : "—";
+        const wt = parseFloat(row.total_weight || 0).toFixed(3);
+
+        const vdBody = document.getElementById("vdBody");
+        vdBody.dataset.weight = row.total_weight || 0;
+        vdBody.dataset.issueNo = row.issue_number || "";
+        vdBody.dataset.goldRate = goldRate;
+        vdBody.dataset.pct = pct;
+
+        const rateDisplay = goldRate
+          ? `₹${Number(goldRate).toLocaleString("en-IN")}`
+          : "—";
+        const pctDisplay = pct ? `${pct}%` : "—";
+
+        vdBody.innerHTML = `
+          <div class="vd-fields" style="grid-template-columns:1fr 1fr;">
+            <div class="vd-field">
+              <label>Gold Rate (₹/10g)</label>
+              <div class="vd-val" style="font-family:'DM Mono',monospace;font-weight:600;">${rateDisplay}</div>
+            </div>
+            <div class="vd-field">
+              <label>Percentage</label>
+              <div class="vd-val" style="font-family:'DM Mono',monospace;font-weight:600;">${pctDisplay}</div>
+            </div>
+          </div>
+          <div id="vdPreview" class="inv-preview" style="color:var(--ink-3);">
+            No rate saved — click Edit MC Bill to set gold rate and generate.
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:10px;">
+            <div class="vd-section-label" style="margin-bottom:8px;">Issue Voucher (Reference)</div>
+            <div class="vd-fields" style="grid-template-columns:1fr 1fr 1fr;">
+              <div class="vd-field">
+                <label>Company</label>
+                <div class="vd-val">${row.company_name || "—"}</div>
+              </div>
+              <div class="vd-field">
+                <label>Issue No.</label>
+                <div class="vd-val">${row.issue_number || "—"}</div>
+              </div>
+              <div class="vd-field">
+                <label>Date</label>
+                <div class="vd-val">${dt}</div>
+              </div>
+            </div>
+            <div class="vd-fields" style="grid-template-columns:1fr 1fr;margin-top:8px;">
+              <div class="vd-field">
+                <label>Weight</label>
+                <div class="vd-val" style="font-family:'DM Mono',monospace;color:var(--blue);font-weight:700;">${wt} g</div>
+              </div>
+            </div>
+          </div>`;
+        refreshVdPreview();
+      }
+
+      function refreshVdPreview() {
+        const vdBody = document.getElementById("vdBody");
+        const goldRate = Number.parseFloat(vdBody?.dataset.goldRate || "0");
+        const pct = Number.parseFloat(vdBody?.dataset.pct || "0");
+        const weight = Number.parseFloat(vdBody?.dataset.weight || "0");
+        const issueNo = vdBody?.dataset.issueNo || "";
+        const el = document.getElementById("vdPreview");
+        if (!el) return;
+
+        if (!goldRate || !pct) {
+          el.style.color = "var(--ink-3)";
+          el.textContent = `${weight.toFixed(3)} g — no rate saved. Click Edit MC Bill to set gold rate.`;
+          return;
+        }
+
+        const ratePerGram = (pct / 100) * (goldRate / 10);
+        const fineWeight = Math.round(((weight * 99.9) / 92) * 100) / 100;
+        const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
+        const rounded = Math.round(subtotal);
+        const roundOff = parseFloat((rounded - subtotal).toFixed(2));
+        const fmtAmt = (n) =>
+          Number(n).toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+
+        el.style.color = "var(--ink-2)";
+        el.innerHTML = `
+          <div style="display:flex;justify-content:space-between;padding-bottom:7px;margin-bottom:7px;border-bottom:1px solid var(--border);">
+            <span style="font-weight:600;">${issueNo || "Issue Voucher"}</span>
+            <span style="font-family:'DM Mono',monospace;">${weight.toFixed(3)} g</span>
+          </div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">
+            Rate: <b>₹${ratePerGram.toFixed(2)}/g</b>
+            &nbsp;(${pct}% of ₹${Number(goldRate).toLocaleString("en-IN")}/10g)
+            &nbsp;·&nbsp; Fine Weight: <b>${fineWeight.toFixed(2)} g</b>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;">
+              <span>Making Charges</span>
+              <span style="font-family:'DM Mono',monospace;">₹${fmtAmt(subtotal)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3);">
+              <span>Round off</span>
+              <span style="font-family:'DM Mono',monospace;">₹${fmtAmt(roundOff)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+              <span>Total</span>
+              <span style="font-family:'DM Mono',monospace;color:#c0186a;">₹${rounded.toLocaleString("en-IN")}</span>
+            </div>
+          </div>`;
+      }
+
+      let _allowRegenerate = false;
+
+      function editMcBill(id) {
+        // Close view popup if open
+        const vd = document.getElementById("viewDialog");
+        if (vd.open) { _viewId = null; vd.close(); }
+        _editingId = id;
+        // Allow regenerating even if already generated
+        _allowRegenerate = true;
+        // Deselect all, select only this row (force-enable checkbox temporarily)
+        document.querySelectorAll(".row-chk").forEach((cb) => {
+          cb.checked = false;
+        });
+        const target = document.querySelector(`.row-chk[data-id="${id}"]`);
+        if (target) target.checked = true;
+        updateSummary();
+        openInvoiceModal();
+      }
+
+      function unmarkGenerated(ids) {
+        const s = getGeneratedIds();
+        ids.forEach((id) => {
+          s.delete(String(id));
+          removeMcBillData(id);
+        });
+        localStorage.setItem("mc_generated_ids", JSON.stringify([...s]));
+      }
+
+      // Per-company invoice number key
+      function mcInvKey(company) {
+        return `mc_inv_no_${(company || "default").replace(/\s+/g, "_").toLowerCase()}`;
+      }
+
+      // ── MC Bill data helpers (receipt voucher id + photo url per issue id) ──
+      function getMcBillData(id) {
+        try {
+          return (
+            JSON.parse(localStorage.getItem("mc_bill_data") || "{}")[
+              String(id)
+            ] || null
+          );
+        } catch {
+          return null;
+        }
+      }
+      function setMcBillData(id, data) {
+        try {
+          const all = JSON.parse(
+            localStorage.getItem("mc_bill_data") || "{}",
+          );
+          all[String(id)] = data;
+          localStorage.setItem("mc_bill_data", JSON.stringify(all));
+        } catch {}
+      }
+      function removeMcBillData(id) {
+        try {
+          const all = JSON.parse(
+            localStorage.getItem("mc_bill_data") || "{}",
+          );
+          delete all[String(id)];
+          localStorage.setItem("mc_bill_data", JSON.stringify(all));
+        } catch {}
+      }
+
+      // ── Capture rendered bill HTML as JPEG via html2canvas ──
+      async function captureBillAsImage(htmlString) {
+        return new Promise((resolve, reject) => {
+          const iframe = document.createElement("iframe");
+          iframe.style.cssText =
+            "position:fixed;left:-9999px;top:0;width:800px;height:1200px;border:none;";
+          iframe.setAttribute("scrolling", "no");
+          document.body.appendChild(iframe);
+          const timer = setTimeout(() => {
+            document.body.removeChild(iframe);
+            reject(new Error("iframe capture timeout"));
+          }, 15000);
+          iframe.onload = async () => {
+            clearTimeout(timer);
+            try {
+              if (iframe.contentDocument?.fonts)
+                await iframe.contentDocument.fonts.ready;
+              await new Promise((r) => setTimeout(r, 400));
+              const canvas = await html2canvas(
+                iframe.contentDocument.body,
+                {
+                  scale: 1.5,
+                  useCORS: true,
+                  logging: false,
+                  width: 800,
+                  windowWidth: 800,
+                },
+              );
+              document.body.removeChild(iframe);
+              resolve(canvas.toDataURL("image/jpeg", 0.88));
+            } catch (e) {
+              document.body.removeChild(iframe);
+              reject(e);
+            }
+          };
+          iframe.srcdoc = htmlString;
+        });
+      }
+
+      async function uploadMcBillPhoto(dataUrl, filename) {
+        const res = await fetch("/api/upload-base64", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: dataUrl, folder: "mc_bills", filename }),
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const d = await res.json();
+        return d.photo_url;
+      }
+
+      async function saveReceiptVoucher(labourIds, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl }) {
+        const payload = {
+          labour_ids: labourIds.map(Number),
+          closing_date: invDate,
+          bill_no: `MC/${String(invNo).padStart(2, "0")}`,
+          taxable_total: subtotal,
+          round_off: roundOff,
+          total: rounded,
+          tds: 0,
+          bill_value_after_deduction: rounded,
+          photo_url: photoUrl || null,
+          items: [
+            {
+              sl_no: 1,
+              description: "Making Charges",
+              quantity: Number.parseFloat(fineWeight.toFixed(2)),
+              rate: Number.parseFloat(ratePerGram.toFixed(2)),
+              tax_percent: 0,
+              amount: subtotal,
+            },
+          ],
+        };
+        const res = await fetch("/api/close-issue-voucher", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Failed to create receipt voucher");
+        return (await res.json()).id;
+      }
+
+      async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl }) {
+        const payload = {
+          date: invDate,
+          receipt_bill_no: `MC/${String(invNo).padStart(2, "0")}`,
+          taxable_total: subtotal,
+          round_off: roundOff,
+          total: rounded,
+          tds: 0,
+          bill_value_after_deduction: rounded,
+          photo_url: photoUrl || null,
+          items: [
+            {
+              sl_no: 1,
+              description: "Making Charges",
+              quantity: Number.parseFloat(fineWeight.toFixed(2)),
+              rate: Number.parseFloat(ratePerGram.toFixed(2)),
+              tax_percent: 0,
+              amount: subtotal,
+            },
+          ],
+        };
+        const res = await fetch(`/api/labour/${receiptId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error("Failed to update receipt voucher");
+      }
+
+      function confirmDeleteMcBill(id, e) {
+        e.stopPropagation();
+        if (
+          !confirm(
+            "Delete MC bill for this issue voucher?\nThis will allow it to be generated again.",
+          )
+        )
+          return;
+        unmarkGenerated([id]);
+        renderTable();
+      }
+
+      function closeViewDialog() {
+        document.getElementById("viewDialog").close();
+        _viewId = null;
+      }
+
+      function goEditFromView() {
+        const id = _viewId;
+        if (!id) return;
+        closeViewDialog();
+        if (_viewIsGenerated) {
+          editMcBill(id);
+        } else {
+          window.location.href = `/labour?edit=${id}`;
+        }
+      }
+
+      document
+        .getElementById("viewDialog")
+        .addEventListener("click", (e) => {
+          if (e.target === document.getElementById("viewDialog"))
+            closeViewDialog();
+        });
 
       loadData();
     </script>

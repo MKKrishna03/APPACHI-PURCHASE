@@ -430,7 +430,8 @@
         formMessage.className = "message";
       }
       function goBack() {
-        window.location.href = "/";
+        const from = new URLSearchParams(location.search).get("from");
+        window.location.href = from || "/";
       }
 
       function resetVoucherSelectors() {
@@ -588,18 +589,24 @@
             againstHint.classList.add("show");
             return;
           }
+          let addedCount = 0;
           labourReceiptVouchers.forEach((lv) => {
+            const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
+            const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
+            if (balAmt <= 0.009) return; // fully paid — hide
             const o = document.createElement("option");
             const billLabel = lv.receipt_bill_no || `ID-${lv.id}`;
             o.value = lv.receipt_bill_no || `ID-${lv.id}`;
-            const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
-            const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
             const isPartial = balAmt < fullAmt - 0.01;
-            const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
-            o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
-            o.dataset.amount = balAmt || "";
+            o.textContent = `${billLabel} · ₹${balAmt.toLocaleString("en-IN")}${isPartial ? " (bal)" : ""}`;
+            o.dataset.amount = balAmt;
             againstBillNo.appendChild(o);
+            addedCount++;
           });
+          if (!addedCount) {
+            againstHint.textContent = "All Receipt Vouchers for this company are fully paid.";
+            againstHint.classList.add("show");
+          }
           return;
         }
         if (againstVoucherType.value === "Purchase Voucher") {
@@ -732,18 +739,17 @@
               });
           const result = await res.json();
           if (result.id) {
-            if (!editId) {
+            if (editId) {
+              setMessage("Transaction updated successfully.", "success");
+              const from = new URLSearchParams(location.search).get("from");
+              setTimeout(() => { location.href = from || "/"; }, 1000);
+            } else {
               const kind = transactionKind.value;
               resetForm();
               transactionKind.value = kind;
               updateSaveLabel();
+              setMessage("Transaction saved successfully.", "success");
             }
-            setMessage(
-              editId
-                ? "Transaction updated successfully."
-                : "Transaction saved successfully.",
-              "success",
-            );
           } else setMessage(result.error || "Failed to save.", "error");
         } catch (err) {
           setMessage("Network error: " + err.message, "error");

@@ -17,6 +17,7 @@ cloudinaryPkg.config({
 const ALLOWED_FOLDERS = new Set([
   "purchase_bills", "chittai_bills", "labour_receipts",
   "hallmark_bills", "expense_bills", "credit_notes", "debit_notes", "refinery_bills",
+  "mc_bills",
 ]);
 const ALL_FOLDERS = [...ALLOWED_FOLDERS];
 
@@ -104,6 +105,25 @@ router.post("/upload-session/:token/done", async (req, res) => {
   if (!session) return res.status(404).json({ error: "Invalid or expired" });
   await pool.query(`UPDATE upload_sessions SET done=true WHERE token=$1`, [req.params.token]);
   res.json({ status: "SUCCESS" });
+});
+
+// Accept a base64 data-URL and upload directly to Cloudinary (used by MC bill auto-save)
+router.post("/upload-base64", async (req, res) => {
+  const { data, folder, filename } = req.body;
+  if (!data) return res.status(400).json({ error: "No data" });
+  const finalFolder = ALLOWED_FOLDERS.has(folder) ? folder : "mc_bills";
+  try {
+    const result = await cloudinaryPkg.uploader.upload(data, {
+      folder: finalFolder,
+      public_id: filename || undefined,
+      resource_type: "image",
+      transformation: [{ width: 1600, height: 2200, crop: "limit", quality: "auto:good" }],
+    });
+    res.json({ status: "SUCCESS", photo_url: result.secure_url, public_id: result.public_id });
+  } catch (err) {
+    logger.error("cloudinary-base64-upload", { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/chittai-upload", uploadChittai.single("photo"), (req, res) => {

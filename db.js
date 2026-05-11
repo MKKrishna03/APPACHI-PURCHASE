@@ -404,6 +404,8 @@ async function initDB() {
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour_items ADD COLUMN IF NOT EXISTS tax_percent NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS payment_voucher_id INTEGER REFERENCES vouchers(id)`);
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS created_by TEXT`);
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_url TEXT`);
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
