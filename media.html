@@ -288,28 +288,6 @@
         border-color: var(--accent);
         color: #fff;
       }
-      .photo-del-btn {
-        position: absolute;
-        top: 8px;
-        right: 36px;
-        width: 26px;
-        height: 26px;
-        border-radius: 6px;
-        background: rgba(255,255,255,0.95);
-        border: 1.5px solid rgba(181,48,30,0.35);
-        color: var(--danger);
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 5;
-        opacity: 0;
-        transition: opacity 0.15s;
-        padding: 0;
-        line-height: 1;
-      }
-      .photo-card:hover .photo-del-btn { opacity: 1; }
 
       .empty-state {
         text-align: center;
@@ -1447,7 +1425,6 @@
             return `<div class="photo-card ${isSel ? "selected" : ""}" data-id="${p.id}" draggable="true" ondragstart="onCardDragStart(event,'${p.id}')" ondragover="onCardDragOver(event)" ondrop="onCardDrop(event,'${p.id}')" ondragend="onCardDragEnd()" onclick="openLightbox('${p.id}')">
                         <div class="photo-checkbox" onclick="event.stopPropagation();toggleSelect('${p.id}')">${isSel ? "✓" : ""}</div>
                         <button class="copy-link-btn" onclick="event.stopPropagation();copyPhotoLink('${p.photo_url}')" title="Copy photo link">🔗</button>
-                        ${window._canDeletePhotos ? `<button class="photo-del-btn" onclick="event.stopPropagation();deletePhoto(${idx})" title="Delete photo">🗑</button>` : ""}
                         <div class="drag-handle" title="Drag to reorder">⠿</div>
                         ${thumb}
                         <div class="photo-info">
@@ -1457,7 +1434,10 @@
                           <div style="margin-top:4px;font-size:10px;font-weight:700;color:var(--ink-3);">${meta.icon} ${meta.label}</div>
                           ${!p._matched ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--ink-3);background:var(--surface-3);border-radius:4px;padding:2px 6px;display:inline-block;">⚠ No DB record</div>` : ""}
                           ${p.is_accounted ? `<div style="margin-top:2px;font-size:10px;font-weight:700;color:var(--green);background:var(--green-light);border-radius:4px;padding:2px 6px;display:inline-block;">✓ ACCOUNTED</div>` : ""}
-                          <button onclick="event.stopPropagation();showMoveMenu('${p.id}', this)" style="margin-top:6px;width:100%;padding:4px 0;font-size:11px;font-weight:600;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:6px;cursor:pointer;color:var(--ink-2);">📂 Move</button>
+                          <div style="display:flex;gap:5px;margin-top:6px;">
+                            <button onclick="event.stopPropagation();showMoveMenu('${p.id}', this)" style="flex:1;padding:4px 0;font-size:11px;font-weight:600;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:6px;cursor:pointer;color:var(--ink-2);">📂 Move</button>
+                            ${window._canDeletePhotos ? `<button onclick="event.stopPropagation();deletePhoto(${idx})" style="padding:4px 10px;font-size:11px;font-weight:600;background:var(--danger-light);border:1px solid rgba(181,48,30,0.3);border-radius:6px;cursor:pointer;color:var(--danger);" title="Delete from Cloudinary">🗑</button>` : ""}
+                          </div>
                         </div>
                       </div>`;
           })

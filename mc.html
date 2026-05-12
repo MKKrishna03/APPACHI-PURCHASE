@@ -798,10 +798,10 @@
       let allData = [];
       let filteredData = [];
 
-      // ── Generated tracking (DB-backed via mc_receipt_id in allData) ──
+      // ── Generated tracking (DB-backed via mc_receipt_id; localStorage fallback for pre-migration data) ──
       function isGenerated(id) {
         const row = allData.find((r) => String(r.id) === String(id));
-        return !!(row?.mc_receipt_id);
+        return !!(row?.mc_receipt_id) || !!(getMcBillData(id)?.receiptId);
       }
       function markGenerated(ids, receiptId, extras = {}) {
         ids.forEach((id) => {
@@ -810,14 +810,17 @@
         });
       }
       async function unmarkGenerated(ids) {
-        const receiptId = allData.find((r) => String(r.id) === String(ids[0]))?.mc_receipt_id;
+        const firstRow = allData.find((r) => String(r.id) === String(ids[0]));
+        const receiptId = firstRow?.mc_receipt_id || getMcBillData(ids[0])?.receiptId;
         if (receiptId) {
           try {
             await fetch(`/api/labour/${receiptId}`, { method: "DELETE" });
           } catch (e) {
             console.warn("[MC] Delete receipt failed:", e.message);
           }
-          allData.forEach((row) => { if (row.mc_receipt_id === receiptId) row.mc_receipt_id = null; });
+          allData.forEach((row) => {
+            if (String(row.mc_receipt_id) === String(receiptId)) row.mc_receipt_id = null;
+          });
         }
         ids.forEach((id) => removeMcBillData(id));
       }
@@ -963,9 +966,12 @@
         const _invCompany = _firstChecked?.dataset.company || "";
         let _suggestNo;
         if (_editingId) {
-          // Edit: restore exact number, gold rate, pct from DB via allData
+          // Edit: restore exact number, date, gold rate, pct from DB via allData
           const _editRow = allData.find((r) => String(r.id) === String(_editingId));
           _suggestNo = Number.parseInt((_editRow?.mc_receipt_bill_no || "").replace("MC/", "") || "0", 10) || 1;
+          if (_editRow?.mc_receipt_date) {
+            document.getElementById("invDate").value = String(_editRow.mc_receipt_date).slice(0, 10);
+          }
           document.getElementById("invGoldRate").value = _editRow?.mc_gold_rate || "";
           document.getElementById("invPct").value = _editRow?.mc_pct || localStorage.getItem(`mc_last_pct_${_invCompany}`) || "3.5";
         } else {
@@ -1155,18 +1161,21 @@
 
           if (editId) {
             // 2a. Edit: update existing receipt voucher
+            // Get receiptId from DB (allData) first, fall back to localStorage
+            const _editRow = allData.find((r) => String(r.id) === String(editId));
             const stored = getMcBillData(editId);
-            if (stored?.receiptId) {
+            const receiptId = _editRow?.mc_receipt_id || stored?.receiptId;
+            if (receiptId) {
               try {
-                await updateReceiptVoucher(stored.receiptId, billParams);
+                await updateReceiptVoucher(receiptId, billParams);
                 setMcBillData(editId, {
-                  receiptId: stored.receiptId,
-                  photoUrl: billParams.photoUrl || stored.photoUrl,
+                  receiptId,
+                  photoUrl: billParams.photoUrl || stored?.photoUrl,
                   invNo: billParams.invNo,
                   goldRate: billParams.goldRate,
                   pct: billParams.pct,
                 });
-                _finalReceiptId = stored.receiptId;
+                _finalReceiptId = receiptId;
               } catch (e) {
                 console.warn("[MC] Receipt update failed:", e.message);
               }
@@ -1201,6 +1210,7 @@
           mc_receipt_bill_no: `MC/${String(invNoInput || 1).padStart(2, "0")}`,
           mc_gold_rate: goldRate,
           mc_pct: pct,
+          mc_receipt_date: invDate,
         });
         closeInvoiceModal();
         renderTable();

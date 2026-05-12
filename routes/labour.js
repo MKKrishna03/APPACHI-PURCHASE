@@ -85,7 +85,8 @@ router.get("/labour/mc-bill-issues", async (req, res) => {
               l.mc_receipt_id,
               r.receipt_bill_no AS mc_receipt_bill_no,
               r.gold_rate       AS mc_gold_rate,
-              r.mc_pct
+              r.mc_pct,
+              r.date            AS mc_receipt_date
        FROM labour l
        LEFT JOIN labour_items li ON li.labour_id = l.id
        LEFT JOIN profiles p ON p.id = l.profile_id
@@ -95,7 +96,7 @@ router.get("/labour/mc-bill-issues", async (req, res) => {
          AND l.deleted_at IS NULL
        GROUP BY l.id, l.profile_id, l.company_name, l.date, l.issue_number,
                 p.address, p.city, p.pincode, p.pan_number, p.gst_number,
-                l.mc_receipt_id, r.receipt_bill_no, r.gold_rate, r.mc_pct
+                l.mc_receipt_id, r.receipt_bill_no, r.gold_rate, r.mc_pct, r.date
        ORDER BY l.date DESC`,
     );
     res.json(result.rows);

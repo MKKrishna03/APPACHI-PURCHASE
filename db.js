@@ -428,6 +428,26 @@ async function initDB() {
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_receipt_id INTEGER REFERENCES labour(id)`);
+
+  // Backfill mc_receipt_id for issue vouchers that already have a matching MC receipt
+  await pool.query(`
+    UPDATE labour iv
+    SET mc_receipt_id = (
+      SELECT rv.id FROM labour rv
+      WHERE rv.voucher_type = 'Receipt Voucher'
+        AND rv.deleted_at IS NULL
+        AND rv.receipt_bill_no LIKE 'MC/%'
+        AND (rv.issue_number = iv.issue_number
+             OR rv.issue_number LIKE iv.issue_number || ',%'
+             OR rv.issue_number LIKE '%,' || iv.issue_number
+             OR rv.issue_number LIKE '%,' || iv.issue_number || ',%')
+      ORDER BY rv.id DESC LIMIT 1
+    )
+    WHERE iv.voucher_type = 'ISSUE VOUCHER'
+      AND UPPER(iv.labour_item_type) = 'OTHERS'
+      AND iv.mc_receipt_id IS NULL
+      AND iv.deleted_at IS NULL
+  `).catch(() => {});
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS gold_rate NUMERIC`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_pct NUMERIC`);
 
