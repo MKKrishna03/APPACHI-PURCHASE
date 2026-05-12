@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { deleteCloudinaryPhoto } = require("./cloudinary");
 
 const router = express.Router();
 
@@ -398,12 +399,22 @@ router.post("/close-issue-voucher", async (req, res) => {
 });
 
 router.patch("/labour/:id/mc", async (req, res) => {
-  const { date, receipt_bill_no, gold_rate, mc_pct } = req.body;
+  const { date, receipt_bill_no, gold_rate, mc_pct, photo_url } = req.body;
   try {
-    await pool.query(
-      `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4 WHERE id=$5`,
-      [date || null, receipt_bill_no || null, gold_rate ?? null, mc_pct ?? null, req.params.id],
-    );
+    if (photo_url) {
+      const old = await pool.query(`SELECT photo_url FROM labour WHERE id = $1`, [req.params.id]);
+      const oldUrl = old.rows[0]?.photo_url;
+      if (oldUrl && oldUrl !== photo_url) await deleteCloudinaryPhoto(oldUrl);
+      await pool.query(
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4, photo_url=$5 WHERE id=$6`,
+        [date || null, receipt_bill_no || null, gold_rate ?? null, mc_pct ?? null, photo_url, req.params.id],
+      );
+    } else {
+      await pool.query(
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4 WHERE id=$5`,
+        [date || null, receipt_bill_no || null, gold_rate ?? null, mc_pct ?? null, req.params.id],
+      );
+    }
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });

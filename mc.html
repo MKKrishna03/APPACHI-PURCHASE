@@ -1720,11 +1720,12 @@
 
       async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
         const billNo = `MC/${String(invNo).padStart(2, "0")}`;
-        // PATCH first — simple direct update with no transaction, guarantees date/rates are saved
+        // PATCH first — simple direct update with no transaction, guarantees date/rates/photo are saved.
+        // Server deletes the old Cloudinary photo if a new one is provided.
         const patchRes = await fetch(`/api/labour/${receiptId}/mc`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: invDate, receipt_bill_no: billNo, gold_rate: goldRate || null, mc_pct: pct || null }),
+          body: JSON.stringify({ date: invDate, receipt_bill_no: billNo, gold_rate: goldRate || null, mc_pct: pct || null, photo_url: photoUrl || null }),
         });
         if (!patchRes.ok) throw new Error("Failed to update MC bill date");
         // PUT updates amounts + items (non-fatal if this part fails — date is already saved above)
