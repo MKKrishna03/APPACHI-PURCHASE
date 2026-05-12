@@ -1,7 +1,11 @@
 require("dotenv").config();
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
+// Return DATE columns as plain "YYYY-MM-DD" strings instead of JS Date objects.
+// postgres-date v1 parses DATE as local-midnight Date, which JSON-serialises to
+// the previous UTC day in IST (UTC+5:30), causing an off-by-one date bug.
+types.setTypeParser(1082, (val) => val);
 const crypto = require("crypto");
 
 function generateResetKey() {
