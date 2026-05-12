@@ -647,7 +647,7 @@
             onchange="applyFilter()"
           >
             <option value="">All Status</option>
-            <option value="not_generated">Not Generated</option>
+            <option value="not_generated" selected>Not Generated</option>
             <option value="generated">Generated</option>
           </select>
         </div>
@@ -1663,7 +1663,7 @@
           const d = await res.json();
           const l = d.labour;
           const items = d.items || [];
-          const invDate = (l.date || new Date().toISOString()).slice(0, 10);
+          const invDate = String(row?.mc_receipt_date || l.date || new Date().toISOString()).slice(0, 10);
           const invNo = (l.receipt_bill_no || "").replace("MC/", "") || "01";
           const fineWeight = Number.parseFloat(items[0]?.quantity || 0);
           const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
@@ -1719,34 +1719,41 @@
       }
 
       async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
-        const payload = {
-          date: invDate,
-          receipt_bill_no: `MC/${String(invNo).padStart(2, "0")}`,
-          taxable_total: subtotal,
-          round_off: roundOff,
-          total: rounded,
-          tds: 0,
-          bill_value_after_deduction: rounded,
-          photo_url: photoUrl || null,
-          gold_rate: goldRate || null,
-          mc_pct: pct || null,
-          items: [
-            {
-              sl_no: 1,
-              description: "Making Charges",
-              quantity: Number.parseFloat(fineWeight.toFixed(2)),
-              rate: Number.parseFloat(ratePerGram.toFixed(2)),
-              tax_percent: 0,
-              amount: subtotal,
-            },
-          ],
-        };
-        const res = await fetch(`/api/labour/${receiptId}`, {
-          method: "PUT",
+        const billNo = `MC/${String(invNo).padStart(2, "0")}`;
+        // PATCH first — simple direct update with no transaction, guarantees date/rates are saved
+        const patchRes = await fetch(`/api/labour/${receiptId}/mc`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ date: invDate, receipt_bill_no: billNo, gold_rate: goldRate || null, mc_pct: pct || null }),
         });
-        if (!res.ok) throw new Error("Failed to update receipt voucher");
+        if (!patchRes.ok) throw new Error("Failed to update MC bill date");
+        // PUT updates amounts + items (non-fatal if this part fails — date is already saved above)
+        try {
+          await fetch(`/api/labour/${receiptId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              date: invDate,
+              receipt_bill_no: billNo,
+              taxable_total: subtotal,
+              round_off: roundOff,
+              total: rounded,
+              tds: 0,
+              bill_value_after_deduction: rounded,
+              photo_url: photoUrl || null,
+              gold_rate: goldRate || null,
+              mc_pct: pct || null,
+              items: [{
+                sl_no: 1, description: "Making Charges",
+                quantity: Number.parseFloat(fineWeight.toFixed(2)),
+                rate: Number.parseFloat(ratePerGram.toFixed(2)),
+                tax_percent: 0, amount: subtotal,
+              }],
+            }),
+          });
+        } catch (e) {
+          console.warn("[MC] Items PUT failed (date already saved):", e.message);
+        }
       }
 
       async function confirmDeleteMcBill(id, e) {

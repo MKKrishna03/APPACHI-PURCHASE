@@ -397,6 +397,19 @@ router.post("/close-issue-voucher", async (req, res) => {
   }
 });
 
+router.patch("/labour/:id/mc", async (req, res) => {
+  const { date, receipt_bill_no, gold_rate, mc_pct } = req.body;
+  try {
+    await pool.query(
+      `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4 WHERE id=$5`,
+      [date || null, receipt_bill_no || null, gold_rate ?? null, mc_pct ?? null, req.params.id],
+    );
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete("/labour/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   const client = await pool.connect();
