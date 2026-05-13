@@ -799,21 +799,25 @@
       let filteredData = [];
 
       // ── MC bill number helpers ──
-      // Suffixes stripped only from the END of the name (business type words)
-      const _MC_TRAIL = new Set(["MC", "HUF", "PVT", "LTD", "JEWELLERY", "JEWELLERS", "JEWELERS", "TRADERS", "ENTERPRISES", "CO", "COMPANY", "BROS", "BROTHERS"]);
-      // Conjunctions filtered from anywhere in the name
-      const _MC_CONJ  = new Set(["AND", "&"]);
+      const _MC_PREFIX_MAP = {
+        "VIGNESH NAMACHIVAYAM MC": "VN",
+        "VIMAL HUF MC":            "VH",
+        "VIMAL MC":                "V",
+        "NAMACHIVAYAM HUF":        "NH",
+      };
       function getMcPrefix(companyName) {
-        const words = String(companyName || "").toUpperCase().trim().split(/\s+/).filter(Boolean);
-        // Strip trailing business-type words so they don't become initials
-        while (words.length > 1 && _MC_TRAIL.has(words[words.length - 1])) words.pop();
-        // Keep all words except conjunctions, then take first letter of each
-        const meaningful = words.filter(w => !_MC_CONJ.has(w));
-        const initials = meaningful.map(w => w[0]).join("");
+        const key = String(companyName || "").trim().toUpperCase();
+        // Check exact match first (case-insensitive)
+        for (const [k, v] of Object.entries(_MC_PREFIX_MAP)) {
+          if (k === key) return `${v}-MC/`;
+        }
+        // Fallback: initials of each word, strip trailing MC/HUF/etc.
+        const _trail = new Set(["MC","HUF","PVT","LTD","JEWELLERY","JEWELLERS","JEWELERS","TRADERS","ENTERPRISES","CO","COMPANY","BROS","BROTHERS"]);
+        const words = key.split(/\s+/).filter(Boolean);
+        while (words.length > 1 && _trail.has(words[words.length - 1])) words.pop();
+        const initials = words.filter(w => w !== "AND" && w !== "&").map(w => w[0]).join("");
         if (initials) return `${initials}-MC/`;
-        // Fallback: first 2 chars of whatever is left
-        const fallback = (words[0] || "").slice(0, 2);
-        return fallback ? `${fallback}-MC/` : "MC/";
+        return `${(words[0] || "").slice(0, 2)}-MC/` || "MC/";
       }
       function parseMcBillNum(billNo) {
         const m = /(\d+)$/.exec(billNo || "");
