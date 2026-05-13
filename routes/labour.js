@@ -404,11 +404,13 @@ router.patch("/labour/:id/mc", async (req, res) => {
     if (photo_url) {
       const old = await pool.query(`SELECT photo_url FROM labour WHERE id = $1`, [req.params.id]);
       const oldUrl = old.rows[0]?.photo_url;
-      if (oldUrl && oldUrl !== photo_url) await deleteCloudinaryPhoto(oldUrl);
+      // UPDATE first — if it fails, old Cloudinary photo is preserved
       await pool.query(
         `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4, photo_url=$5 WHERE id=$6`,
         [date || null, receipt_bill_no || null, gold_rate ?? null, mc_pct ?? null, photo_url, req.params.id],
       );
+      // Delete old photo AFTER DB is updated (unique filename guarantees old != new)
+      if (oldUrl && oldUrl !== photo_url) await deleteCloudinaryPhoto(oldUrl);
     } else {
       await pool.query(
         `UPDATE labour SET date=$1, receipt_bill_no=$2, gold_rate=$3, mc_pct=$4 WHERE id=$5`,

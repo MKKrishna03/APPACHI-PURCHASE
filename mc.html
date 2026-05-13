@@ -1184,7 +1184,7 @@
             const dataUrl = await captureBillAsImage(html);
             billParams.photoUrl = await uploadMcBillPhoto(
               dataUrl,
-              `mc_${String(invNoInput || 1).padStart(2, "0")}_${invDate.replace(/-/g, "")}`,
+              `mc_${String(invNoInput || 1).padStart(2, "0")}_${invDate.replace(/-/g, "")}_${Date.now()}`,
             );
           } catch (e) {
             console.warn("[MC] Photo upload failed:", e.message);
