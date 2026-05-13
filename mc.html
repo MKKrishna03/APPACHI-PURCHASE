@@ -799,11 +799,21 @@
       let filteredData = [];
 
       // ── MC bill number helpers ──
-      const _MC_SKIP = new Set(["MC", "HUF", "PVT", "LTD", "JEWELLERY", "JEWELLERS", "JEWELERS", "TRADERS", "ENTERPRISES", "AND", "&", "CO", "COMPANY", "BROS", "BROTHERS"]);
+      // Suffixes stripped only from the END of the name (business type words)
+      const _MC_TRAIL = new Set(["MC", "HUF", "PVT", "LTD", "JEWELLERY", "JEWELLERS", "JEWELERS", "TRADERS", "ENTERPRISES", "CO", "COMPANY", "BROS", "BROTHERS"]);
+      // Conjunctions filtered from anywhere in the name
+      const _MC_CONJ  = new Set(["AND", "&"]);
       function getMcPrefix(companyName) {
-        const words = String(companyName || "").toUpperCase().trim().split(/\s+/).filter(w => w && !_MC_SKIP.has(w));
-        const initials = words.map(w => w[0]).join("");
-        return initials ? `${initials}-MC/` : "MC/";
+        const words = String(companyName || "").toUpperCase().trim().split(/\s+/).filter(Boolean);
+        // Strip trailing business-type words so they don't become initials
+        while (words.length > 1 && _MC_TRAIL.has(words[words.length - 1])) words.pop();
+        // Keep all words except conjunctions, then take first letter of each
+        const meaningful = words.filter(w => !_MC_CONJ.has(w));
+        const initials = meaningful.map(w => w[0]).join("");
+        if (initials) return `${initials}-MC/`;
+        // Fallback: first 2 chars of whatever is left
+        const fallback = (words[0] || "").slice(0, 2);
+        return fallback ? `${fallback}-MC/` : "MC/";
       }
       function parseMcBillNum(billNo) {
         const m = /(\d+)$/.exec(billNo || "");
@@ -1673,7 +1683,7 @@
       }
 
       async function openMcBillWindow(id) {
-        const row = allData.find((r) => r.id === id);
+        const row = allData.find((r) => String(r.id) === String(id));
         const billData = getMcBillData(id);
         const receiptId = row?.mc_receipt_id || billData?.receiptId;
         if (!receiptId) {
@@ -1687,7 +1697,9 @@
           const l = d.labour;
           const items = d.items || [];
           const invDate = String(row?.mc_receipt_date || l.date || new Date().toISOString()).slice(0, 10);
-          const mcBillNo = l.receipt_bill_no || "MC/01";
+          const _storedNum = parseMcBillNum(l.receipt_bill_no) || 1;
+          const mcBillNo = `${getMcPrefix(row?.company_name || "")}${String(_storedNum).padStart(2, "0")}`;
+
           const fineWeight = Number.parseFloat(items[0]?.quantity || 0);
           const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
           const subtotal = Number.parseFloat(l.taxable_total ?? items[0]?.amount ?? 0);
