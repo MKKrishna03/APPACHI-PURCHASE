@@ -798,6 +798,18 @@
       let allData = [];
       let filteredData = [];
 
+      // ── MC bill number helpers ──
+      const _MC_SKIP = new Set(["MC", "HUF", "PVT", "LTD", "JEWELLERY", "JEWELLERS", "JEWELERS", "TRADERS", "ENTERPRISES", "AND", "&", "CO", "COMPANY", "BROS", "BROTHERS"]);
+      function getMcPrefix(companyName) {
+        const words = String(companyName || "").toUpperCase().trim().split(/\s+/).filter(w => w && !_MC_SKIP.has(w));
+        const initials = words.map(w => w[0]).join("");
+        return initials ? `${initials}-MC/` : "MC/";
+      }
+      function parseMcBillNum(billNo) {
+        const m = /(\d+)$/.exec(billNo || "");
+        return m ? parseInt(m[1], 10) : 0;
+      }
+
       // ── Generated tracking (DB-backed via mc_receipt_id; localStorage fallback for pre-migration data) ──
       function isGenerated(id) {
         const row = allData.find((r) => String(r.id) === String(id));
@@ -968,7 +980,7 @@
         if (_editingId) {
           // Edit: restore exact number, date, gold rate, pct from DB via allData
           const _editRow = allData.find((r) => String(r.id) === String(_editingId));
-          _suggestNo = Number.parseInt((_editRow?.mc_receipt_bill_no || "").replace("MC/", "") || "0", 10) || 1;
+          _suggestNo = parseMcBillNum(_editRow?.mc_receipt_bill_no) || 1;
           if (_editRow?.mc_receipt_date) {
             document.getElementById("invDate").value = String(_editRow.mc_receipt_date).slice(0, 10);
           }
@@ -978,7 +990,7 @@
           // New: next number = max existing MC number for this company + 1
           const _maxNo = Math.max(0, ...allData
             .filter((r) => r.company_name === _invCompany && r.mc_receipt_bill_no)
-            .map((r) => Number.parseInt((r.mc_receipt_bill_no || "").replace("MC/", "") || "0", 10))
+            .map((r) => parseMcBillNum(r.mc_receipt_bill_no))
           );
           _suggestNo = _maxNo + 1;
           const _defaultPct = /namachivayam/i.test(_invCompany) ? "3" : "3.5";
@@ -1099,9 +1111,10 @@
           .join(" - ");
         const senderPan = profile.pan_number || "";
 
-        const invNo = String(invNoInput || 1).padStart(2, "0");
         const _company = checked[0]?.dataset.company || "";
         localStorage.setItem(`mc_last_pct_${_company}`, String(pct));
+        const _prefix = getMcPrefix(_company);
+        const mcBillNo = `${_prefix}${String(invNoInput || 1).padStart(2, "0")}`;
 
         const ratePerGram = (pct / 100) * (goldRate / 10);
         const vouchers = checked.map((cb) => ({
@@ -1113,11 +1126,15 @@
         const fineWeight = Math.round(((totalWeight * 99.9) / 92) * 100) / 100;
         const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
         const rounded = Math.round(subtotal);
+
+        const issueNo = vouchers.map(v => v.issue).filter(Boolean).join(", ");
+        const _issueRow = allData.find(r => String(r.id) === String(vouchers[0]?.id));
+        const issueDate = String(_issueRow?.date || "").slice(0, 10);
         const roundOff = parseFloat((rounded - subtotal).toFixed(2));
 
         const html = buildBillHtml({
           senderName, senderCity, senderPan,
-          invNo, invDate, fineWeight, ratePerGram,
+          mcBillNo, invDate, issueNo, issueDate, fineWeight, ratePerGram,
           subtotal, roundOff, rounded, goldRate, pct,
         });
 
@@ -1135,7 +1152,7 @@
 
         const billParams = {
           invDate,
-          invNo: invNoInput || 1,
+          mcBillNo,
           fineWeight,
           ratePerGram,
           subtotal,
@@ -1207,7 +1224,7 @@
 
         // Mark as generated (DB-backed via allData), close modal, refresh table, open print
         if (_finalReceiptId) markGenerated(voucherIds, _finalReceiptId, {
-          mc_receipt_bill_no: `MC/${String(invNoInput || 1).padStart(2, "0")}`,
+          mc_receipt_bill_no: mcBillNo,
           mc_gold_rate: goldRate,
           mc_pct: pct,
           mc_receipt_date: invDate,
@@ -1530,19 +1547,18 @@
         return d.photo_url;
       }
 
-      function buildBillHtml({ senderName, senderCity, senderPan, invNo, invDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct }) {
-        const fmtD = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+      function buildBillHtml({ senderName, senderCity, senderPan, mcBillNo, invDate, issueNo, issueDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct }) {
+        const fmtD = (iso) => { const s = String(iso || "").slice(0, 10); const [y, m, d] = s.split("-"); return `${d}/${m}/${y}`; };
         const fmtA = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const footNote = pct && goldRate
           ? `${pct}% RATE for ${Number(goldRate).toLocaleString("en-IN")} on ${fmtD(invDate)} is ${Number(ratePerGram).toFixed(2)}`
           : `Rate: ₹${Number(ratePerGram).toFixed(2)}/g`;
         const senderMeta = [senderCity, senderPan ? `PAN - ${senderPan}` : ""].filter(Boolean).join("<br>");
-        const invNoStr = String(invNo).padStart(2, "0");
         return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>Invoice #${invNoStr} — ${senderName}</title>
+  <title>${mcBillNo} — ${senderName}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a2e;background:#fff;font-size:14px;}
@@ -1592,10 +1608,17 @@
         <div class="sender-name">${senderName}</div>
         <div class="sender-meta">${senderMeta}</div>
       </div>
-      <div class="inv-ref">
-        <div class="inv-ref-eye">Invoice</div>
-        <div class="inv-ref-no">#${invNoStr}</div>
-        <div class="inv-ref-date">${fmtD(invDate)}</div>
+      <div style="text-align:right;">
+        <div class="inv-ref">
+          <div class="inv-ref-eye">Invoice</div>
+          <div class="inv-ref-no">${mcBillNo}</div>
+          <div class="inv-ref-date">${fmtD(invDate)}</div>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="inv-ref-eye">For Issue Voucher</div>
+          <div style="font-size:14px;font-weight:800;color:#1a1a2e;">${issueNo || "—"}</div>
+          ${issueDate ? `<div class="inv-ref-date">${fmtD(issueDate)}</div>` : ""}
+        </div>
       </div>
     </div>
     <hr class="thin"/>
@@ -1664,7 +1687,7 @@
           const l = d.labour;
           const items = d.items || [];
           const invDate = String(row?.mc_receipt_date || l.date || new Date().toISOString()).slice(0, 10);
-          const invNo = (l.receipt_bill_no || "").replace("MC/", "") || "01";
+          const mcBillNo = l.receipt_bill_no || "MC/01";
           const fineWeight = Number.parseFloat(items[0]?.quantity || 0);
           const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
           const subtotal = Number.parseFloat(l.taxable_total ?? items[0]?.amount ?? 0);
@@ -1675,7 +1698,9 @@
           const senderName = row?.company_name || l.company_name || "—";
           const senderCity = [row?.city, row?.pincode].filter(Boolean).join(" - ");
           const senderPan = row?.pan_number || "";
-          const html = buildBillHtml({ senderName, senderCity, senderPan, invNo, invDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct });
+          const issueNo = row?.issue_number || "";
+          const issueDate = String(row?.date || "").slice(0, 10);
+          const html = buildBillHtml({ senderName, senderCity, senderPan, mcBillNo, invDate, issueNo, issueDate, fineWeight, ratePerGram, subtotal, roundOff, rounded, goldRate, pct });
           const w = window.open("", "_blank");
           w.document.write(html);
           w.document.close();
@@ -1684,12 +1709,12 @@
         }
       }
 
-      async function saveReceiptVoucher(labourIds, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
+      async function saveReceiptVoucher(labourIds, { invDate, mcBillNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
         const payload = {
           is_mc: true,
           labour_ids: labourIds.map(Number),
           closing_date: invDate,
-          bill_no: `MC/${String(invNo).padStart(2, "0")}`,
+          bill_no: mcBillNo,
           taxable_total: subtotal,
           round_off: roundOff,
           total: rounded,
@@ -1718,8 +1743,8 @@
         return (await res.json()).id;
       }
 
-      async function updateReceiptVoucher(receiptId, { invDate, invNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
-        const billNo = `MC/${String(invNo).padStart(2, "0")}`;
+      async function updateReceiptVoucher(receiptId, { invDate, mcBillNo, fineWeight, ratePerGram, subtotal, roundOff, rounded, photoUrl, goldRate, pct }) {
+        const billNo = mcBillNo;
         // PATCH first — simple direct update with no transaction, guarantees date/rates/photo are saved.
         // Server deletes the old Cloudinary photo if a new one is provided.
         const patchRes = await fetch(`/api/labour/${receiptId}/mc`, {
