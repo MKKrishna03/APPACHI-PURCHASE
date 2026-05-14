@@ -757,18 +757,6 @@
               style="background:var(--surface-2);cursor:default;color:var(--ink);font-family:'DM Mono',monospace;font-weight:600;"
             />
           </div>
-          <div class="field">
-            <label for="invFineWeight">Fine Weight (g)</label>
-            <input
-              type="number"
-              id="invFineWeight"
-              placeholder="auto"
-              step="0.01"
-              min="0"
-              oninput="refreshPreview()"
-            />
-            <div class="field-hint">Leave blank to auto-calculate</div>
-          </div>
         </div>
         <div class="inv-preview" id="invPreview" style="color: var(--ink-3)">
           Enter gold rate and percentage to preview.
@@ -1083,10 +1071,6 @@
           document.getElementById("invNo").value,
           10,
         );
-        const fineWeightOverride = Number.parseFloat(
-          document.getElementById("invFineWeight").value,
-        );
-
         if (!invDate) {
           alert("Please enter invoice date.");
           return;
@@ -1137,7 +1121,7 @@
           weight: Number.parseFloat(cb.dataset.weight || 0),
         }));
         const totalWeight = vouchers.reduce((s, v) => s + v.weight, 0);
-        const fineWeight = Math.round(((totalWeight * 99.9) / 92) * 100) / 100;
+        const fineWeight = Math.round(totalWeight * 100) / 100;
         const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
         const rounded = Math.round(subtotal);
 
@@ -1418,7 +1402,7 @@
         }
 
         const ratePerGram = (pct / 100) * (goldRate / 10);
-        const fineWeight = Math.round(((weight * 99.9) / 92) * 100) / 100;
+        const fineWeight = Math.round(weight * 100) / 100;
         const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
         const rounded = Math.round(subtotal);
         const roundOff = parseFloat((rounded - subtotal).toFixed(2));
@@ -1437,7 +1421,7 @@
           <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">
             Rate: <b>₹${ratePerGram.toFixed(2)}/g</b>
             &nbsp;(${pct}% of ₹${Number(goldRate).toLocaleString("en-IN")}/10g)
-            &nbsp;·&nbsp; Fine Weight: <b>${fineWeight.toFixed(2)} g</b>
+            &nbsp;·&nbsp; Weight: <b>${fineWeight.toFixed(2)} g</b>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;">
             <div style="display:flex;justify-content:space-between;font-size:12.5px;">
