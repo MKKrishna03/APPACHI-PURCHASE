@@ -427,10 +427,18 @@ router.delete("/labour/:id", async (req, res) => {
   if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
   const client = await pool.connect();
   try {
+    // Fetch photo URL before deleting so we can clean up Cloudinary
+    const photoRes = await client.query(`SELECT photo_url FROM labour WHERE id = $1`, [req.params.id]);
+    const photoUrl = photoRes.rows[0]?.photo_url;
+
     await client.query("BEGIN");
     await client.query(`UPDATE labour SET mc_receipt_id = NULL WHERE mc_receipt_id = $1 AND deleted_at IS NULL`, [req.params.id]);
     await client.query(`UPDATE labour SET deleted_at = NOW() WHERE id = $1`, [req.params.id]);
     await client.query("COMMIT");
+
+    // Delete Cloudinary photo after DB is committed (non-fatal if this fails)
+    if (photoUrl) await deleteCloudinaryPhoto(photoUrl);
+
     res.json({ status: "SUCCESS" });
   } catch (err) {
     await client.query("ROLLBACK");

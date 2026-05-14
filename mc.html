@@ -1000,7 +1000,6 @@
           document.getElementById("invPct").value = localStorage.getItem(`mc_last_pct_${_invCompany}`) || _defaultPct;
         }
         document.getElementById("invNo").value = _suggestNo;
-        document.getElementById("invFineWeight").value = "";
         refreshPreview();
         document.getElementById("invoiceDialog").showModal();
         setTimeout(() => document.getElementById("invGoldRate").focus(), 100);
@@ -1688,11 +1687,12 @@
           const _storedNum = parseMcBillNum(l.receipt_bill_no) || 1;
           const mcBillNo = `${getMcPrefix(row?.company_name || "")}${String(_storedNum).padStart(2, "0")}`;
 
-          const fineWeight = Number.parseFloat(items[0]?.quantity || 0);
+          // Always use the issue voucher's exact total weight (no purity formula)
+          const fineWeight = Math.round(Number.parseFloat(row?.total_weight || items[0]?.quantity || 0) * 100) / 100;
           const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
-          const subtotal = Number.parseFloat(l.taxable_total ?? items[0]?.amount ?? 0);
-          const rounded = Number.parseFloat(l.total || 0);
-          const roundOff = Number.parseFloat(l.round_off || 0);
+          const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
+          const rounded = Math.round(subtotal);
+          const roundOff = parseFloat((rounded - subtotal).toFixed(2));
           const goldRate = Number(l.gold_rate) || billData?.goldRate || 0;
           const pct = Number(l.mc_pct) || billData?.pct || 0;
           const senderName = row?.company_name || l.company_name || "—";
