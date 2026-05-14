@@ -1678,7 +1678,11 @@
           return;
         }
         try {
-          const res = await fetch(`/api/labour/${receiptId}`);
+          // Fetch receipt voucher AND issue voucher in parallel
+          const [res, issueRes] = await Promise.all([
+            fetch(`/api/labour/${receiptId}`),
+            fetch(`/api/labour/${id}`),
+          ]);
           if (!res.ok) throw new Error();
           const d = await res.json();
           const l = d.labour;
@@ -1687,8 +1691,10 @@
           const _storedNum = parseMcBillNum(l.receipt_bill_no) || 1;
           const mcBillNo = `${getMcPrefix(row?.company_name || "")}${String(_storedNum).padStart(2, "0")}`;
 
-          // Always use the issue voucher's exact total weight (no purity formula)
-          const fineWeight = Math.round(Number.parseFloat(row?.total_weight || items[0]?.quantity || 0) * 100) / 100;
+          // Use exact weight from issue voucher items (no purity formula)
+          const issueItems = issueRes.ok ? (await issueRes.json()).items || [] : [];
+          const _exactWeight = issueItems.reduce((s, it) => s + Number.parseFloat(it.quantity || 0), 0);
+          const fineWeight = Math.round((_exactWeight || Number.parseFloat(row?.total_weight || 0)) * 100) / 100;
           const ratePerGram = Number.parseFloat(items[0]?.rate || 0);
           const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
           const rounded = Math.round(subtotal);
