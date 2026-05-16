@@ -1332,10 +1332,16 @@
           receiptBills.forEach((b) => {
             if (!b.issue_number) return;
             const issueNums = b.issue_number.split(",").map((s) => s.trim());
-            const qtyPerIssue = (qtyMap[b.id] || 0) / issueNums.length;
-            issueNums.forEach((n) => {
-              receivedQty[n] = (receivedQty[n] || 0) + qtyPerIssue;
-            });
+            if (issueNums.length <= 1) {
+              receivedQty[issueNums[0]] = (receivedQty[issueNums[0]] || 0) + (qtyMap[b.id] || 0);
+            } else {
+              // Multi-voucher receipt: credit each issue with its own issued quantity
+              issueNums.forEach((n) => {
+                const matchingIssue = issueBills.find((iv) => iv.issue_number === n);
+                const credit = matchingIssue ? (qtyMap[matchingIssue.id] || 0) : 0;
+                receivedQty[n] = (receivedQty[n] || 0) + credit;
+              });
+            }
           });
           const pendingBills = issueBills.filter(
             (b) =>
