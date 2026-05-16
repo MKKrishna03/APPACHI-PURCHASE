@@ -344,9 +344,11 @@ router.post("/close-issue-voucher", async (req, res) => {
         }
       }
       await client.query("COMMIT");
-      return res.json({ status: "SUCCESS", id: close_labour_id });
+      console.log("[close-issue-voucher] BULK saved receipt id=%d issue_number=%s labour_ids=%j", close_labour_id, issueNumbers.join(","), labour_ids);
+      return res.json({ status: "SUCCESS", id: close_labour_id, saved_issue_number: issueNumbers.join(","), saved_count: labour_ids.length });
     } catch (err) {
       await client.query("ROLLBACK");
+      console.error("[close-issue-voucher] ROLLBACK error:", err.message, "labour_ids:", labour_ids);
       return res.status(500).json({ error: err.message });
     } finally {
       client.release();

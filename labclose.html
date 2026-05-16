@@ -1337,7 +1337,7 @@
             } else {
               // Multi-voucher receipt: credit each issue with its own issued quantity
               issueNums.forEach((n) => {
-                const matchingIssue = issueBills.find((iv) => iv.issue_number === n);
+                const matchingIssue = issueBills.find((iv) => (iv.issue_number || "").trim() === n);
                 const credit = matchingIssue ? (qtyMap[matchingIssue.id] || 0) : 0;
                 receivedQty[n] = (receivedQty[n] || 0) + credit;
               });
@@ -1345,7 +1345,7 @@
           });
           const pendingBills = issueBills.filter(
             (b) =>
-              (qtyMap[b.id] || 0) > (receivedQty[b.issue_number] || 0) + 0.001,
+              (qtyMap[b.id] || 0) > (receivedQty[(b.issue_number || "").trim()] || 0) + 0.001,
           );
           displayLabourBillCards(pendingBills, qtyMap, receivedQty);
         } catch (err) {
@@ -1362,9 +1362,10 @@
         list.innerHTML = bills
           .map((bill) => {
             const issued = (qtyMap[bill.id] || 0).toFixed(2);
-            const received = (receivedQty[bill.issue_number] || 0).toFixed(2);
+            const issKey = (bill.issue_number || "").trim();
+            const received = (receivedQty[issKey] || 0).toFixed(2);
             const pending = (
-              (qtyMap[bill.id] || 0) - (receivedQty[bill.issue_number] || 0)
+              (qtyMap[bill.id] || 0) - (receivedQty[issKey] || 0)
             ).toFixed(2);
             return `<div class="bill-card" id="card_${bill.id}">
                               <div class="bill-card-id">${bill.issue_number}</div>
@@ -1404,6 +1405,7 @@
       }
 
       function selectLabourBill(labourId, issueNumber, companyName, billDate) {
+        let isFirstSelection = false;
         if (selectedLabourIds.includes(labourId)) {
           selectedLabourIds = selectedLabourIds.filter((id) => id !== labourId);
           document
@@ -1418,6 +1420,7 @@
         } else {
           selectedLabourIds.push(labourId);
           document.getElementById(`card_${labourId}`).classList.add("selected");
+          isFirstSelection = selectedLabourIds.length === 1;
         }
         selectedLabourId = labourId;
         document.getElementById(`card_${labourId}`).classList.add("selected");
@@ -1430,7 +1433,7 @@
           })
           .join(", ");
         document.getElementById("companyName").textContent = companyName || "";
-        if (!_editMode) {
+        if (!_editMode && isFirstSelection) {
           document.getElementById("closingDate").value = "";
           document.getElementById("receiptBillNo").value = "";
           uploadedPhotoUrls = [];
@@ -1449,7 +1452,7 @@
           document.getElementById("gstType").textContent =
             "CGST 2.5% + SGST 2.5%";
         }
-        if (!_editMode) {
+        if (!_editMode && isFirstSelection) {
           rowCount = 0;
           loadLabourItems(labourId);
         }
@@ -1790,8 +1793,10 @@
           });
           const result = await res.json();
           if (result.status === "SUCCESS") {
+            const savedNum = result.saved_issue_number || "";
+            const savedCount = result.saved_count || selectedLabourIds.length;
             showMessage(
-              selectedLabourIds.length + " voucher(s) closed successfully!",
+              savedCount + " voucher(s) closed: " + savedNum,
               "success",
             );
             setTimeout(function () {
