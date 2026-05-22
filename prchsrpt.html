@@ -302,7 +302,7 @@
         background: #245c43;
       }
       .main {
-        padding: 28px;
+        padding: 14px 20px;
         flex: 1;
         overflow: hidden;
         display: flex;
@@ -311,13 +311,13 @@
       }
       .filters {
         display: flex;
-        gap: 16px;
+        gap: 10px;
         align-items: center;
-        margin-bottom: 24px;
+        margin-bottom: 10px;
         flex-wrap: wrap;
       }
       .filters select {
-        padding: 9px 32px 9px 12px;
+        padding: 6px 28px 6px 10px;
         border: 1px solid var(--border-strong);
         border-radius: var(--radius);
         background: var(--surface);
@@ -342,14 +342,14 @@
       .summary-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
-        gap: 16px;
-        margin-bottom: 24px;
+        gap: 10px;
+        margin-bottom: 10px;
       }
       .summary-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 18px 20px;
+        padding: 10px 14px;
         box-shadow:
           0 4px 16px rgba(0, 0, 0, 0.07),
           0 1px 4px rgba(0, 0, 0, 0.04);
@@ -367,10 +367,10 @@
         color: var(--ink-3);
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        margin-bottom: 8px;
+        margin-bottom: 3px;
       }
       .summary-value {
-        font-size: 20px;
+        font-size: 16px;
         font-weight: 700;
         color: var(--ink);
         font-family: "DM Mono", monospace;
@@ -379,13 +379,13 @@
       .summary-sub {
         font-size: 11px;
         color: var(--ink-3);
-        margin-top: 4px;
+        margin-top: 2px;
       }
       .card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 20px;
+        padding: 14px;
         box-shadow:
           0 4px 16px rgba(0, 0, 0, 0.07),
           0 1px 4px rgba(0, 0, 0, 0.04);
@@ -398,7 +398,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
       }
       .card-title {
         font-size: 11px;
@@ -527,6 +527,7 @@
       }
     </style>
       <link rel="stylesheet" href="/polish.css" />
+      <script src="/responsive.js" defer></script>
   </head>
   <body>
     <div class="topbar">
