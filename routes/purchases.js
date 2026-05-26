@@ -53,7 +53,10 @@ router.get("/purchases/no-photo", async (req, res) => {
       `SELECT p.id, p.profile_id, p.bill_no, p.date, p.net_value, p.total_value,
               COALESCE(pr.alias, pr.company_name) AS company_name, 'purchase' AS source
        FROM purchases p LEFT JOIN profiles pr ON pr.id = p.profile_id
-       WHERE (p.photo_url IS NULL OR p.photo_url = '') AND (p.voucher_type IS NULL OR p.voucher_type != 'Hallmark Voucher') AND p.deleted_at IS NULL
+       WHERE (p.photo_url IS NULL OR p.photo_url = '')
+         AND (p.voucher_type IS NULL OR p.voucher_type NOT ILIKE '%Hallmark Voucher%')
+         AND (p.voucher_type IS NULL OR p.voucher_type NOT ILIKE '%issue%')
+         AND p.deleted_at IS NULL
        UNION ALL
        SELECT l.id, l.profile_id, l.receipt_bill_no AS bill_no, l.date,
               l.bill_value_after_deduction AS net_value, l.total AS total_value,
@@ -200,7 +203,11 @@ router.patch("/purchases/:id/accounted", async (req, res) => {
 
 router.patch("/purchases/:id/photo", async (req, res) => {
   try {
-    await pool.query(`UPDATE purchases SET photo_url = $1 WHERE id = $2`, [req.body.photo_url || null, req.params.id]);
+    const { photo_url, photo_urls } = req.body;
+    await pool.query(
+      `UPDATE purchases SET photo_url = $1, photo_urls = $2 WHERE id = $3`,
+      [photo_url || null, photo_urls?.length ? photo_urls : null, req.params.id],
+    );
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });

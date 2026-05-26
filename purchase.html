@@ -184,6 +184,38 @@
         border-radius: 2px;
       }
 
+      /* ── No-Photo Bills sidebar list ── */
+      .no-photo-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.12s;
+      }
+      .no-photo-item:hover { background: var(--surface-2); }
+      .no-photo-item:last-child { border-bottom: none; }
+      .no-photo-bill {
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--accent);
+        font-family: "DM Mono", monospace;
+      }
+      .no-photo-meta {
+        font-size: 10px;
+        color: var(--ink-3);
+        margin-top: 2px;
+      }
+      .no-photo-amt {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink-2);
+        white-space: nowrap;
+        margin-left: 6px;
+      }
+
       .pay-card {
         background: var(--surface-2);
         border: 1px solid var(--border);
@@ -714,6 +746,29 @@
         </button>
         <div class="section-body" id="body_recent">
           <div id="recentList"><div class="no-data">Loading…</div></div>
+        </div>
+
+        <!-- Bills Without Photos -->
+        <button
+          class="section-toggle"
+          onclick="toggleSection('nophoto'); if(!window._noPhotoLoaded) loadNoPhotoBills()"
+          style="margin-top: 8px"
+          id="noPhotoToggleBtn"
+        >
+          <span style="display:flex;align-items:center;gap:6px;">
+            📷 No Photo Bills
+            <span
+              id="noPhotoBadge"
+              title="Bills missing a photo attachment"
+              style="background:#b5301e;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;line-height:15px;display:none;"
+            >0</span>
+          </span>
+          <span class="section-icon" id="arrow_nophoto">▾</span>
+        </button>
+        <div class="section-body" id="body_nophoto">
+          <div id="noPhotoList">
+            <div class="no-data">Loading…</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2386,6 +2441,7 @@
               }
             }
             showMessage("Purchase Voucher created successfully!", "success");
+            clearPhotoStorage(); // draft photos submitted — wipe session draft
             _showLastSaved(document.getElementById("message"));
             if (window._markFormClean) _markFormClean();
             // Update selected cards balance live
@@ -2570,6 +2626,74 @@
       function removePhotoSlot(i) {
         uploadedPhotoUrls.splice(i, 1);
         renderPhotoSlots();
+        autoSavePhotosIfEditing();
+      }
+
+      // ── PHOTO PERSISTENCE ──
+
+      // For existing bills: immediately PATCH the DB so the photo is linked
+      // right away — not only after the full bill form is submitted.
+      async function autoSavePhotosIfEditing() {
+        if (!editPurchaseId) {
+          persistPhotoUrls(); // new bills: keep in sessionStorage as a draft
+          return;
+        }
+        try {
+          await fetch(`/api/purchases/${editPurchaseId}/photo`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              photo_url: uploadedPhotoUrls[0] || null,
+              photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
+            }),
+          });
+        } catch (_) {
+          // Silent — the full Update Purchase submit will save it anyway
+        }
+      }
+
+      // Persist draft photo URLs so they survive a page refresh on new bills
+      function persistPhotoUrls() {
+        try {
+          if (uploadedPhotoUrls.length) {
+            sessionStorage.setItem(
+              "purchase_draft_photos",
+              JSON.stringify(uploadedPhotoUrls),
+            );
+            sessionStorage.setItem(
+              "purchase_draft_ocr",
+              JSON.stringify(photoOcrTexts),
+            );
+          } else {
+            sessionStorage.removeItem("purchase_draft_photos");
+            sessionStorage.removeItem("purchase_draft_ocr");
+          }
+        } catch (_) {}
+      }
+
+      // Restore draft photos on page load (only for new-bill mode)
+      function restorePhotoUrls() {
+        if (editPurchaseId) return;
+        try {
+          const saved = sessionStorage.getItem("purchase_draft_photos");
+          if (saved) {
+            const urls = JSON.parse(saved);
+            if (urls?.length) {
+              uploadedPhotoUrls = urls;
+              const savedOcr = sessionStorage.getItem("purchase_draft_ocr");
+              if (savedOcr) photoOcrTexts = JSON.parse(savedOcr) || {};
+              renderPhotoSlots();
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Wipe draft storage after a successful new-bill submit or form clear
+      function clearPhotoStorage() {
+        try {
+          sessionStorage.removeItem("purchase_draft_photos");
+          sessionStorage.removeItem("purchase_draft_ocr");
+        } catch (_) {}
       }
 
       function getBillDateForUpload() {
@@ -2612,12 +2736,15 @@
         try {
           const res = await fetch(`/api/upload-session/${uploadToken}/status`);
           const data = await res.json();
-          if (data.done && data.photo_url) {
+          // Detect the photo as soon as it's uploaded — don't require the
+          // 'done' flag (which mobile may fail to set if its browser crashes).
+          if (data.photo_url && !uploadedPhotoUrls.includes(data.photo_url)) {
             uploadedPhotoUrls.push(data.photo_url);
             uploadToken = null;
             clearInterval(uploadPollInterval);
             document.getElementById("qrArea").style.display = "none";
             renderPhotoSlots();
+            autoSavePhotosIfEditing();
             // Run OCR on phone-uploaded image for GST badge
             if (typeof Tesseract !== "undefined") {
               try {
@@ -2695,6 +2822,7 @@
           if (upData.status === "SUCCESS") {
             uploadedPhotoUrls.push(upData.photo_url);
             renderPhotoSlots();
+            autoSavePhotosIfEditing();
             showMessage("Photo uploaded ✓", "success");
             setTimeout(() => {
               const m = document.getElementById("message");
@@ -3045,6 +3173,69 @@
           : "";
       }
 
+      // ── NO-PHOTO BILLS SIDEBAR ──
+      window._noPhotoLoaded = false;
+      window._noPhotoCache  = null;
+
+      async function loadNoPhotoBills() {
+        window._noPhotoLoaded = true;
+        const el = document.getElementById("noPhotoList");
+        if (!el) return;
+        el.innerHTML = '<div class="no-data">Loading…</div>';
+        try {
+          const list = await fetch("/api/purchases/no-photo").then((r) => r.json());
+          window._noPhotoCache = list;
+          // Update badge
+          const badge = document.getElementById("noPhotoBadge");
+          if (badge) {
+            badge.textContent = list.length;
+            badge.style.display = list.length ? "inline" : "none";
+          }
+          renderNoPhotoBills(list, el);
+        } catch (e) {
+          el.innerHTML =
+            '<div class="no-data" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
+      function renderNoPhotoBills(list, el) {
+        if (!el) el = document.getElementById("noPhotoList");
+        if (!list.length) {
+          el.innerHTML = '<div class="no-data">✓ All bills have photos</div>';
+          return;
+        }
+        const labelMap = {
+          purchase: "Purchase",
+          receipt_voucher: "Receipt",
+          hallmark: "Hallmark",
+          expenses: "Expense",
+        };
+        el.innerHTML = list
+          .map((b) => {
+            const href =
+              b.source === "purchase"
+                ? `/purchase?edit=${b.id}`
+                : b.source === "receipt_voucher"
+                  ? `/labclose?edit=${b.id}`
+                  : b.source === "hallmark" || b.source === "expenses"
+                    ? `/hmex?edit=${b.id}`
+                    : `/purchase?edit=${b.id}`;
+            const typeLabel = labelMap[b.source] || "Bill";
+            const date = b.date
+              ? new Date(b.date).toLocaleDateString("en-GB")
+              : "—";
+            const amt = parseFloat(b.net_value || b.total_value || 0);
+            return `<a href="${href}" class="no-photo-item">
+              <div>
+                <div class="no-photo-bill">${b.bill_no || "—"}</div>
+                <div class="no-photo-meta">${b.company_name || ""} · ${typeLabel}<br>${date}</div>
+              </div>
+              <div class="no-photo-amt">₹${amt.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            </a>`;
+          })
+          .join("");
+      }
+
       // ── INIT ──
       window.onload = async () => {
         await loadCompanies();
@@ -3066,7 +3257,10 @@
           document.getElementById("billDate").value = new Date()
             .toISOString()
             .split("T")[0];
+          restorePhotoUrls(); // restore any photos taken before a page refresh
         }
+        // Load no-photo count in background (badge shows before section is opened)
+        loadNoPhotoBills();
       };
       function getCurrentUser() {
         try {
@@ -3175,6 +3369,7 @@
           addRow();
           uploadedPhotoUrls = [];
           renderPhotoSlots();
+          clearPhotoStorage();
           updateTotals();
           document.getElementById("billNo").style.borderColor = "";
           document.getElementById("billNo").style.boxShadow = "";
