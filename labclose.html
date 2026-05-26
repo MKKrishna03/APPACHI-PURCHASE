@@ -165,6 +165,38 @@
         border-radius: 2px;
       }
 
+      /* ── No-Photo Bills sidebar list ── */
+      .no-photo-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.12s;
+      }
+      .no-photo-item:hover { background: var(--surface-2); }
+      .no-photo-item:last-child { border-bottom: none; }
+      .no-photo-bill {
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--accent);
+        font-family: "DM Mono", monospace;
+      }
+      .no-photo-meta {
+        font-size: 10px;
+        color: var(--ink-3);
+        margin-top: 2px;
+      }
+      .no-photo-amt {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink-2);
+        white-space: nowrap;
+        margin-left: 6px;
+      }
+
       .bill-card {
         background: var(--surface-2);
         border: 1px solid var(--border);
@@ -683,6 +715,28 @@
         <div class="section-body" id="body_payments">
           <div style="font-size:11px;color:var(--ink-3);padding:4px 0 6px;">Select an unlinked payment to attach to this receipt.</div>
           <div id="recentPaymentsList"><div class="no-data">Loading…</div></div>
+        </div>
+
+        <!-- Labour Receipts Without Photos -->
+        <button
+          class="section-toggle"
+          onclick="toggleSection('nophoto'); if(!window._labNoPhotoLoaded) loadLabNoPhotoBills()"
+          style="margin-top: 8px"
+        >
+          <span style="display:flex;align-items:center;gap:6px;">
+            📷 No Photo Receipts
+            <span
+              id="labNoPhotoBadge"
+              title="Labour receipts missing a photo attachment"
+              style="background:#b5301e;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;line-height:15px;display:none;"
+            >0</span>
+          </span>
+          <span class="section-icon" id="arrow_nophoto">▾</span>
+        </button>
+        <div class="section-body" id="body_nophoto">
+          <div id="labNoPhotoList">
+            <div class="no-data">Loading…</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1834,6 +1888,48 @@
         el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
 
+      // ── NO-PHOTO LABOUR RECEIPTS SIDEBAR ──
+      window._labNoPhotoLoaded = false;
+
+      async function loadLabNoPhotoBills() {
+        window._labNoPhotoLoaded = true;
+        const el = document.getElementById("labNoPhotoList");
+        if (!el) return;
+        el.innerHTML = '<div class="no-data">Loading…</div>';
+        try {
+          const all = await fetch("/api/purchases/no-photo").then((r) => r.json());
+          // Only show labour receipt vouchers on this page
+          const list = all.filter((b) => b.source === "receipt_voucher");
+          const badge = document.getElementById("labNoPhotoBadge");
+          if (badge) {
+            badge.textContent = list.length;
+            badge.style.display = list.length ? "inline" : "none";
+          }
+          if (!list.length) {
+            el.innerHTML = '<div class="no-data">✓ All receipts have photos</div>';
+            return;
+          }
+          el.innerHTML = list
+            .map((b) => {
+              const date = b.date
+                ? new Date(b.date).toLocaleDateString("en-GB")
+                : "—";
+              const amt = parseFloat(b.net_value || b.total_value || 0);
+              return `<a href="/labclose?edit=${b.id}" class="no-photo-item">
+                <div>
+                  <div class="no-photo-bill">${b.bill_no || "—"}</div>
+                  <div class="no-photo-meta">${b.company_name || ""}<br>${date}</div>
+                </div>
+                <div class="no-photo-amt">₹${amt.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </a>`;
+            })
+            .join("");
+        } catch (e) {
+          el.innerHTML =
+            '<div class="no-data" style="color:#b5301e;">Error loading</div>';
+        }
+      }
+
       window.onload = async () => {
         await loadCompanies();
         loadDescriptions();
@@ -1844,6 +1940,8 @@
         loadRecentPayments();
         const editId = new URLSearchParams(location.search).get("edit");
         if (editId) loadEditReceipt(editId);
+        // Load no-photo count in background so badge shows immediately
+        loadLabNoPhotoBills();
       };
 
       async function loadEditReceipt(id) {
@@ -2061,7 +2159,8 @@
         try {
           const res = await fetch(`/api/upload-session/${uploadToken}/status`);
           const data = await res.json();
-          if (data.done && data.photo_url) {
+          // Detect as soon as photo_url is set — don't require 'done' flag
+          if (data.photo_url && !uploadedPhotoUrls.includes(data.photo_url)) {
             uploadedPhotoUrls.push(data.photo_url);
             uploadToken = null;
             clearInterval(uploadPollInterval);

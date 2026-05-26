@@ -29,6 +29,24 @@ async function getSession(token) {
   return result.rows[0] || null;
 }
 
+/**
+ * Build a human-readable Cloudinary public_id so photos can be identified
+ * in the media library even if they are never linked to a DB record.
+ * Example: "KNR_JEWELLERY_INV_001_2026_m1xqz" instead of "upltngphwa8olsyfymev".
+ */
+function buildPublicId(bill_no, company) {
+  const raw_bill = (bill_no || "").trim();
+  if (!raw_bill) return undefined; // no bill number → let Cloudinary assign its own ID
+  const safe = (s) =>
+    s.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/, "");
+  const parts = [];
+  const co = safe((company || "").trim()).slice(0, 25);
+  if (co) parts.push(co);
+  parts.push(safe(raw_bill).slice(0, 40));
+  parts.push(Date.now().toString(36)); // compact, unique suffix (~7 chars)
+  return parts.join("_");
+}
+
 function makeUploader(defaultFolder) {
   return multer({
     storage: new CloudinaryStorage({
@@ -41,9 +59,14 @@ function makeUploader(defaultFolder) {
         else if (req.body?.folder && ALLOWED_FOLDERS.has(req.body.folder)) folder = req.body.folder;
         else if (req.query?.folder && ALLOWED_FOLDERS.has(req.query.folder)) folder = req.query.folder;
         const bill_date = session?.bill_date || req.body?.bill_date || null;
-        logger.info("cloudinary-upload", { folder, token: req.params?.token || null });
+        // Use bill_no + company from session (phone upload) or request body (PC upload)
+        const bill_no = session?.bill_no || req.body?.bill_no || null;
+        const company = session?.company || req.body?.company || null;
+        const public_id = buildPublicId(bill_no, company);
+        logger.info("cloudinary-upload", { folder, public_id: public_id || "(auto)", token: req.params?.token || null });
         return {
           folder,
+          ...(public_id ? { public_id } : {}),
           resource_type: isPdf ? "raw" : "image",
           allowed_formats: isPdf ? ["pdf"] : ["jpg", "jpeg", "png", "webp", "heic"],
           ...(bill_date ? { context: `bill_date=${bill_date}` } : {}),
