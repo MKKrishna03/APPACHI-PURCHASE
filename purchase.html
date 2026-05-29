@@ -310,6 +310,38 @@
         font-size: 12px;
       }
 
+      /* ── Cancelled Bills sidebar list ── */
+      .cancelled-item {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--danger);
+        border-radius: var(--radius);
+        padding: 9px 10px;
+        margin-bottom: 5px;
+        cursor: pointer;
+        transition: background 0.12s;
+        position: relative;
+      }
+      .cancelled-item:hover { background: var(--danger-light); }
+      .cancelled-item-no {
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--danger);
+        margin-bottom: 2px;
+      }
+      .cancelled-type-tag {
+        display: inline-block;
+        background: var(--danger-light);
+        color: var(--danger);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
       /* MAIN */
       .main {
         flex: 1;
@@ -769,6 +801,33 @@
           <div id="noPhotoList">
             <div class="no-data">Loading…</div>
           </div>
+        </div>
+
+        <!-- Cancelled Bills -->
+        <button
+          class="section-toggle"
+          onclick="toggleSection('cancelled'); if(!window._cancelledLoaded) loadCancelledBills()"
+          style="margin-top: 8px"
+        >
+          <span style="display:flex;align-items:center;gap:6px;">
+            🚫 Cancelled Bills
+            <span
+              id="cancelledBadge"
+              style="background:#b5301e;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;line-height:15px;display:none;"
+            >0</span>
+          </span>
+          <span class="section-icon" id="arrow_cancelled">▾</span>
+        </button>
+        <div class="section-body" id="body_cancelled">
+          <div style="padding:8px 10px 4px;">
+            <button
+              onclick="openCancelledModal()"
+              style="width:100%;padding:7px;background:var(--danger-light);color:var(--danger);border:1px solid #f09898;border-radius:var(--radius);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background 0.12s;"
+              onmouseover="this.style.background='#fcd4d0'"
+              onmouseout="this.style.background='var(--danger-light)'"
+            >＋ Add Cancelled Bill</button>
+          </div>
+          <div id="cancelledList"><div class="no-data">Loading…</div></div>
         </div>
       </div>
     </div>
@@ -1599,23 +1658,21 @@
           const purchasesRes = await fetch("/api/purchases/list");
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
 
-          // Build voucher -> purchase map using the vouchers' linked_purchase_id
-          // (because a single purchase may be linked to multiple vouchers, we read
-          // the link from the vouchers side)
-          // For each voucher, find the purchase it's linked to and compute net_value
-          const purchaseById = {};
-          purchases.forEach((p) => {
-            purchaseById[p.id] = p;
-          });
-
+          // Build voucher -> total consumed amount from the purchases side.
+          // A voucher can be referenced by multiple purchases (partial bills),
+          // so sum all net_values across every purchase that cites this voucher.
           const purchasedByVoucher = {};
-          all.forEach((v) => {
-            if (v.linked_purchase_id && purchaseById[v.linked_purchase_id]) {
-              const p = purchaseById[v.linked_purchase_id];
-              purchasedByVoucher[v.id] = parseFloat(
-                p.net_value || p.total_value || 0,
-              );
-            }
+          purchases.forEach((p) => {
+            const ids =
+              Array.isArray(p.linked_voucher_ids) && p.linked_voucher_ids.length
+                ? p.linked_voucher_ids
+                : p.linked_voucher_id
+                  ? [p.linked_voucher_id]
+                  : [];
+            const pNet = parseFloat(p.net_value || p.total_value || 0);
+            ids.forEach((id) => {
+              purchasedByVoucher[id] = (purchasedByVoucher[id] || 0) + pNet;
+            });
           });
 
           // Filter: payment vouchers or chittai payments where balance != 0 (over OR under)
@@ -1625,8 +1682,6 @@
               v.voucher_type === "Payment Voucher" ||
               v.voucher_type === "Chittai Payment";
             if (!isPayment) return false;
-            // Not linked yet → always show
-            if (!v.linked_purchase_id) return true;
             const paid = purchasedByVoucher[v.id] || 0;
             const balance = parseFloat(v.total_value || 0) - paid;
             // Hide only if exactly settled
@@ -3339,6 +3394,378 @@
             : "Upload a photo first";
         };
       })();
+
+      // ── CANCELLED BILLS ──
+      window._cancelledLoaded = false;
+      let cbPhotoUrls = [];
+      let cbUploadToken = null;
+      let cbPollInterval = null;
+
+      async function loadCancelledBills() {
+        window._cancelledLoaded = true;
+        const list = document.getElementById("cancelledList");
+        list.innerHTML = '<div class="no-data">Loading…</div>';
+        try {
+          const res = await fetch("/api/cancelled-bills");
+          const data = await res.json();
+          const badge = document.getElementById("cancelledBadge");
+          if (badge) {
+            badge.textContent = data.length;
+            badge.style.display = data.length ? "inline" : "none";
+          }
+          if (!data.length) {
+            list.innerHTML = '<div class="no-data">No cancelled bills</div>';
+            return;
+          }
+          list.innerHTML = data.map((b) => {
+            const date = b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—";
+            const amt = parseFloat(b.amount || 0);
+            return `<div class="cancelled-item" onclick="viewCancelledBill(${b.id}, ${JSON.stringify(b).replace(/"/g, '&quot;')})">
+              <div style="display:flex;justify-content:space-between;align-items:start;">
+                <div class="cancelled-item-no">${b.bill_no || "— no bill no —"}</div>
+                <button onclick="event.stopPropagation();deleteCancelledBill(${b.id})" style="background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:12px;padding:0 2px;line-height:1;" title="Delete">✕</button>
+              </div>
+              <div style="font-size:11px;color:var(--ink-2);font-weight:600;margin-bottom:3px;">${b.company_name || "—"}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--ink-3);">
+                <span>${date}</span>
+                <span style="font-weight:600;color:var(--danger);">${amt > 0 ? "₹" + fmt(amt) : "—"}</span>
+              </div>
+              <div style="margin-top:4px;">
+                <span class="cancelled-type-tag">${b.bill_type || "—"}</span>
+                ${b.photo_url ? '<span style="margin-left:5px;font-size:11px;">📷</span>' : ""}
+              </div>
+            </div>`;
+          }).join("");
+        } catch (e) {
+          list.innerHTML = '<div class="no-data">Error loading</div>';
+        }
+      }
+
+      async function deleteCancelledBill(id) {
+        if (!confirm("Delete this cancelled bill record?")) return;
+        try {
+          await fetch(`/api/cancelled-bills/${id}`, { method: "DELETE" });
+          loadCancelledBills();
+        } catch (e) {
+          alert("Error: " + e.message);
+        }
+      }
+
+      function viewCancelledBill(id, b) {
+        const modal = document.createElement("div");
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:center;justify-content:center;";
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        const box = document.createElement("div");
+        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px;position:relative;";
+        const date = b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—";
+        const amt = parseFloat(b.amount || 0);
+        const photos = Array.isArray(b.photo_urls) && b.photo_urls.length ? b.photo_urls : (b.photo_url ? [b.photo_url] : []);
+        box.innerHTML = `
+          <button onclick="this.closest('[style*=fixed]').remove()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-3);">✕</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+            <span style="font-size:20px;">🚫</span>
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--danger);">${b.bill_no || "No Bill No"}</div>
+              <div style="font-size:11px;color:var(--ink-3);margin-top:1px;">${b.company_name || "—"}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
+              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Bill Type</div>
+              <div style="font-size:13px;font-weight:600;color:var(--danger);">${b.bill_type || "—"}</div>
+            </div>
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
+              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Date</div>
+              <div style="font-size:13px;font-weight:600;">${date}</div>
+            </div>
+            ${amt > 0 ? `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
+              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Amount</div>
+              <div style="font-size:13px;font-weight:600;color:var(--danger);">₹${fmt(amt)}</div>
+            </div>` : ""}
+          </div>
+          ${b.reason ? `<div style="margin-bottom:14px;padding:10px 12px;background:var(--amber-light);border:1px solid rgba(181,98,10,0.2);border-radius:var(--radius);">
+            <div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Reason</div>
+            <div style="font-size:13px;color:var(--ink-2);">${b.reason}</div>
+          </div>` : ""}
+          ${photos.length ? `<div>
+            <div style="font-size:10px;font-weight:700;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">📸 Bill Photo</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${photos.map((u) => `<img src="${u}" loading="lazy" style="max-width:180px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("")}
+            </div>
+          </div>` : ""}
+        `;
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+      }
+
+      function openCancelledModal() {
+        const existing = document.getElementById("cancelledModal");
+        if (existing) existing.remove();
+        cbPhotoUrls = [];
+        if (cbPollInterval) clearInterval(cbPollInterval);
+        cbUploadToken = null;
+
+        const modal = document.createElement("div");
+        modal.id = "cancelledModal";
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:center;justify-content:center;";
+        modal.onclick = (e) => { if (e.target === modal) closeCancelledModal(); };
+
+        const box = document.createElement("div");
+        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:520px;max-height:92vh;overflow-y:auto;padding:24px;position:relative;";
+
+        const billTypeOptions = [
+          "Purchase Bill", "Payment Voucher", "Chittai",
+          "Labour", "Hallmark", "Expense", "Other",
+        ].map((t) => `<option value="${t}">${t}</option>`).join("");
+
+        const companyOptions = companies
+          .map((c) => `<option value="${c.id}">${c.alias || c.company}</option>`)
+          .join("");
+
+        box.innerHTML = `
+          <button onclick="closeCancelledModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-3);">✕</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+            <span style="font-size:22px;">🚫</span>
+            <div style="font-size:16px;font-weight:700;color:var(--danger);">Add Cancelled Bill</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Bill Type *</label>
+              <select id="cb_bill_type" style="-webkit-appearance:none;width:100%;padding:9px 28px 9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2) url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%238888aa%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E') no-repeat right 10px center;color:var(--ink);font-family:inherit;font-size:12px;">
+                ${billTypeOptions}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Company</label>
+              <select id="cb_company" style="-webkit-appearance:none;width:100%;padding:9px 28px 9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2) url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%238888aa%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E') no-repeat right 10px center;color:var(--ink);font-family:inherit;font-size:12px;">
+                <option value="">— Select company —</option>
+                ${companyOptions}
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Bill / Voucher No.</label>
+              <input id="cb_bill_no" type="text" placeholder="e.g. INV-2024-001" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Date</label>
+              <input id="cb_date" type="date" value="${new Date().toISOString().split("T")[0]}" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;" />
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Amount</label>
+            <input id="cb_amount" type="number" step="0.01" placeholder="0.00" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;" />
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Reason / Notes</label>
+            <textarea id="cb_reason" placeholder="Why was this bill cancelled?" rows="2" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;resize:vertical;box-sizing:border-box;"></textarea>
+          </div>
+
+          <div style="padding:14px;background:var(--surface-2);border-radius:var(--radius);border:1px dashed var(--border-strong);margin-bottom:16px;">
+            <div style="font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">📸 Bill Photo (Saved to Cancelled Bills folder)</div>
+            <div id="cb_photo_slots" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;min-height:4px;"></div>
+            <div id="cb_photo_btns" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button type="button" onclick="cbStartPhoneUpload()" style="padding:8px 14px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--ink-2);">📱 From Phone</button>
+              <label style="padding:8px 14px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--ink-2);">
+                💻 Upload
+                <input type="file" id="cb_file_input" accept="image/*,application/pdf" style="display:none" onchange="cbUploadFromPC(event)" />
+              </label>
+              <span style="font-size:11px;color:var(--ink-3);">Up to 3 photos</span>
+            </div>
+            <div id="cb_qr_area" style="display:none;text-align:center;padding:12px;">
+              <div id="cb_qr_code" style="display:inline-block;background:#fff;padding:10px;border-radius:8px;"></div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:8px;">Scan with phone camera, take photo, upload</div>
+              <div id="cb_qr_status" style="font-size:13px;font-weight:600;color:var(--accent);margin-top:6px;">Waiting for photo…</div>
+              <button type="button" onclick="cbCancelPhoneUpload()" style="margin-top:8px;padding:5px 12px;background:none;border:1px solid var(--border-strong);border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px;">Cancel</button>
+            </div>
+          </div>
+
+          <div id="cb_message" style="display:none;padding:10px 14px;border-radius:var(--radius);font-size:12px;font-weight:500;margin-bottom:12px;border:1px solid transparent;"></div>
+
+          <div style="display:flex;gap:10px;">
+            <button onclick="saveCancelledBill()" style="flex:1;padding:11px;background:var(--danger);color:#fff;border:none;border-radius:var(--radius);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:0.02em;transition:background 0.15s;" onmouseover="this.style.background='#8c1f10'" onmouseout="this.style.background='var(--danger)'">Save Cancelled Bill</button>
+            <button onclick="closeCancelledModal()" style="padding:11px 18px;background:none;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:inherit;font-size:13px;cursor:pointer;color:var(--ink-2);">Cancel</button>
+          </div>
+        `;
+
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+        cbRenderPhotoSlots();
+      }
+
+      function closeCancelledModal() {
+        const modal = document.getElementById("cancelledModal");
+        if (modal) modal.remove();
+        if (cbPollInterval) clearInterval(cbPollInterval);
+        cbUploadToken = null;
+        cbPhotoUrls = [];
+      }
+
+      function cbRenderPhotoSlots() {
+        const slots = document.getElementById("cb_photo_slots");
+        const btns = document.getElementById("cb_photo_btns");
+        if (!slots) return;
+        slots.innerHTML = cbPhotoUrls.map((url, i) =>
+          `<div style="position:relative;display:inline-block;">
+            <img src="${url}" loading="lazy" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${url}','_blank')" />
+            <button type="button" onclick="cbRemovePhoto(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
+          </div>`
+        ).join("");
+        if (btns) btns.style.display = cbPhotoUrls.length >= 3 ? "none" : "flex";
+      }
+
+      function cbRemovePhoto(i) {
+        cbPhotoUrls.splice(i, 1);
+        cbRenderPhotoSlots();
+      }
+
+      function cbShowMessage(msg, type) {
+        const el = document.getElementById("cb_message");
+        if (!el) return;
+        el.textContent = msg;
+        el.style.display = "block";
+        el.style.background = type === "error" ? "var(--danger-light)" : "var(--green-light)";
+        el.style.color = type === "error" ? "var(--danger)" : "var(--green)";
+        el.style.borderColor = type === "error" ? "#f09898" : "#52b788";
+      }
+
+      async function cbStartPhoneUpload() {
+        const billNo = document.getElementById("cb_bill_no")?.value.trim() || "";
+        const companySel = document.getElementById("cb_company");
+        const company = companySel?.options[companySel.selectedIndex]?.text || "";
+        try {
+          const res = await fetch("/api/upload-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_no: billNo, company, folder: "cancelled_bills" }),
+          });
+          const data = await res.json();
+          cbUploadToken = data.token;
+          const url = `${window.location.origin}/upload/${cbUploadToken}`;
+          const qrDiv = document.getElementById("cb_qr_code");
+          qrDiv.innerHTML = "";
+          new QRCode(qrDiv, { text: url, width: 160, height: 160 });
+          document.getElementById("cb_photo_btns").style.display = "none";
+          document.getElementById("cb_qr_area").style.display = "block";
+          cbPollInterval = setInterval(cbCheckUploadStatus, 2000);
+        } catch (e) {
+          cbShowMessage("Error starting upload: " + e.message, "error");
+        }
+      }
+
+      async function cbCheckUploadStatus() {
+        if (!cbUploadToken) return;
+        try {
+          const res = await fetch(`/api/upload-session/${cbUploadToken}/status`);
+          const data = await res.json();
+          if (data.photo_url && !cbPhotoUrls.includes(data.photo_url)) {
+            cbPhotoUrls.push(data.photo_url);
+            cbUploadToken = null;
+            clearInterval(cbPollInterval);
+            document.getElementById("cb_qr_area").style.display = "none";
+            cbRenderPhotoSlots();
+          }
+        } catch (e) {}
+      }
+
+      function cbCancelPhoneUpload() {
+        if (cbPollInterval) clearInterval(cbPollInterval);
+        cbUploadToken = null;
+        const qrArea = document.getElementById("cb_qr_area");
+        if (qrArea) qrArea.style.display = "none";
+        cbRenderPhotoSlots();
+      }
+
+      async function cbUploadFromPC(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+          cbShowMessage("File must be under 15 MB", "error");
+          event.target.value = "";
+          return;
+        }
+        const billNo = document.getElementById("cb_bill_no")?.value.trim() || "";
+        const companySel = document.getElementById("cb_company");
+        const company = companySel?.options[companySel.selectedIndex]?.text || "";
+        try {
+          cbShowMessage("Uploading…", "success");
+          const sessRes = await fetch("/api/upload-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_no: billNo, company, folder: "cancelled_bills" }),
+          });
+          const sessData = await sessRes.json();
+          const token = sessData.token;
+          const fd = new FormData();
+          fd.append("photo", file);
+          fd.append("folder", "cancelled_bills");
+          const upRes = await fetch(`/api/upload-session/${token}/upload`, { method: "POST", body: fd });
+          const upData = await upRes.json();
+          if (upData.status === "SUCCESS") {
+            cbPhotoUrls.push(upData.photo_url);
+            cbRenderPhotoSlots();
+            cbShowMessage("Photo uploaded ✓", "success");
+            setTimeout(() => {
+              const m = document.getElementById("cb_message");
+              if (m) m.style.display = "none";
+            }, 1500);
+          } else {
+            cbShowMessage("Upload failed: " + (upData.error || "unknown"), "error");
+          }
+        } catch (e) {
+          cbShowMessage("Upload error: " + e.message, "error");
+        }
+        event.target.value = "";
+      }
+
+      async function saveCancelledBill() {
+        const bill_type = document.getElementById("cb_bill_type")?.value || "";
+        const profile_id = document.getElementById("cb_company")?.value || null;
+        const bill_no = document.getElementById("cb_bill_no")?.value.trim() || "";
+        const date = document.getElementById("cb_date")?.value || null;
+        const amtRaw = document.getElementById("cb_amount")?.value;
+        const amount = amtRaw !== "" && amtRaw != null ? parseFloat(amtRaw) : null;
+        const reason = document.getElementById("cb_reason")?.value.trim() || "";
+
+        if (!bill_type) { cbShowMessage("Please select a bill type", "error"); return; }
+
+        try {
+          const res = await fetch("/api/cancelled-bills", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              profile_id: profile_id || null,
+              bill_type,
+              bill_no,
+              date,
+              amount,
+              reason,
+              photo_url: cbPhotoUrls[0] || null,
+              photo_urls: cbPhotoUrls.length ? cbPhotoUrls : null,
+              created_by: getCurrentUser()?.id || null,
+            }),
+          });
+          const result = await res.json();
+          if (result.status === "SUCCESS") {
+            closeCancelledModal();
+            // Refresh list if section is open
+            if (document.getElementById("body_cancelled")?.classList.contains("show")) {
+              loadCancelledBills();
+            } else {
+              window._cancelledLoaded = false;
+            }
+          } else {
+            cbShowMessage("Error: " + (result.error || "Failed to save"), "error");
+          }
+        } catch (e) {
+          cbShowMessage("Error: " + e.message, "error");
+        }
+      }
 
       // ── CLEAR FORM BUTTON ──
       (function () {

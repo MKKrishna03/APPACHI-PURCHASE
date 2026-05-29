@@ -17,7 +17,7 @@ cloudinaryPkg.config({
 const ALLOWED_FOLDERS = new Set([
   "purchase_bills", "chittai_bills", "labour_receipts",
   "hallmark_bills", "expense_bills", "credit_notes", "debit_notes", "refinery_bills",
-  "mc_bills",
+  "mc_bills", "cancelled_bills",
 ]);
 const ALL_FOLDERS = [...ALLOWED_FOLDERS];
 

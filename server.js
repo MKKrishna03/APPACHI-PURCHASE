@@ -25,6 +25,7 @@ const scheduleRoutes = require("./routes/schedule");
 const { router: cloudinaryRouter } = require("./routes/cloudinary");
 const aiRoutes = require("./routes/ai");
 const miscRoutes = require("./routes/misc");
+const cancelledBillsRoutes = require("./routes/cancelledBills");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -126,6 +127,7 @@ app.use("/api", scheduleRoutes);
 app.use("/api", cloudinaryRouter);
 app.use("/api", aiRoutes);
 app.use("/api", miscRoutes);
+app.use("/api", cancelledBillsRoutes);
 
 // ── Page routes ──
 const pages = {
