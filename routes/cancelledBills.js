@@ -3,7 +3,7 @@ const { pool } = require("../db");
 
 const router = express.Router();
 
-// Create table on startup if it does not exist
+// Create table on startup if it does not exist, then add fields_data if missing
 pool.query(`
   CREATE TABLE IF NOT EXISTS cancelled_bills (
     id           SERIAL PRIMARY KEY,
@@ -18,7 +18,9 @@ pool.query(`
     created_by   TEXT,
     created_at   TIMESTAMP DEFAULT NOW()
   )
-`).catch((e) => console.error("cancelled_bills table init error:", e.message));
+`).then(() =>
+  pool.query(`ALTER TABLE cancelled_bills ADD COLUMN IF NOT EXISTS fields_data JSONB`)
+).catch((e) => console.error("cancelled_bills table init error:", e.message));
 
 // GET /api/cancelled-bills
 router.get("/cancelled-bills", async (req, res) => {
@@ -39,13 +41,13 @@ router.get("/cancelled-bills", async (req, res) => {
 router.post("/cancelled-bills", async (req, res) => {
   const {
     profile_id, bill_type, bill_no, date,
-    amount, reason, photo_url, photo_urls, created_by,
+    amount, reason, fields_data, photo_url, photo_urls, created_by,
   } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO cancelled_bills
-         (profile_id, bill_type, bill_no, date, amount, reason, photo_url, photo_urls, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (profile_id, bill_type, bill_no, date, amount, reason, fields_data, photo_url, photo_urls, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
       [
         profile_id || null,
@@ -54,6 +56,7 @@ router.post("/cancelled-bills", async (req, res) => {
         date || null,
         amount != null && amount !== "" ? amount : null,
         reason || "",
+        fields_data ? JSON.stringify(fields_data) : null,
         photo_url || null,
         photo_urls?.length ? photo_urls : null,
         created_by || null,

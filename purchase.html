@@ -3397,9 +3397,18 @@
 
       // ── CANCELLED BILLS ──
       window._cancelledLoaded = false;
+      window._cbCache = {};
       let cbPhotoUrls = [];
       let cbUploadToken = null;
       let cbPollInterval = null;
+      let cbRowCount = 0;
+
+      // shared style helpers (used inside renderCbFields)
+      const _CB_SEL = `-webkit-appearance:none;width:100%;padding:9px 28px 9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238888aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;color:var(--ink);font-family:inherit;font-size:12px;`;
+      const _CB_INP = `width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;box-sizing:border-box;`;
+      const _CB_NUM = `${_CB_INP}font-family:'DM Mono',monospace;`;
+      const _CB_RO  = `${_CB_NUM}background:var(--surface-3);`;
+      const _CB_LBL = (t) => `<label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">${t}</label>`;
 
       async function loadCancelledBills() {
         window._cancelledLoaded = true;
@@ -3408,6 +3417,8 @@
         try {
           const res = await fetch("/api/cancelled-bills");
           const data = await res.json();
+          window._cbCache = {};
+          data.forEach((b) => { window._cbCache[b.id] = b; });
           const badge = document.getElementById("cancelledBadge");
           if (badge) {
             badge.textContent = data.length;
@@ -3420,7 +3431,7 @@
           list.innerHTML = data.map((b) => {
             const date = b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—";
             const amt = parseFloat(b.amount || 0);
-            return `<div class="cancelled-item" onclick="viewCancelledBill(${b.id}, ${JSON.stringify(b).replace(/"/g, '&quot;')})">
+            return `<div class="cancelled-item" onclick="viewCancelledBill(${b.id})">
               <div style="display:flex;justify-content:space-between;align-items:start;">
                 <div class="cancelled-item-no">${b.bill_no || "— no bill no —"}</div>
                 <button onclick="event.stopPropagation();deleteCancelledBill(${b.id})" style="background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:12px;padding:0 2px;line-height:1;" title="Delete">✕</button>
@@ -3451,57 +3462,126 @@
         }
       }
 
-      function viewCancelledBill(id, b) {
+      function viewCancelledBill(id) {
+        const b = window._cbCache[id];
+        if (!b) return;
+        const f = (typeof b.fields_data === "string" ? JSON.parse(b.fields_data) : b.fields_data) || {};
+        const type = b.bill_type || "";
+        const date = b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—";
+        const amt = parseFloat(b.amount || 0);
+        const photos = Array.isArray(b.photo_urls) && b.photo_urls.length ? b.photo_urls : (b.photo_url ? [b.photo_url] : []);
+
+        // small field card helper
+        const fc = (label, val, color) =>
+          `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;">
+            <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">${label}</div>
+            <div style="font-size:13px;font-weight:600;color:${color || "var(--ink)"};">${val ?? "—"}</div>
+          </div>`;
+
+        // items table helper
+        const itemsTable = (cols, rows) =>
+          `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr style="background:var(--surface-2);">${cols.map(c => `<th style="padding:6px 8px;font-size:10px;color:var(--ink-3);text-align:${c.r?"right":"left"};">${c.t}</th>`).join("")}</tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+
+        let fieldsHtml = "";
+
+        if (type === "Purchase Bill" || type === "Hallmark" || type === "Expense") {
+          if (f.items?.length) {
+            const rows = f.items.map(it =>
+              `<tr style="border-top:1px solid var(--border);">
+                <td style="padding:6px 8px;font-size:12px;">${it.description || "—"}</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">${parseFloat(it.qty||0).toFixed(3)}</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">₹${fmt(it.rate)}</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">${it.tax_pct||0}%</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">₹${fmt(it.taxable)}</td>
+              </tr>`).join("");
+            fieldsHtml += itemsTable(
+              [{t:"Description"},{t:"Qty/g",r:1},{t:"Rate",r:1},{t:"Tax%",r:1},{t:"Taxable",r:1}], rows
+            );
+          }
+          fieldsHtml += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+            ${f.taxable_value != null ? fc("Taxable Total","₹"+fmt(f.taxable_value)) : ""}
+            ${f.value_added ? fc("Value Added","₹"+fmt(f.value_added)) : ""}
+            ${f.cgst > 0 ? fc("CGST","₹"+fmt(f.cgst)) : ""}
+            ${f.sgst > 0 ? fc("SGST","₹"+fmt(f.sgst)) : ""}
+            ${f.igst > 0 ? fc("IGST","₹"+fmt(f.igst)) : ""}
+            ${f.round_off ? fc("Round Off",fmt(f.round_off)) : ""}
+            ${f.total_value != null ? fc("Total","₹"+fmt(f.total_value)) : ""}
+            ${f.tds > 0 ? fc("TDS","₹"+fmt(f.tds)) : ""}
+            ${fc("Net Payable","₹"+fmt(amt),"var(--danger)")}
+          </div>`;
+        } else if (type === "Chittai") {
+          fieldsHtml = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+            ${f.weight != null ? fc("Weight (g)",parseFloat(f.weight).toFixed(3)+"g") : ""}
+            ${f.rate != null ? fc("Rate / g","₹"+fmt(f.rate)) : ""}
+            ${f.value != null ? fc("Value","₹"+fmt(f.value)) : ""}
+            ${f.others ? fc("Others",fmt(f.others)) : ""}
+            ${f.round_off ? fc("Round Off",fmt(f.round_off)) : ""}
+            ${f.total != null ? fc("Total","₹"+fmt(f.total)) : ""}
+            ${f.tds > 0 ? fc("TDS","₹"+fmt(f.tds)) : ""}
+            ${f.rtgs > 0 ? fc("RTGS","₹"+fmt(f.rtgs)) : ""}
+          </div>`;
+          if (f.remarks) fieldsHtml += `<div style="padding:8px 12px;background:var(--amber-light);border-radius:var(--radius);font-size:12px;color:var(--amber);margin-bottom:12px;">Remarks: ${f.remarks}</div>`;
+        } else if (type === "Payment Voucher") {
+          fieldsHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+            ${fc("Amount","₹"+fmt(amt),"var(--danger)")}
+            ${f.mop ? fc("Mode of Payment",f.mop) : ""}
+          </div>`;
+        } else if (type === "Labour") {
+          if (f.items?.length) {
+            const rows = f.items.map(it =>
+              `<tr style="border-top:1px solid var(--border);">
+                <td style="padding:6px 8px;font-size:12px;">${it.description || "—"}</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">${parseFloat(it.qty||0).toFixed(3)}</td>
+                <td style="padding:6px 8px;font-size:12px;text-align:right;">₹${fmt(it.amount)}</td>
+              </tr>`).join("");
+            fieldsHtml += itemsTable([{t:"Description"},{t:"Qty/g",r:1},{t:"Amount",r:1}], rows);
+          }
+          fieldsHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+            ${f.item_type ? fc("Item Type",f.item_type) : ""}
+            ${fc("Total Amount","₹"+fmt(amt),"var(--danger)")}
+          </div>`;
+        } else {
+          fieldsHtml = `<div style="margin-bottom:12px;">${fc("Amount",amt>0?"₹"+fmt(amt):"—","var(--danger)")}</div>`;
+        }
+
         const modal = document.createElement("div");
         modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:center;justify-content:center;";
         modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
         const box = document.createElement("div");
-        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px;position:relative;";
-        const date = b.date ? new Date(b.date).toLocaleDateString("en-GB") : "—";
-        const amt = parseFloat(b.amount || 0);
-        const photos = Array.isArray(b.photo_urls) && b.photo_urls.length ? b.photo_urls : (b.photo_url ? [b.photo_url] : []);
+        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:520px;max-height:90vh;overflow-y:auto;padding:24px;position:relative;";
         box.innerHTML = `
           <button onclick="this.closest('[style*=fixed]').remove()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-3);">✕</button>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
             <span style="font-size:20px;">🚫</span>
-            <div>
+            <div style="flex:1;">
               <div style="font-size:16px;font-weight:700;color:var(--danger);">${b.bill_no || "No Bill No"}</div>
-              <div style="font-size:11px;color:var(--ink-3);margin-top:1px;">${b.company_name || "—"}</div>
+              <div style="font-size:11px;color:var(--ink-3);">${b.company_name || "—"} · ${date}</div>
             </div>
+            <span class="cancelled-type-tag">${type}</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
-              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Bill Type</div>
-              <div style="font-size:13px;font-weight:600;color:var(--danger);">${b.bill_type || "—"}</div>
-            </div>
-            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
-              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Date</div>
-              <div style="font-size:13px;font-weight:600;">${date}</div>
-            </div>
-            ${amt > 0 ? `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;">
-              <div style="font-size:10px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Amount</div>
-              <div style="font-size:13px;font-weight:600;color:var(--danger);">₹${fmt(amt)}</div>
-            </div>` : ""}
-          </div>
-          ${b.reason ? `<div style="margin-bottom:14px;padding:10px 12px;background:var(--amber-light);border:1px solid rgba(181,98,10,0.2);border-radius:var(--radius);">
-            <div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Reason</div>
+          ${fieldsHtml}
+          ${b.reason ? `<div style="padding:9px 12px;background:var(--amber-light);border:1px solid rgba(181,98,10,0.2);border-radius:var(--radius);margin-bottom:12px;">
+            <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Reason</div>
             <div style="font-size:13px;color:var(--ink-2);">${b.reason}</div>
           </div>` : ""}
           ${photos.length ? `<div>
             <div style="font-size:10px;font-weight:700;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">📸 Bill Photo</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              ${photos.map((u) => `<img src="${u}" loading="lazy" style="max-width:180px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("")}
+              ${photos.map(u => `<img src="${u}" loading="lazy" style="max-width:200px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')" />`).join("")}
             </div>
-          </div>` : ""}
-        `;
+          </div>` : ""}`;
         modal.appendChild(box);
         document.body.appendChild(modal);
       }
 
       function openCancelledModal() {
-        const existing = document.getElementById("cancelledModal");
-        if (existing) existing.remove();
-        cbPhotoUrls = [];
+        document.getElementById("cancelledModal")?.remove();
+        cbPhotoUrls = []; cbRowCount = 0;
         if (cbPollInterval) clearInterval(cbPollInterval);
         cbUploadToken = null;
 
@@ -3511,16 +3591,12 @@
         modal.onclick = (e) => { if (e.target === modal) closeCancelledModal(); };
 
         const box = document.createElement("div");
-        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:520px;max-height:92vh;overflow-y:auto;padding:24px;position:relative;";
+        box.style.cssText = "background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:580px;max-height:92vh;overflow-y:auto;padding:24px;position:relative;";
 
-        const billTypeOptions = [
-          "Purchase Bill", "Payment Voucher", "Chittai",
-          "Labour", "Hallmark", "Expense", "Other",
-        ].map((t) => `<option value="${t}">${t}</option>`).join("");
-
-        const companyOptions = companies
-          .map((c) => `<option value="${c.id}">${c.alias || c.company}</option>`)
-          .join("");
+        const today = new Date().toISOString().split("T")[0];
+        const billTypeOpts = ["Purchase Bill","Payment Voucher","Chittai","Labour","Hallmark","Expense","Other"]
+          .map(t => `<option value="${t}">${t}</option>`).join("");
+        const coOpts = companies.map(c => `<option value="${c.id}">${c.alias || c.company}</option>`).join("");
 
         box.innerHTML = `
           <button onclick="closeCancelledModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-3);">✕</button>
@@ -3528,82 +3604,300 @@
             <span style="font-size:22px;">🚫</span>
             <div style="font-size:16px;font-weight:700;color:var(--danger);">Add Cancelled Bill</div>
           </div>
-
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Bill Type *</label>
-              <select id="cb_bill_type" style="-webkit-appearance:none;width:100%;padding:9px 28px 9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2) url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%238888aa%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E') no-repeat right 10px center;color:var(--ink);font-family:inherit;font-size:12px;">
-                ${billTypeOptions}
-              </select>
-            </div>
-            <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Company</label>
-              <select id="cb_company" style="-webkit-appearance:none;width:100%;padding:9px 28px 9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2) url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%238888aa%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E') no-repeat right 10px center;color:var(--ink);font-family:inherit;font-size:12px;">
-                <option value="">— Select company —</option>
-                ${companyOptions}
-              </select>
-            </div>
+            <div>${_CB_LBL("Bill Type *")}<select id="cb_bill_type" style="${_CB_SEL}" onchange="cbChangeType()">${billTypeOpts}</select></div>
+            <div>${_CB_LBL("Company")}<select id="cb_company" style="${_CB_SEL}" onchange="cbUpdateTotals()"><option value="">— Select —</option>${coOpts}</select></div>
           </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Bill / Voucher No.</label>
-              <input id="cb_bill_no" type="text" placeholder="e.g. INV-2024-001" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;" />
-            </div>
-            <div>
-              <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Date</label>
-              <input id="cb_date" type="date" value="${new Date().toISOString().split("T")[0]}" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;" />
-            </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div>${_CB_LBL("Bill / Voucher No.")}<input id="cb_bill_no" type="text" placeholder="e.g. INV-001" style="${_CB_INP}" /></div>
+            <div>${_CB_LBL("Date")}<input id="cb_date" type="date" value="${today}" style="${_CB_INP}" /></div>
           </div>
-
-          <div style="margin-bottom:12px;">
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Amount</label>
-            <input id="cb_amount" type="number" step="0.01" placeholder="0.00" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;" />
-          </div>
-
-          <div style="margin-bottom:16px;">
-            <label style="display:block;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;">Reason / Notes</label>
-            <textarea id="cb_reason" placeholder="Why was this bill cancelled?" rows="2" style="width:100%;padding:9px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;resize:vertical;box-sizing:border-box;"></textarea>
-          </div>
-
-          <div style="padding:14px;background:var(--surface-2);border-radius:var(--radius);border:1px dashed var(--border-strong);margin-bottom:16px;">
-            <div style="font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">📸 Bill Photo (Saved to Cancelled Bills folder)</div>
+          <div id="cb_dynamic_fields"></div>
+          <div style="margin-bottom:14px;">${_CB_LBL("Reason / Notes")}<textarea id="cb_reason" rows="2" placeholder="Why was this bill cancelled?" style="${_CB_INP}resize:vertical;"></textarea></div>
+          <div style="padding:12px;background:var(--surface-2);border-radius:var(--radius);border:1px dashed var(--border-strong);margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">📸 Bill Photo → cancelled_bills folder</div>
             <div id="cb_photo_slots" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;min-height:4px;"></div>
             <div id="cb_photo_btns" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <button type="button" onclick="cbStartPhoneUpload()" style="padding:8px 14px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--ink-2);">📱 From Phone</button>
-              <label style="padding:8px 14px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--ink-2);">
-                💻 Upload
-                <input type="file" id="cb_file_input" accept="image/*,application/pdf" style="display:none" onchange="cbUploadFromPC(event)" />
-              </label>
+              <label style="padding:8px 14px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--ink-2);">💻 Upload<input type="file" id="cb_file_input" accept="image/*,application/pdf" style="display:none" onchange="cbUploadFromPC(event)" /></label>
               <span style="font-size:11px;color:var(--ink-3);">Up to 3 photos</span>
             </div>
-            <div id="cb_qr_area" style="display:none;text-align:center;padding:12px;">
+            <div id="cb_qr_area" style="display:none;text-align:center;padding:10px;">
               <div id="cb_qr_code" style="display:inline-block;background:#fff;padding:10px;border-radius:8px;"></div>
-              <div style="font-size:12px;color:var(--ink-3);margin-top:8px;">Scan with phone camera, take photo, upload</div>
-              <div id="cb_qr_status" style="font-size:13px;font-weight:600;color:var(--accent);margin-top:6px;">Waiting for photo…</div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:8px;">Scan with phone, take photo, upload</div>
+              <div id="cb_qr_status" style="font-size:13px;font-weight:600;color:var(--accent);margin-top:6px;">Waiting…</div>
               <button type="button" onclick="cbCancelPhoneUpload()" style="margin-top:8px;padding:5px 12px;background:none;border:1px solid var(--border-strong);border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px;">Cancel</button>
             </div>
           </div>
-
           <div id="cb_message" style="display:none;padding:10px 14px;border-radius:var(--radius);font-size:12px;font-weight:500;margin-bottom:12px;border:1px solid transparent;"></div>
-
           <div style="display:flex;gap:10px;">
-            <button onclick="saveCancelledBill()" style="flex:1;padding:11px;background:var(--danger);color:#fff;border:none;border-radius:var(--radius);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:0.02em;transition:background 0.15s;" onmouseover="this.style.background='#8c1f10'" onmouseout="this.style.background='var(--danger)'">Save Cancelled Bill</button>
+            <button onclick="saveCancelledBill()" style="flex:1;padding:11px;background:var(--danger);color:#fff;border:none;border-radius:var(--radius);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Save Cancelled Bill</button>
             <button onclick="closeCancelledModal()" style="padding:11px 18px;background:none;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:inherit;font-size:13px;cursor:pointer;color:var(--ink-2);">Cancel</button>
-          </div>
-        `;
+          </div>`;
 
         modal.appendChild(box);
         document.body.appendChild(modal);
         cbRenderPhotoSlots();
+        cbChangeType();
+      }
+
+      function cbChangeType() {
+        cbRowCount = 0;
+        const type = document.getElementById("cb_bill_type")?.value || "";
+        const el = document.getElementById("cb_dynamic_fields");
+        if (!el) return;
+        el.innerHTML = renderCbFields(type);
+        if (["Purchase Bill","Hallmark","Expense","Labour"].includes(type)) cbAddRow(type);
+      }
+
+      function renderCbFields(type) {
+        const totRow = (label, id, ro, extra, bld) =>
+          `<div style="display:flex;gap:10px;align-items:center;margin-bottom:3px;">
+            <span style="color:var(--ink-3);width:160px;text-align:right;font-size:12px;">${label}</span>
+            <input type="number" id="${id}" step="0.01" ${ro?"readonly":""} ${extra||""} style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);${ro?"background:var(--surface-3);":"background:var(--surface-2);"}color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;text-align:right;${bld?"font-weight:700;":""}" />
+          </div>`;
+
+        if (type === "Purchase Bill" || type === "Hallmark" || type === "Expense") {
+          return `
+            <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:var(--surface-2);">
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:left;">Description</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Qty/g</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Rate/g</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Tax%</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Taxable</th>
+                  <th style="padding:7px 6px;"></th>
+                </tr></thead>
+                <tbody id="cb_items_body"></tbody>
+              </table>
+            </div>
+            <button type="button" onclick="cbAddRow('${type}')" style="padding:6px 13px;background:none;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:inherit;font-size:11px;font-weight:500;color:var(--ink-2);cursor:pointer;margin-bottom:12px;">＋ Add Row</button>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0;margin-bottom:16px;">
+              ${totRow("Taxable Total","cb_txbl",true)}
+              ${totRow("Value Added","cb_vadd",false,'oninput="cbUpdateTotals()"')}
+              <div id="cb_cgst_row" style="display:flex;gap:10px;align-items:center;margin-bottom:3px;"><span style="color:var(--ink-3);width:160px;text-align:right;font-size:12px;">CGST</span><input type="number" id="cb_cgst" readonly style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-3);color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;text-align:right;" /></div>
+              <div id="cb_sgst_row" style="display:flex;gap:10px;align-items:center;margin-bottom:3px;"><span style="color:var(--ink-3);width:160px;text-align:right;font-size:12px;">SGST</span><input type="number" id="cb_sgst" readonly style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-3);color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;text-align:right;" /></div>
+              <div id="cb_igst_row" style="display:none;gap:10px;align-items:center;margin-bottom:3px;"><span style="color:var(--ink-3);width:160px;text-align:right;font-size:12px;">IGST</span><input type="number" id="cb_igst" readonly style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-3);color:var(--ink);font-family:'DM Mono',monospace;font-size:12px;text-align:right;" /></div>
+              ${totRow("Round Off","cb_roff",false,'oninput="cbUpdateTotals()"')}
+              ${totRow("Total","cb_total",true)}
+              ${totRow("TDS","cb_tds",false,'oninput="cbUpdateTotals()"')}
+              ${totRow("Net Payable","cb_net",true,"","1")}
+            </div>`;
+        }
+
+        if (type === "Chittai") {
+          return `
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div>${_CB_LBL("Weight (g)")}<input type="number" id="cb_weight" step="0.001" placeholder="0.000" style="${_CB_NUM}" oninput="cbCalcChittai()" /></div>
+              <div>${_CB_LBL("Rate / g")}<input type="number" id="cb_rate" step="0.01" placeholder="0.00" style="${_CB_NUM}" oninput="cbCalcChittai()" /></div>
+              <div>${_CB_LBL("Value")}<input type="number" id="cb_value" readonly style="${_CB_RO}" /></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div>${_CB_LBL("Others")}<input type="number" id="cb_others" step="0.01" placeholder="0.00" style="${_CB_NUM}" oninput="cbCalcChittai()" /></div>
+              <div>${_CB_LBL("Round Off")}<input type="number" id="cb_roff" step="0.01" placeholder="0.00" style="${_CB_NUM}" oninput="cbCalcChittai()" /></div>
+              <div>${_CB_LBL("Total")}<input type="number" id="cb_total" readonly style="${_CB_RO}" /></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div>${_CB_LBL("TDS")}<input type="number" id="cb_tds" step="0.01" placeholder="0.00" style="${_CB_NUM}" oninput="cbCalcChittai()" /></div>
+              <div>${_CB_LBL("RTGS")}<input type="number" id="cb_rtgs" step="0.01" placeholder="0.00" style="${_CB_NUM}" /></div>
+            </div>
+            <div style="margin-bottom:14px;">${_CB_LBL("Remarks")}<input type="text" id="cb_remarks" placeholder="Remarks" style="${_CB_INP}" /></div>`;
+        }
+
+        if (type === "Payment Voucher") {
+          return `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+              <div>${_CB_LBL("Amount *")}<input type="number" id="cb_amount" step="0.01" placeholder="0.00" style="${_CB_NUM}" /></div>
+              <div>${_CB_LBL("Mode of Payment")}<select id="cb_mop" style="${_CB_SEL}"><option value="">— Select —</option><option>Cash</option><option>Bank Transfer</option><option>RTGS</option><option>NEFT</option><option>UPI</option><option>Cheque</option></select></div>
+            </div>`;
+        }
+
+        if (type === "Labour") {
+          return `
+            <div style="margin-bottom:10px;">${_CB_LBL("Item Type")}<select id="cb_item_type" style="${_CB_SEL}"><option value="">— Select —</option><option>Gold</option><option>Silver</option><option>Diamond</option><option>Platinum</option><option>Stones</option><option>Other</option></select></div>
+            <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:var(--surface-2);">
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:left;">Description</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Qty/g</th>
+                  <th style="padding:7px 6px;font-size:10px;color:var(--ink-3);text-align:right;">Amount</th>
+                  <th style="padding:7px 6px;"></th>
+                </tr></thead>
+                <tbody id="cb_items_body"></tbody>
+              </table>
+            </div>
+            <button type="button" onclick="cbAddRow('Labour')" style="padding:6px 13px;background:none;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:inherit;font-size:11px;font-weight:500;color:var(--ink-2);cursor:pointer;margin-bottom:10px;">＋ Add Row</button>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:12px;font-weight:600;margin-bottom:16px;">
+              <span style="color:var(--ink-3);">Total Amount</span>
+              <input type="number" id="cb_total" readonly style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-3);font-family:'DM Mono',monospace;font-size:12px;text-align:right;font-weight:700;" />
+            </div>`;
+        }
+
+        // Other
+        return `<div style="margin-bottom:16px;">${_CB_LBL("Amount")}<input type="number" id="cb_amount" step="0.01" placeholder="0.00" style="${_CB_NUM}" /></div>`;
+      }
+
+      function cbAddRow(type) {
+        const tbody = document.getElementById("cb_items_body");
+        if (!tbody) return;
+        cbRowCount++;
+        const idx = cbRowCount;
+        const tr = document.createElement("tr");
+        tr.id = `cb_row_${idx}`;
+        const ic = `width:100%;padding:5px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-2);font-family:inherit;font-size:11px;color:var(--ink);box-sizing:border-box;`;
+        const nc = `${ic}font-family:'DM Mono',monospace;`;
+        const rc = `${nc}background:var(--surface-3);`;
+        if (type === "Labour") {
+          tr.innerHTML = `
+            <td style="padding:4px 5px;"><input type="text" class="cb-desc" placeholder="Description" style="${ic}min-width:110px;" /></td>
+            <td style="padding:4px 5px;"><input type="number" class="cb-qty" step="0.001" placeholder="0.000" style="${nc}width:80px;" oninput="cbCalcLabourTotals()" /></td>
+            <td style="padding:4px 5px;"><input type="number" class="cb-amt" step="0.01" placeholder="0.00" style="${nc}width:90px;" oninput="cbCalcLabourTotals()" /></td>
+            <td style="padding:4px 5px;"><button onclick="cbDeleteRow(${idx})" style="padding:3px 7px;background:var(--danger-light);color:var(--danger);border:1px solid #f09898;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;">Del</button></td>`;
+        } else {
+          const taxOpts = `<option value="0">0%</option>` + taxFormats.map(t => `<option value="${t.percent}">${t.percent}%</option>`).join("");
+          tr.innerHTML = `
+            <td style="padding:4px 5px;"><input type="text" class="cb-desc" placeholder="Description" style="${ic}min-width:110px;" list="descriptionList" /></td>
+            <td style="padding:4px 5px;"><input type="number" class="cb-qty" step="0.001" placeholder="0.000" style="${nc}width:78px;" oninput="cbCalcRow(${idx})" /></td>
+            <td style="padding:4px 5px;"><input type="number" class="cb-rate" step="0.01" placeholder="0.00" style="${nc}width:78px;" oninput="cbCalcRow(${idx})" /></td>
+            <td style="padding:4px 5px;"><select class="cb-tax" style="-webkit-appearance:none;${nc}width:64px;" onchange="cbCalcRow(${idx})">${taxOpts}</select></td>
+            <td style="padding:4px 5px;"><input type="number" class="cb-taxable" step="0.01" readonly style="${rc}width:80px;" /></td>
+            <td style="padding:4px 5px;"><button onclick="cbDeleteRow(${idx})" style="padding:3px 7px;background:var(--danger-light);color:var(--danger);border:1px solid #f09898;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;">Del</button></td>`;
+        }
+        tbody.appendChild(tr);
+      }
+
+      function cbDeleteRow(idx) {
+        document.getElementById(`cb_row_${idx}`)?.remove();
+        cbUpdateTotals();
+        cbCalcLabourTotals();
+      }
+
+      function cbCalcRow(idx) {
+        const row = document.getElementById(`cb_row_${idx}`);
+        if (!row) return;
+        const qty = parseFloat(row.querySelector(".cb-qty")?.value) || 0;
+        const rate = parseFloat(row.querySelector(".cb-rate")?.value) || 0;
+        if (row.querySelector(".cb-taxable")) row.querySelector(".cb-taxable").value = (qty * rate).toFixed(2);
+        cbUpdateTotals();
+      }
+
+      function cbUpdateTotals() {
+        let taxable = 0;
+        document.querySelectorAll("#cb_items_body tr").forEach(row => {
+          taxable += parseFloat(row.querySelector(".cb-taxable")?.value) || 0;
+        });
+        const setV = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+        const getV = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+        const vadd = getV("cb_vadd");
+
+        const coId = document.getElementById("cb_company")?.value;
+        const co = companies.find(c => String(c.id) === String(coId));
+        const isIGST = co?.state_code && co.state_code !== "33";
+
+        let cgst = 0, sgst = 0, igst = 0;
+        document.querySelectorAll("#cb_items_body tr").forEach(row => {
+          const base = parseFloat(row.querySelector(".cb-taxable")?.value) || 0;
+          const pct = parseFloat(row.querySelector(".cb-tax")?.value) || 0;
+          const share = taxable > 0 ? (base / taxable) * vadd : 0;
+          const gBase = base + share;
+          if (isIGST) igst += (gBase * pct) / 100;
+          else { cgst += (gBase * pct / 2) / 100; sgst += (gBase * pct / 2) / 100; }
+        });
+
+        setV("cb_txbl", taxable.toFixed(2));
+        setV("cb_cgst", cgst.toFixed(2));
+        setV("cb_sgst", sgst.toFixed(2));
+        setV("cb_igst", igst.toFixed(2));
+
+        const cgstRow = document.getElementById("cb_cgst_row");
+        const sgstRow = document.getElementById("cb_sgst_row");
+        const igstRow = document.getElementById("cb_igst_row");
+        if (cgstRow) cgstRow.style.display = isIGST ? "none" : "flex";
+        if (sgstRow) sgstRow.style.display = isIGST ? "none" : "flex";
+        if (igstRow) igstRow.style.display = isIGST ? "flex" : "none";
+
+        const roff = getV("cb_roff");
+        const total = taxable + vadd + cgst + sgst + igst + roff;
+        setV("cb_total", total.toFixed(2));
+        setV("cb_net", (total - getV("cb_tds")).toFixed(2));
+      }
+
+      function cbCalcChittai() {
+        const setV = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+        const getV = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+        const value = getV("cb_weight") * getV("cb_rate");
+        setV("cb_value", value.toFixed(2));
+        setV("cb_total", (value + getV("cb_others") + getV("cb_roff")).toFixed(2));
+      }
+
+      function cbCalcLabourTotals() {
+        let total = 0;
+        document.querySelectorAll("#cb_items_body tr").forEach(row => {
+          total += parseFloat(row.querySelector(".cb-amt")?.value) || 0;
+        });
+        const e = document.getElementById("cb_total");
+        if (e) e.value = total.toFixed(2);
+      }
+
+      function cbCollectFields() {
+        const type = document.getElementById("cb_bill_type")?.value || "";
+        const getV = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+        const getS = (id) => document.getElementById(id)?.value || "";
+
+        if (type === "Purchase Bill" || type === "Hallmark" || type === "Expense") {
+          const items = [];
+          document.querySelectorAll("#cb_items_body tr").forEach(row => {
+            const qty = parseFloat(row.querySelector(".cb-qty")?.value) || 0;
+            if (qty || row.querySelector(".cb-desc")?.value)
+              items.push({ description: row.querySelector(".cb-desc")?.value||"", qty, rate: parseFloat(row.querySelector(".cb-rate")?.value)||0, tax_pct: parseFloat(row.querySelector(".cb-tax")?.value)||0, taxable: parseFloat(row.querySelector(".cb-taxable")?.value)||0 });
+          });
+          return { amount: getV("cb_net"), fields_data: { items, taxable_value: getV("cb_txbl"), value_added: getV("cb_vadd"), cgst: getV("cb_cgst"), sgst: getV("cb_sgst"), igst: getV("cb_igst"), round_off: getV("cb_roff"), total_value: getV("cb_total"), tds: getV("cb_tds"), net_payable: getV("cb_net") } };
+        }
+        if (type === "Chittai") {
+          return { amount: getV("cb_total"), fields_data: { weight: getV("cb_weight"), rate: getV("cb_rate"), value: getV("cb_value"), others: getV("cb_others"), round_off: getV("cb_roff"), total: getV("cb_total"), tds: getV("cb_tds"), rtgs: getV("cb_rtgs"), remarks: getS("cb_remarks") } };
+        }
+        if (type === "Payment Voucher") {
+          return { amount: getV("cb_amount"), fields_data: { amount: getV("cb_amount"), mop: getS("cb_mop") } };
+        }
+        if (type === "Labour") {
+          const items = [];
+          document.querySelectorAll("#cb_items_body tr").forEach(row => {
+            items.push({ description: row.querySelector(".cb-desc")?.value||"", qty: parseFloat(row.querySelector(".cb-qty")?.value)||0, amount: parseFloat(row.querySelector(".cb-amt")?.value)||0 });
+          });
+          return { amount: getV("cb_total"), fields_data: { item_type: getS("cb_item_type"), items, total: getV("cb_total") } };
+        }
+        return { amount: getV("cb_amount"), fields_data: { amount: getV("cb_amount") } };
+      }
+
+      async function saveCancelledBill() {
+        const bill_type = document.getElementById("cb_bill_type")?.value || "";
+        if (!bill_type) { cbShowMessage("Please select a bill type", "error"); return; }
+        const profile_id = document.getElementById("cb_company")?.value || null;
+        const bill_no = document.getElementById("cb_bill_no")?.value.trim() || "";
+        const date = document.getElementById("cb_date")?.value || null;
+        const reason = document.getElementById("cb_reason")?.value.trim() || "";
+        const { amount, fields_data } = cbCollectFields();
+        try {
+          const res = await fetch("/api/cancelled-bills", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ profile_id: profile_id||null, bill_type, bill_no, date, amount, reason, fields_data, photo_url: cbPhotoUrls[0]||null, photo_urls: cbPhotoUrls.length?cbPhotoUrls:null, created_by: getCurrentUser()?.id||null }),
+          });
+          const result = await res.json();
+          if (result.status === "SUCCESS") {
+            closeCancelledModal();
+            if (document.getElementById("body_cancelled")?.classList.contains("show")) loadCancelledBills();
+            else window._cancelledLoaded = false;
+          } else {
+            cbShowMessage("Error: " + (result.error || "Failed"), "error");
+          }
+        } catch (e) { cbShowMessage("Error: " + e.message, "error"); }
       }
 
       function closeCancelledModal() {
-        const modal = document.getElementById("cancelledModal");
-        if (modal) modal.remove();
+        document.getElementById("cancelledModal")?.remove();
         if (cbPollInterval) clearInterval(cbPollInterval);
-        cbUploadToken = null;
-        cbPhotoUrls = [];
+        cbUploadToken = null; cbPhotoUrls = [];
       }
 
       function cbRenderPhotoSlots() {
@@ -3614,157 +3908,65 @@
           `<div style="position:relative;display:inline-block;">
             <img src="${url}" loading="lazy" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${url}','_blank')" />
             <button type="button" onclick="cbRemovePhoto(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">×</button>
-          </div>`
-        ).join("");
+          </div>`).join("");
         if (btns) btns.style.display = cbPhotoUrls.length >= 3 ? "none" : "flex";
       }
-
-      function cbRemovePhoto(i) {
-        cbPhotoUrls.splice(i, 1);
-        cbRenderPhotoSlots();
-      }
-
+      function cbRemovePhoto(i) { cbPhotoUrls.splice(i,1); cbRenderPhotoSlots(); }
       function cbShowMessage(msg, type) {
         const el = document.getElementById("cb_message");
         if (!el) return;
-        el.textContent = msg;
-        el.style.display = "block";
-        el.style.background = type === "error" ? "var(--danger-light)" : "var(--green-light)";
-        el.style.color = type === "error" ? "var(--danger)" : "var(--green)";
-        el.style.borderColor = type === "error" ? "#f09898" : "#52b788";
+        el.textContent = msg; el.style.display = "block";
+        el.style.background = type==="error"?"var(--danger-light)":"var(--green-light)";
+        el.style.color = type==="error"?"var(--danger)":"var(--green)";
+        el.style.borderColor = type==="error"?"#f09898":"#52b788";
       }
-
       async function cbStartPhoneUpload() {
-        const billNo = document.getElementById("cb_bill_no")?.value.trim() || "";
-        const companySel = document.getElementById("cb_company");
-        const company = companySel?.options[companySel.selectedIndex]?.text || "";
+        const billNo = document.getElementById("cb_bill_no")?.value.trim()||"";
+        const cSel = document.getElementById("cb_company");
+        const company = cSel?.options[cSel.selectedIndex]?.text||"";
         try {
-          const res = await fetch("/api/upload-session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bill_no: billNo, company, folder: "cancelled_bills" }),
-          });
-          const data = await res.json();
-          cbUploadToken = data.token;
-          const url = `${window.location.origin}/upload/${cbUploadToken}`;
-          const qrDiv = document.getElementById("cb_qr_code");
-          qrDiv.innerHTML = "";
-          new QRCode(qrDiv, { text: url, width: 160, height: 160 });
-          document.getElementById("cb_photo_btns").style.display = "none";
-          document.getElementById("cb_qr_area").style.display = "block";
-          cbPollInterval = setInterval(cbCheckUploadStatus, 2000);
-        } catch (e) {
-          cbShowMessage("Error starting upload: " + e.message, "error");
-        }
+          const { token } = await fetch("/api/upload-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bill_no:billNo,company,folder:"cancelled_bills"})}).then(r=>r.json());
+          cbUploadToken = token;
+          const qrDiv = document.getElementById("cb_qr_code"); qrDiv.innerHTML="";
+          new QRCode(qrDiv,{text:`${window.location.origin}/upload/${token}`,width:160,height:160});
+          document.getElementById("cb_photo_btns").style.display="none";
+          document.getElementById("cb_qr_area").style.display="block";
+          cbPollInterval = setInterval(cbCheckUploadStatus,2000);
+        } catch(e){ cbShowMessage("Error: "+e.message,"error"); }
       }
-
       async function cbCheckUploadStatus() {
         if (!cbUploadToken) return;
         try {
-          const res = await fetch(`/api/upload-session/${cbUploadToken}/status`);
-          const data = await res.json();
+          const data = await fetch(`/api/upload-session/${cbUploadToken}/status`).then(r=>r.json());
           if (data.photo_url && !cbPhotoUrls.includes(data.photo_url)) {
-            cbPhotoUrls.push(data.photo_url);
-            cbUploadToken = null;
-            clearInterval(cbPollInterval);
-            document.getElementById("cb_qr_area").style.display = "none";
-            cbRenderPhotoSlots();
+            cbPhotoUrls.push(data.photo_url); cbUploadToken=null; clearInterval(cbPollInterval);
+            document.getElementById("cb_qr_area").style.display="none"; cbRenderPhotoSlots();
           }
-        } catch (e) {}
+        } catch(e){}
       }
-
       function cbCancelPhoneUpload() {
-        if (cbPollInterval) clearInterval(cbPollInterval);
-        cbUploadToken = null;
-        const qrArea = document.getElementById("cb_qr_area");
-        if (qrArea) qrArea.style.display = "none";
+        if (cbPollInterval) clearInterval(cbPollInterval); cbUploadToken=null;
+        const qa=document.getElementById("cb_qr_area"); if(qa) qa.style.display="none";
         cbRenderPhotoSlots();
       }
-
       async function cbUploadFromPC(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        if (file.size > 15 * 1024 * 1024) {
-          cbShowMessage("File must be under 15 MB", "error");
-          event.target.value = "";
-          return;
-        }
-        const billNo = document.getElementById("cb_bill_no")?.value.trim() || "";
-        const companySel = document.getElementById("cb_company");
-        const company = companySel?.options[companySel.selectedIndex]?.text || "";
+        const file = event.target.files[0]; if (!file) return;
+        if (file.size > 15*1024*1024) { cbShowMessage("File must be under 15 MB","error"); event.target.value=""; return; }
+        const billNo = document.getElementById("cb_bill_no")?.value.trim()||"";
+        const cSel = document.getElementById("cb_company");
+        const company = cSel?.options[cSel.selectedIndex]?.text||"";
         try {
-          cbShowMessage("Uploading…", "success");
-          const sessRes = await fetch("/api/upload-session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bill_no: billNo, company, folder: "cancelled_bills" }),
-          });
-          const sessData = await sessRes.json();
-          const token = sessData.token;
-          const fd = new FormData();
-          fd.append("photo", file);
-          fd.append("folder", "cancelled_bills");
-          const upRes = await fetch(`/api/upload-session/${token}/upload`, { method: "POST", body: fd });
-          const upData = await upRes.json();
-          if (upData.status === "SUCCESS") {
-            cbPhotoUrls.push(upData.photo_url);
-            cbRenderPhotoSlots();
-            cbShowMessage("Photo uploaded ✓", "success");
-            setTimeout(() => {
-              const m = document.getElementById("cb_message");
-              if (m) m.style.display = "none";
-            }, 1500);
-          } else {
-            cbShowMessage("Upload failed: " + (upData.error || "unknown"), "error");
-          }
-        } catch (e) {
-          cbShowMessage("Upload error: " + e.message, "error");
-        }
-        event.target.value = "";
-      }
-
-      async function saveCancelledBill() {
-        const bill_type = document.getElementById("cb_bill_type")?.value || "";
-        const profile_id = document.getElementById("cb_company")?.value || null;
-        const bill_no = document.getElementById("cb_bill_no")?.value.trim() || "";
-        const date = document.getElementById("cb_date")?.value || null;
-        const amtRaw = document.getElementById("cb_amount")?.value;
-        const amount = amtRaw !== "" && amtRaw != null ? parseFloat(amtRaw) : null;
-        const reason = document.getElementById("cb_reason")?.value.trim() || "";
-
-        if (!bill_type) { cbShowMessage("Please select a bill type", "error"); return; }
-
-        try {
-          const res = await fetch("/api/cancelled-bills", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              profile_id: profile_id || null,
-              bill_type,
-              bill_no,
-              date,
-              amount,
-              reason,
-              photo_url: cbPhotoUrls[0] || null,
-              photo_urls: cbPhotoUrls.length ? cbPhotoUrls : null,
-              created_by: getCurrentUser()?.id || null,
-            }),
-          });
-          const result = await res.json();
-          if (result.status === "SUCCESS") {
-            closeCancelledModal();
-            // Refresh list if section is open
-            if (document.getElementById("body_cancelled")?.classList.contains("show")) {
-              loadCancelledBills();
-            } else {
-              window._cancelledLoaded = false;
-            }
-          } else {
-            cbShowMessage("Error: " + (result.error || "Failed to save"), "error");
-          }
-        } catch (e) {
-          cbShowMessage("Error: " + e.message, "error");
-        }
+          cbShowMessage("Uploading…","success");
+          const {token} = await fetch("/api/upload-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bill_no:billNo,company,folder:"cancelled_bills"})}).then(r=>r.json());
+          const fd=new FormData(); fd.append("photo",file); fd.append("folder","cancelled_bills");
+          const upData = await fetch(`/api/upload-session/${token}/upload`,{method:"POST",body:fd}).then(r=>r.json());
+          if (upData.status==="SUCCESS") {
+            cbPhotoUrls.push(upData.photo_url); cbRenderPhotoSlots();
+            cbShowMessage("Photo uploaded ✓","success");
+            setTimeout(()=>{ const m=document.getElementById("cb_message"); if(m) m.style.display="none"; },1500);
+          } else { cbShowMessage("Upload failed: "+(upData.error||"unknown"),"error"); }
+        } catch(e){ cbShowMessage("Upload error: "+e.message,"error"); }
+        event.target.value="";
       }
 
       // ── CLEAR FORM BUTTON ──
