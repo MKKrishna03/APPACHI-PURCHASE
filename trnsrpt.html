@@ -654,9 +654,9 @@
           <div class="summary-value" id="sumCount">—</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">Labour Bill Value</div>
+          <div class="summary-label">Bill Value</div>
           <div class="summary-value" id="sumBillValue">—</div>
-          <div class="summary-sub">after deduction · excl. chittai</div>
+          <div class="summary-sub">labour · hallmark · expense</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Payment Received</div>
@@ -715,7 +715,7 @@
                   onclick="sortBy('billValue')"
                   style="text-align: right"
                 >
-                  Labour Value<span class="si" id="si_billValue">⇅</span>
+                  Bill Value<span class="si" id="si_billValue">⇅</span>
                 </th>
                 <th
                   class="sortable"
@@ -1193,7 +1193,7 @@
               .toLowerCase()
               .includes("receipt");
             const hasBillVal =
-              b._isChittai || !!b.linked_labour_id || isReceipt;
+              b._isChittai || !!b.linked_labour_id || b._linkedHM || isReceipt;
             const date = b.date
               ? (() => {
                   const d = new Date(
@@ -1275,13 +1275,18 @@
         tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Loading...</td></tr>`;
 
         try {
-          const [labourRes, voucherRes, profileRes, chittaiRes] =
+          const [labourRes, voucherRes, profileRes, chittaiRes, hmRes] =
             await Promise.all([
               fetch("/api/labour").then((r) => r.json()),
               fetch("/api/vouchers/list").then((r) => r.json()),
               fetch("/api/profile/all").then((r) => r.json()),
               fetch("/api/chittai/list/all").then((r) => r.json()),
+              fetch("/api/hallmark-expenses/list").then((r) => r.json()),
             ]);
+
+          // Build lookup map: hallmark_expense id → entry (covers both Hallmark and Expense bills)
+          const hmById = {};
+          (Array.isArray(hmRes) ? hmRes : []).forEach((h) => { hmById[h.id] = h; });
 
           const inRange = (dateStr) => {
             if (!dateStr) return false;
@@ -1335,10 +1340,13 @@
             const chittai = chittaiRes.find(
               (c) => c.id === b.linked_chittai_id,
             );
+            // linked_purchase_id can point to a hallmark or expense entry
+            const hmEntry = b.linked_purchase_id ? hmById[b.linked_purchase_id] : null;
             const pid =
               b.profile_id ||
               (chittai && chittai.profile_id) ||
-              (labour && labour.profile_id);
+              (labour && labour.profile_id) ||
+              (hmEntry && hmEntry.profile_id);
             b._pid = pid;
             const p = profileRes.find((c) => String(c.id) === String(pid));
             let companyName;
@@ -1353,13 +1361,16 @@
                 : "-";
             b._billNo = b.bill_no || "-";
             b._isChittai = !!chittai;
+            b._linkedHM = !!hmEntry;
             b._billValue = chittai
               ? parseFloat(chittai.total || 0) - parseFloat(chittai.tds || 0)
               : labour
                 ? parseFloat(
                     labour.bill_value_after_deduction || labour.total || 0,
                   )
-                : parseFloat(b.bill_value || b.total_value || 0);
+                : hmEntry
+                  ? parseFloat(hmEntry.net_value || hmEntry.total_value || 0)
+                  : parseFloat(b.bill_value || b.total_value || 0);
           });
 
           document.getElementById("rowCount").textContent = receipts.length;
@@ -1376,7 +1387,7 @@
 
           allRows = receipts;
           receipts.forEach((b) => {
-            if (b._isChittai || b.linked_labour_id)
+            if (b._isChittai || b.linked_labour_id || b._linkedHM)
               totalBillValue += b._billValue || 0;
             totalPayment += parseFloat(b.total_value || 0);
           });
