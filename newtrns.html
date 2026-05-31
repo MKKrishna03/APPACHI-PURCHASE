@@ -251,6 +251,83 @@
         display: none;
       }
 
+      /* ── Multi-bill checkbox list ── */
+      .bill-list {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .bill-list::-webkit-scrollbar { width: 4px; }
+      .bill-list::-webkit-scrollbar-thumb { background: #d0d0e0; border-radius: 2px; }
+      .bill-check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+      .bill-check-item:last-child { border-bottom: none; }
+      .bill-check-item:hover { background: var(--surface-2, #f9f9f6); }
+      .bill-check-item.selected { background: rgba(45,106,79,0.06); }
+      .bill-check-item input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        accent-color: var(--accent);
+        flex-shrink: 0;
+        padding: 0;
+        border: none;
+        background: none;
+      }
+      .bill-check-no {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        font-family: "DM Mono", monospace;
+      }
+      .bill-check-type {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--ink-3);
+        background: var(--surface-2, #f0f0ea);
+        border-radius: 4px;
+        padding: 1px 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .bill-check-amt {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--accent);
+        font-family: "DM Mono", monospace;
+        white-space: nowrap;
+      }
+      .bill-check-bal {
+        font-size: 10px;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .selection-summary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 14px;
+        background: rgba(45,106,79,0.07);
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        margin-top: 8px;
+      }
+      .selection-summary .sum-total {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
       @media (max-width: 700px) {
         .modal {
           padding: 22px;
@@ -322,16 +399,24 @@
           <h2 class="section-title">New Transaction Details</h2>
           <div class="form-grid">
             <div class="form-group">
-              <label for="newDate">Date</label
-              ><input type="date" id="newDate" />
+              <label for="newDate">Date</label>
+              <input type="date" id="newDate" />
             </div>
             <div class="form-group">
-              <label for="newAmount">Amount</label
-              ><input type="number" id="newAmount" min="0" step="0.01" />
+              <label for="newAmount">Amount</label>
+              <input type="number" id="newAmount" min="0" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label for="newRoundOff">Round Off</label>
+              <input type="number" id="newRoundOff" step="0.01" value="0" placeholder="0.00" oninput="updateNewTotal()" />
+            </div>
+            <div class="form-group">
+              <label for="newTotal">Total</label>
+              <input type="number" id="newTotal" readonly style="background:var(--surface-2);font-weight:700;" />
             </div>
             <div class="form-group full">
-              <label for="newMop">MOP</label
-              ><select id="newMop">
+              <label for="newMop">MOP</label>
+              <select id="newMop">
                 <option value="">Select MOP</option>
                 <option value="Cash">Cash</option>
                 <option value="NEFT/RTGS">NEFT/RTGS</option>
@@ -343,29 +428,35 @@
         <div class="section-card hidden" id="againstSection">
           <h2 class="section-title">Against Bill Details</h2>
           <div class="form-grid">
-            <div class="form-group">
-              <label for="againstVoucherType">Voucher Type</label
-              ><select id="againstVoucherType">
+            <div class="form-group full">
+              <label for="againstVoucherType">Voucher Type</label>
+              <select id="againstVoucherType">
                 <option value="">Select Voucher Type</option>
               </select>
             </div>
-            <div class="form-group">
-              <label for="againstBillNo">Bill No</label
-              ><select id="againstBillNo">
-                <option value="">Select Bill No</option>
-              </select>
+            <div class="form-group full" id="billListGroup" style="display:none;">
+              <label>Select Bills <span id="billListCount" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-3);font-size:11px;"></span></label>
+              <div class="bill-list" id="againstBillList"></div>
+              <div class="selection-summary" id="selectionSummary" style="display:none;">
+                <span id="selCount">0 bills selected</span>
+                <span class="sum-total" id="selSubtotal">₹0</span>
+              </div>
             </div>
             <div class="form-group">
-              <label for="againstDate">Date</label
-              ><input type="date" id="againstDate" />
+              <label for="againstDate">Date</label>
+              <input type="date" id="againstDate" />
             </div>
             <div class="form-group">
-              <label for="againstAmount">Amount</label
-              ><input type="number" id="againstAmount" min="0" step="0.01" />
+              <label for="againstRoundOff">Round Off</label>
+              <input type="number" id="againstRoundOff" step="0.01" value="0" placeholder="0.00" oninput="updateAgainstTotals()" />
             </div>
             <div class="form-group full">
-              <label for="againstMop">MOP</label
-              ><select id="againstMop">
+              <label for="againstAmount">Amount</label>
+              <input type="number" id="againstAmount" min="0" step="0.01" placeholder="Auto-calculated from selected bills" />
+            </div>
+            <div class="form-group full">
+              <label for="againstMop">MOP</label>
+              <select id="againstMop">
                 <option value="">Select MOP</option>
                 <option value="Cash">Cash</option>
                 <option value="NEFT/RTGS">NEFT/RTGS</option>
@@ -411,7 +502,6 @@
       const newSection = document.getElementById("newSection");
       const againstSection = document.getElementById("againstSection");
       const againstVoucherType = document.getElementById("againstVoucherType");
-      const againstBillNo = document.getElementById("againstBillNo");
       const againstHint = document.getElementById("againstHint");
       const formMessage = document.getElementById("formMessage");
       const saveButton = document.getElementById("saveButton");
@@ -437,9 +527,11 @@
 
       function resetVoucherSelectors() {
         companyVouchers = [];
-        againstVoucherType.innerHTML =
-          '<option value="">Select Voucher Type</option>';
-        againstBillNo.innerHTML = '<option value="">Select Bill No</option>';
+        againstVoucherType.innerHTML = '<option value="">Select Voucher Type</option>';
+        document.getElementById("againstBillList").innerHTML = "";
+        document.getElementById("billListGroup").style.display = "none";
+        document.getElementById("selectionSummary").style.display = "none";
+        document.getElementById("billListCount").textContent = "";
         againstHint.textContent = "";
         againstHint.classList.remove("show");
       }
@@ -450,9 +542,12 @@
         entryType.value = "";
         document.getElementById("newDate").value = todayValue();
         document.getElementById("newAmount").value = "";
+        document.getElementById("newRoundOff").value = "0";
+        document.getElementById("newTotal").value = "";
         document.getElementById("newMop").value = "";
         document.getElementById("againstDate").value = todayValue();
         document.getElementById("againstAmount").value = "";
+        document.getElementById("againstRoundOff").value = "0";
         document.getElementById("againstMop").value = "";
         newSection.classList.add("hidden");
         againstSection.classList.add("hidden");
@@ -560,104 +655,108 @@
         });
       }
 
+      // Build a flat list of bill items for the given voucher type
+      function getBillItems(voucherType) {
+        const fmtAmt = (n) => Number.parseFloat(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (voucherType === "Chittai") {
+          return openChittais.map((c) => ({
+            label: c.chittai_no,
+            typeTag: "Chittai",
+            amount: Number.parseFloat(c.rtgs_amount || c.total || 0),
+            fullAmount: Number.parseFloat(c.total || 0),
+            isBal: false,
+          }));
+        }
+        if (voucherType === "Receipt Voucher") {
+          return labourReceiptVouchers
+            .map((lv) => {
+              const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
+              const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
+              return { label: lv.receipt_bill_no || `ID-${lv.id}`, typeTag: "Labour", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+            })
+            .filter((b) => b.amount > 0.009);
+        }
+        if (voucherType === "Purchase Voucher") {
+          return (window._openPurchases || []).map((p) => {
+            const fullAmt = Number.parseFloat(p.net_value || p.total_value || 0);
+            const balAmt = p.remaining_value != null ? Number.parseFloat(p.remaining_value) : fullAmt;
+            return { label: p.bill_no || `PUR-${p.id}`, typeTag: "Purchase", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+          });
+        }
+        return companyVouchers
+          .filter((v) => v.voucher_type === voucherType)
+          .map((v) => {
+            const fullAmt = Number.parseFloat(v.total_value || 0);
+            const balAmt = v.remaining_value != null ? Number.parseFloat(v.remaining_value) : fullAmt;
+            return { label: v.bill_no || `ID-${v.id}`, typeTag: voucherType, amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+          });
+      }
+
       async function populateBillNumbers() {
-        againstBillNo.innerHTML = '<option value="">Select Bill No</option>';
+        const listEl = document.getElementById("againstBillList");
+        const listGroup = document.getElementById("billListGroup");
+        const summary = document.getElementById("selectionSummary");
+        const countLabel = document.getElementById("billListCount");
+        listEl.innerHTML = "";
+        listGroup.style.display = "none";
+        summary.style.display = "none";
+        document.getElementById("againstAmount").value = "";
+        document.getElementById("againstRoundOff").value = "0";
         againstHint.textContent = "";
         againstHint.classList.remove("show");
         if (!againstVoucherType.value) return;
-        if (againstVoucherType.value === "Chittai") {
-          if (!openChittais.length) {
-            againstHint.textContent =
-              "No unpaid Chittais found for this company.";
-            againstHint.classList.add("show");
-            return;
-          }
-          openChittais.forEach((c) => {
-            const o = document.createElement("option");
-            o.value = c.chittai_no;
-            const amt = Number.parseFloat(c.rtgs_amount || c.total || 0);
-            o.textContent = amt
-              ? `${c.chittai_no} — ₹${amt.toLocaleString("en-IN")}`
-              : c.chittai_no;
-            o.dataset.amount = c.rtgs_amount || "";
-            againstBillNo.appendChild(o);
-          });
-          return;
-        }
-        if (againstVoucherType.value === "Receipt Voucher") {
-          if (!labourReceiptVouchers.length) {
-            againstHint.textContent = "No unlinked Receipt Vouchers found.";
-            againstHint.classList.add("show");
-            return;
-          }
-          let addedCount = 0;
-          labourReceiptVouchers.forEach((lv) => {
-            const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
-            const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
-            if (balAmt <= 0.009) return; // fully paid — hide
-            const o = document.createElement("option");
-            const billLabel = lv.receipt_bill_no || `ID-${lv.id}`;
-            o.value = lv.receipt_bill_no || `ID-${lv.id}`;
-            const isPartial = balAmt < fullAmt - 0.01;
-            o.textContent = `${billLabel} · ₹${balAmt.toLocaleString("en-IN")}${isPartial ? " (bal)" : ""}`;
-            o.dataset.amount = balAmt;
-            againstBillNo.appendChild(o);
-            addedCount++;
-          });
-          if (!addedCount) {
-            againstHint.textContent = "All Receipt Vouchers for this company are fully paid.";
-            againstHint.classList.add("show");
-          }
-          return;
-        }
-        if (againstVoucherType.value === "Purchase Voucher") {
-          const purchases = window._openPurchases || [];
-          if (!purchases.length) {
-            againstHint.textContent =
-              "No purchase vouchers found for this company.";
-            againstHint.classList.add("show");
-            return;
-          }
-          purchases.forEach((p) => {
-            const o = document.createElement("option");
-            const billLabel = p.bill_no || `PUR-${p.id}`;
-            o.value = billLabel;
-            const fullAmt = Number.parseFloat(p.net_value || p.total_value || 0);
-            const balAmt = p.remaining_value != null ? Number.parseFloat(p.remaining_value) : fullAmt;
-            const isPartial = balAmt < fullAmt - 0.01;
-            const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
-            o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
-            o.dataset.amount = balAmt || "";
-            againstBillNo.appendChild(o);
-          });
-          return;
-        }
-        const filtered = companyVouchers.filter(
-          (v) => v.voucher_type === againstVoucherType.value,
-        );
-        if (!filtered.length) {
-          againstHint.textContent = "No bills found under this voucher type.";
+
+        const items = getBillItems(againstVoucherType.value);
+        if (!items.length) {
+          againstHint.textContent = `No bills found for "${againstVoucherType.value}" under this company.`;
           againstHint.classList.add("show");
           return;
         }
-        filtered.forEach((v) => {
-          const o = document.createElement("option");
-          const billLabel = v.bill_no || `ID-${v.id}`;
-          o.value = billLabel;
-          const fullAmt = Number.parseFloat(v.total_value || 0);
-          const balAmt = v.remaining_value != null ? Number.parseFloat(v.remaining_value) : fullAmt;
-          const isPartial = balAmt < fullAmt - 0.01;
-          const amtStr = balAmt ? `₹${balAmt.toLocaleString("en-IN")}${isPartial ? " bal" : ""}` : "";
-          o.textContent = amtStr ? `${billLabel} · ${amtStr}` : billLabel;
-          o.dataset.amount = balAmt || "";
-          againstBillNo.appendChild(o);
+
+        countLabel.textContent = `(${items.length} available)`;
+        items.forEach((item) => {
+          const row = document.createElement("label");
+          row.className = "bill-check-item";
+          row.innerHTML = `
+            <input type="checkbox" class="bill-cb" data-bill-no="${item.label}" data-amount="${item.amount}" onchange="updateAgainstTotals()" />
+            <span class="bill-check-no">${item.label}</span>
+            <span class="bill-check-type">${item.typeTag}</span>
+            <span class="bill-check-amt">₹${item.amount.toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            ${item.isBal ? `<span class="bill-check-bal">bal</span>` : ""}
+          `;
+          row.querySelector("input").addEventListener("change", function () {
+            row.classList.toggle("selected", this.checked);
+          });
+          listEl.appendChild(row);
         });
+        listGroup.style.display = "";
+        updateAgainstTotals();
       }
 
-      function handleBillSelection() {
-        const sel = againstBillNo.options[againstBillNo.selectedIndex];
-        if (sel && sel.value && sel.dataset.amount)
-          document.getElementById("againstAmount").value = sel.dataset.amount;
+      function updateAgainstTotals() {
+        const cbs = document.querySelectorAll("#againstBillList .bill-cb");
+        let subtotal = 0;
+        let count = 0;
+        cbs.forEach((cb) => {
+          if (cb.checked) {
+            subtotal += Number.parseFloat(cb.dataset.amount || 0);
+            count++;
+          }
+        });
+        const roundOff = Number.parseFloat(document.getElementById("againstRoundOff").value) || 0;
+        const total = subtotal + roundOff;
+
+        const summary = document.getElementById("selectionSummary");
+        summary.style.display = count > 0 ? "flex" : "none";
+        document.getElementById("selCount").textContent = `${count} bill${count !== 1 ? "s" : ""} selected`;
+        document.getElementById("selSubtotal").textContent = `₹${subtotal.toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}${roundOff ? ` + ${roundOff >= 0 ? "" : ""}${roundOff} = ₹${total.toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : ""}`;
+        document.getElementById("againstAmount").value = total ? total.toFixed(2) : "";
+      }
+
+      function updateNewTotal() {
+        const amount = Number.parseFloat(document.getElementById("newAmount").value) || 0;
+        const roundOff = Number.parseFloat(document.getElementById("newRoundOff").value) || 0;
+        document.getElementById("newTotal").value = (amount + roundOff).toFixed(2);
       }
 
       async function saveTransaction() {
@@ -677,11 +776,13 @@
         if (entryType.value === "new") {
           const date = document.getElementById("newDate").value,
             amount = document.getElementById("newAmount").value,
+            roundOff = document.getElementById("newRoundOff").value,
             mop = document.getElementById("newMop").value;
           if (!date || !amount || !mop) {
             setMessage("Please fill Date, Amount, and MOP.", "error");
             return;
           }
+          const totalVal = (Number.parseFloat(amount) + (Number.parseFloat(roundOff) || 0)).toFixed(2);
           payload = {
             profile_id: companySelect.value,
             voucher_type: transactionKind.value,
@@ -689,38 +790,36 @@
             bill_no: null,
             entry_type: "new",
             description:
-              (transactionKind.value === "Receipt Voucher"
-                ? "Receipt"
-                : "Payment") +
-              " via " +
-              mop,
-            total_value: amount,
+              (transactionKind.value === "Receipt Voucher" ? "Receipt" : "Payment") +
+              " via " + mop,
+            total_value: totalVal,
+            round_off: roundOff || "0",
           };
         } else {
+          // Collect all checked bills
+          const checkedCbs = [...document.querySelectorAll("#againstBillList .bill-cb:checked")];
+          const selectedBillNos = checkedCbs.map((cb) => cb.dataset.billNo).filter(Boolean);
           const vt = againstVoucherType.value,
-            bn = againstBillNo.value,
             date = document.getElementById("againstDate").value,
             amount = document.getElementById("againstAmount").value,
+            roundOff = document.getElementById("againstRoundOff").value,
             mop = document.getElementById("againstMop").value;
-          if (!vt || !bn || !date || !amount || !mop) {
-            setMessage("Please fill all against fields.", "error");
-            return;
-          }
+          if (!vt) { setMessage("Please select a Voucher Type.", "error"); return; }
+          if (!selectedBillNos.length) { setMessage("Please select at least one bill.", "error"); return; }
+          if (!date || !amount || !mop) { setMessage("Please fill Date, Amount, and MOP.", "error"); return; }
+          const combinedBillNo = selectedBillNos.join(", ");
           payload = {
             profile_id: companySelect.value,
             voucher_type: transactionKind.value,
             date,
-            bill_no: bn,
+            bill_no: combinedBillNo,
+            bill_nos: selectedBillNos,
             entry_type: "against",
             description:
-              (transactionKind.value === "Receipt Voucher"
-                ? "Receipt"
-                : "Payment") +
-              " against " +
-              vt +
-              " via " +
-              mop,
+              (transactionKind.value === "Receipt Voucher" ? "Receipt" : "Payment") +
+              " against " + vt + " via " + mop,
             total_value: amount,
+            round_off: roundOff || "0",
           };
         }
         payload.created_by = getCurrentUser()?.id || null;
@@ -766,12 +865,12 @@
         else resetVoucherSelectors();
       });
       againstVoucherType.addEventListener("change", populateBillNumbers);
-      againstBillNo.addEventListener("change", handleBillSelection);
       entryType.addEventListener("change", async function () {
         updateSections();
         if (entryType.value === "against") await loadCompanyVouchers();
         else resetVoucherSelectors();
       });
+      document.getElementById("newAmount").addEventListener("input", updateNewTotal);
 
       document.getElementById("newDate").value = todayValue();
       document.getElementById("againstDate").value = todayValue();
