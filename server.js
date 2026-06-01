@@ -154,6 +154,8 @@ const pages = {
   "/reports/hallmark": "hmrpt.html",
   "/reports/expense": "exprpt.html",
   "/reports/tds": "tds.html",
+  "/reports/cd-note": "cdrpt.html",
+  "/reports/cancelled": "cancelrpt.html",
   "/mc": "mc.html",
 };
 
