@@ -473,8 +473,11 @@
   }
 
   function initSearchableSelects() {
-    var sel = document.getElementById('companySelect');
-    if (sel) initSearchableSelect(sel);
+    var ids = ['companySelect', 'companyDropdown', 'cb_company', 'companySwitcher', 'chittaiCompany', 'filterCompany'];
+    ids.forEach(function(id) {
+      var sel = document.getElementById(id);
+      if (sel) initSearchableSelect(sel);
+    });
   }
 
   // ── INIT ──
