@@ -333,11 +333,11 @@
           voucherRes.forEach(v=>{if(v.linked_purchase_id)voucherMap[v.linked_purchase_id]=(voucherMap[v.linked_purchase_id]||0)+parseFloat(v.total_value||0);});
 
           let rows=purchasesRes.filter(p=>{
-            const vt=p.voucher_type||'';
-            return(vt==='Credit Note'||vt==='Debit Note')&&inRange(p.date);
+            const nt=p.description||p.voucher_type||'';
+            return(nt==='Credit Note'||nt==='Debit Note')&&inRange(p.date);
           });
           if(companyId)rows=rows.filter(p=>String(p.profile_id)===String(companyId));
-          if(noteTypeFilter)rows=rows.filter(p=>p.voucher_type===noteTypeFilter);
+          if(noteTypeFilter)rows=rows.filter(p=>(p.description||p.voucher_type)===noteTypeFilter);
 
           allRows=rows.map(p=>{
             const taxable=parseFloat(p.taxable_value||0);
@@ -347,7 +347,7 @@
             const net=parseFloat(p.net_value||p.total_value||0);
             const paid=voucherMap[p.id]||0;
             const isPaid=net>0&&paid>=net-0.01;
-            return{id:p.id,profile_id:p.profile_id,company:p.company_name||'-',dateRaw:p.date||'',dateStr:fmtDate(p.date),bill_no:p.bill_no,noteType:p.voucher_type,taxable,gst,tds,net,paid,isPaid,enteredBy:p.created_by_name||p.created_by||'—'};
+            return{id:p.id,profile_id:p.profile_id,company:p.company_name||'-',dateRaw:p.date||'',dateStr:fmtDate(p.date),bill_no:p.bill_no,noteType:p.description||p.voucher_type||'—',taxable,gst,tds,net,paid,isPaid,enteredBy:p.created_by_name||p.created_by||'—'};
           });
 
           if(payFilter==='paid')allRows=allRows.filter(r=>r.isPaid);

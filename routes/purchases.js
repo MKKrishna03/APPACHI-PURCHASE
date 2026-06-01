@@ -98,12 +98,13 @@ router.post("/purchases", async (req, res) => {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO purchases (profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst,
+      `INSERT INTO purchases (profile_id, date, bill_no, description, voucher_type, taxable_value, cgst, sgst, igst,
         round_off, total_value, tds, net_value, linked_voucher_id, linked_chittai_id, created_by, photo_url,
         linked_purchase_ids, linked_voucher_ids, linked_chittai_ids, photo_urls)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
       [
-        profile_id, date, bill_no, description, taxable_value, cgst, sgst, igst, round_off, total_value,
+        profile_id, date, bill_no, description, req.body.voucher_type || null,
+        taxable_value, cgst, sgst, igst, round_off, total_value,
         tds, net_value,
         linked_voucher_ids?.length ? linked_voucher_ids[0] : null,
         linked_chittai_ids?.length ? linked_chittai_ids[0] : null,
