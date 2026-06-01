@@ -1005,6 +1005,7 @@
               result.updated_rv_count > 0
                 ? `Updated successfully!\n${result.updated_rv_count} linked Receipt Voucher(s) updated.`
                 : "Updated successfully!";
+            if (window._markFormClean) _markFormClean();
             alert(msg);
             window.history.back();
           } else {
