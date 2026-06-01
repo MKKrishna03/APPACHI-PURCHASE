@@ -254,10 +254,234 @@
     }, 8000);
   };
 
+  // ── SEARCHABLE COMPANY SELECT ──
+  // Converts <select id="companySelect"> into a type-to-filter widget.
+  // Works with dynamically loaded options and programmatic .value changes.
+
+  function injectSSStyles() {
+    if (document.getElementById('ss-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'ss-styles';
+    s.textContent = [
+      '.ss-wrap{position:relative;display:block;}',
+      '.ss-input{width:100%;padding:9px 28px 9px 12px;',
+        'border:1px solid var(--border-strong,rgba(0,0,0,.14));',
+        'border-radius:var(--radius,8px);',
+        'background-color:var(--surface-2,#f9f9f6);',
+        'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%238888aa\' d=\'M6 8L1 3h10z\'/%3E%3C/svg%3E");',
+        'background-repeat:no-repeat;background-position:right 10px center;',
+        'color:var(--ink,#1a1a2e);font-size:13px;font-family:inherit;',
+        'cursor:pointer;box-sizing:border-box;outline:none;',
+        '-webkit-appearance:none;appearance:none;',
+        'transition:border-color .15s,box-shadow .15s;}',
+      '.ss-input:focus,.ss-input.ss-open{',
+        'border-color:var(--accent,#1d6fa4)!important;',
+        'box-shadow:0 0 0 3px rgba(29,111,164,.1)!important;',
+        'background-color:var(--surface,#fff);}',
+      '.ss-input::placeholder{color:var(--ink-3,#8888aa);}',
+      '.ss-dropdown{display:none;position:absolute;top:calc(100% + 4px);',
+        'left:0;right:0;z-index:9999;background:#fff;',
+        'border:1px solid rgba(0,0,0,.12);border-radius:10px;',
+        'box-shadow:0 8px 24px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06);',
+        'max-height:240px;overflow-y:auto;box-sizing:border-box;}',
+      '.ss-dropdown.ss-open{display:block;}',
+      '.ss-dropdown::-webkit-scrollbar{width:4px;}',
+      '.ss-dropdown::-webkit-scrollbar-thumb{background:#e0e0da;border-radius:2px;}',
+      '.ss-item{padding:9px 12px;cursor:pointer;font-size:13px;',
+        'color:var(--ink,#1a1a2e);white-space:nowrap;',
+        'overflow:hidden;text-overflow:ellipsis;}',
+      '.ss-item:hover,.ss-item.ss-focused{background:var(--surface-2,#f9f9f6);}',
+      '.ss-item.ss-selected{color:var(--accent,#1d6fa4);font-weight:600;',
+        'background:var(--accent-light,#dbeeff);}',
+      '.ss-item.ss-placeholder{color:var(--ink-3,#8888aa);}',
+      '.ss-item.ss-empty{color:var(--ink-3,#8888aa);font-style:italic;pointer-events:none;}',
+      '.ss-item mark{background:var(--accent-light,#dbeeff);color:var(--accent,#1d6fa4);',
+        'border-radius:2px;padding:0 1px;font-style:normal;}',
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  function initSearchableSelect(sel) {
+    if (!sel || sel.dataset.ssInit) return;
+    sel.dataset.ssInit = '1';
+    injectSSStyles();
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'ss-wrap';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'ss-input';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    var dropdown = document.createElement('div');
+    dropdown.className = 'ss-dropdown';
+
+    sel.parentNode.insertBefore(wrapper, sel);
+    wrapper.appendChild(input);
+    wrapper.appendChild(dropdown);
+    wrapper.appendChild(sel);
+    sel.style.display = 'none';
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function updateDisplay() {
+      var opts = sel.options;
+      var idx = sel.selectedIndex;
+      var opt = opts[idx];
+      if (opt && opt.value !== '') {
+        input.value = opt.text;
+        input.placeholder = opts[0] ? opts[0].text : '— Choose a company —';
+      } else {
+        input.value = '';
+        input.placeholder = (opts[0] && opts[0].text) || '— Choose a company —';
+      }
+    }
+
+    function renderList(query) {
+      var q = (query || '').toLowerCase().trim();
+      dropdown.innerHTML = '';
+      var count = 0;
+      var cur = String(sel.value);
+      Array.from(sel.options).forEach(function(opt) {
+        if (opt.value === '') {
+          if (!q) {
+            var ph = document.createElement('div');
+            ph.className = 'ss-item ss-placeholder';
+            ph.textContent = opt.text;
+            ph.dataset.value = ''; ph.dataset.text = opt.text;
+            dropdown.appendChild(ph); count++;
+          }
+          return;
+        }
+        if (q && opt.text.toLowerCase().indexOf(q) === -1) return;
+        var item = document.createElement('div');
+        item.className = 'ss-item' + (String(opt.value) === cur ? ' ss-selected' : '');
+        if (q) {
+          var lo = opt.text.toLowerCase(), i = lo.indexOf(q);
+          item.innerHTML = esc(opt.text.slice(0,i)) +
+            '<mark>' + esc(opt.text.slice(i, i+q.length)) + '</mark>' +
+            esc(opt.text.slice(i+q.length));
+        } else {
+          item.textContent = opt.text;
+        }
+        item.dataset.value = opt.value; item.dataset.text = opt.text;
+        dropdown.appendChild(item); count++;
+      });
+      if (!count) {
+        var empty = document.createElement('div');
+        empty.className = 'ss-item ss-empty';
+        empty.textContent = 'No match';
+        dropdown.appendChild(empty);
+      }
+    }
+
+    function isOpen() { return dropdown.classList.contains('ss-open'); }
+
+    function openDropdown() {
+      input.value = '';
+      input.placeholder = 'Type to search…';
+      input.classList.add('ss-open');
+      dropdown.classList.add('ss-open');
+      renderList('');
+      var active = dropdown.querySelector('.ss-selected');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function closeDropdown() {
+      input.classList.remove('ss-open');
+      dropdown.classList.remove('ss-open');
+      updateDisplay();
+    }
+
+    function choose(value, text) {
+      // Update the underlying select without triggering our setter
+      var opts = Array.from(sel.options);
+      for (var i = 0; i < opts.length; i++) {
+        if (String(opts[i].value) === String(value)) { sel.selectedIndex = i; break; }
+      }
+      closeDropdown();
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // ── Input events ──
+    input.addEventListener('focus', function() { if (!isOpen()) openDropdown(); });
+
+    input.addEventListener('input', function() {
+      if (!isOpen()) {
+        input.classList.add('ss-open'); dropdown.classList.add('ss-open');
+        input.placeholder = 'Type to search…';
+      }
+      renderList(this.value);
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (!isOpen()) return;
+      var items = Array.from(dropdown.querySelectorAll('.ss-item:not(.ss-empty)'));
+      var fi = items.indexOf(dropdown.querySelector('.ss-focused'));
+      if (e.key === 'Escape') { closeDropdown(); input.blur(); e.preventDefault(); }
+      else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        var ni = fi < 0 ? 0 : Math.min(fi + 1, items.length - 1);
+        items.forEach(function(x){ x.classList.remove('ss-focused'); });
+        if (items[ni]) { items[ni].classList.add('ss-focused'); items[ni].scrollIntoView({ block:'nearest' }); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        var pi = Math.max(fi - 1, 0);
+        items.forEach(function(x){ x.classList.remove('ss-focused'); });
+        if (items[pi]) { items[pi].classList.add('ss-focused'); items[pi].scrollIntoView({ block:'nearest' }); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        var focused = dropdown.querySelector('.ss-focused');
+        if (focused) choose(focused.dataset.value, focused.dataset.text);
+      } else if (e.key === 'Tab') { closeDropdown(); }
+    });
+
+    dropdown.addEventListener('mousedown', function(e) {
+      var item = e.target.closest('.ss-item');
+      if (!item || item.classList.contains('ss-empty')) return;
+      e.preventDefault();
+      choose(item.dataset.value, item.dataset.text);
+    });
+
+    document.addEventListener('mousedown', function(e) {
+      if (isOpen() && !wrapper.contains(e.target)) closeDropdown();
+    });
+
+    // ── Watch for dynamic option loading (loadCompanies etc.) ──
+    new MutationObserver(function() {
+      updateDisplay();
+      if (isOpen()) renderList(input.value);
+    }).observe(sel, { childList: true });
+
+    // ── Intercept programmatic .value = ... assignments ──
+    var vDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(sel, 'value', {
+      get: function() { return vDesc.get.call(this); },
+      set: function(v) { vDesc.set.call(this, v); updateDisplay(); },
+      configurable: true,
+    });
+    var iDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+    Object.defineProperty(sel, 'selectedIndex', {
+      get: function() { return iDesc.get.call(this); },
+      set: function(v) { iDesc.set.call(this, v); updateDisplay(); },
+      configurable: true,
+    });
+
+    updateDisplay();
+  }
+
+  function initSearchableSelects() {
+    var sel = document.getElementById('companySelect');
+    if (sel) initSearchableSelect(sel);
+  }
+
   // ── INIT ──
   function init() {
     checkSessionExpiry();
     initDirtyFormCheck();
+    initSearchableSelects();
     // Defer visual inits until after the page has rendered its content
     setTimeout(function () {
       initScrollReveal();

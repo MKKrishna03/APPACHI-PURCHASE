@@ -1171,6 +1171,7 @@
             );
           } catch (e) {
             console.warn("[MC] Photo upload failed:", e.message);
+            if (editId) window._toast?.("Bill photo could not be updated — other changes will still be saved.", "warning", 5000);
           }
 
           if (editId) {
@@ -1192,6 +1193,7 @@
                 _finalReceiptId = receiptId;
               } catch (e) {
                 console.warn("[MC] Receipt update failed:", e.message);
+                window._toast?.("Failed to save bill edits: " + e.message, "error", 6000);
               }
             }
           } else {
@@ -1210,6 +1212,7 @@
               );
             } catch (e) {
               console.warn("[MC] Receipt create failed:", e.message);
+              window._toast?.("Failed to save receipt: " + e.message, "error", 6000);
             }
           }
         } finally {
