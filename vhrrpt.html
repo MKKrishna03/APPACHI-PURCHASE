@@ -1901,14 +1901,38 @@
         <div id="rvPopupHeadContent"></div>
       </div>
       <div id="rvPopupContent" style="padding:24px 28px;overflow-y:auto;flex:1;"></div>
-      <div style="padding:14px 28px;border-top:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;background:#f9f9f6;">
+      <div style="padding:14px 28px;border-top:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f9f9f6;">
         <div id="rvPopupEnteredBy" style="font-size:11px;color:#8888aa;"></div>
-        <button onclick="closeRvPopup()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Close</button>
+        <div style="display:flex;gap:10px;">
+          <button id="rvDeleteBtn" onclick="rvStartDelete()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:1px solid #f09898;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Delete</button>
+          <button id="rvEditBtn" onclick="rvGoEdit()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
+    let _rvPopupId = null;
+    let _rvCanDelete = false;
+
+    function _rvGetCurrentUser() {
+      try {
+        const u = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
+        return u ? JSON.parse(u) : null;
+      } catch { return null; }
+    }
+
+    async function _rvCheckDeleteAccess() {
+      try {
+        const user = _rvGetCurrentUser();
+        if (!user) return;
+        const res = await fetch(`/api/auth/can-delete?user_id=${encodeURIComponent(user.id)}`);
+        const data = await res.json();
+        _rvCanDelete = data.can_delete;
+      } catch(e) { _rvCanDelete = false; }
+    }
+    _rvCheckDeleteAccess();
+
     function _rvField(label, value, accent) {
       return `<div style="background:#f9f9f6;border:1px solid rgba(0,0,0,0.05);border-radius:10px;padding:10px 12px;">
         <div style="font-size:10px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
@@ -1948,6 +1972,7 @@
     }
 
     async function openRvPopup(id) {
+      _rvPopupId = id;
       const popup = document.getElementById('rvPopup');
       const headEl = document.getElementById('rvPopupHeadContent');
       const bodyEl = document.getElementById('rvPopupContent');
@@ -1955,6 +1980,7 @@
       headEl.innerHTML = '';
       footEl.textContent = '';
       bodyEl.innerHTML = '<div style="color:#8888aa;padding:28px 0;text-align:center;">Loading…</div>';
+      document.getElementById('rvDeleteBtn').style.display = 'none';
       popup.style.display = 'flex';
       try {
         const res = await fetch(`/api/labour/${id}`);
@@ -1990,13 +2016,78 @@
         if (l.photo_url) html += _rvSectionTitle('Bill Photo') + `<img src="${l.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${l.photo_url}','_blank')" />`;
         bodyEl.innerHTML = html;
         footEl.textContent = l.created_by_name ? 'Entered by: ' + l.created_by_name : '';
+        document.getElementById('rvDeleteBtn').style.display = _rvCanDelete ? 'inline-block' : 'none';
       } catch (e) {
         bodyEl.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Failed to load bill details.</div>';
       }
     }
 
+    function rvGoEdit() {
+      window.location.href = `/labclose?edit=${_rvPopupId}`;
+    }
+
+    async function rvStartDelete() {
+      let linked = [];
+      try {
+        const res = await fetch(`/api/linked-data/receipt/${_rvPopupId}`);
+        linked = await res.json();
+      } catch(e) {}
+
+      let linkedHTML = '';
+      if (linked.length) {
+        linkedHTML = `
+          <div style="margin:14px 0 6px;font-size:12px;font-weight:700;color:#b5620a;">Linked records found — tick to also delete:</div>
+          <div style="background:#fef0d6;border:1px solid rgba(181,98,10,0.2);border-radius:8px;padding:10px 14px;max-height:180px;overflow-y:auto;">
+            ${linked.map((l, i) => `<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#444466;margin-bottom:6px;cursor:pointer;">
+              <input type="checkbox" id="rvlnk_${i}" data-type="${l.type}" data-id="${l.id}" style="accent-color:#b5301e;width:14px;height:14px;">
+              ${l.label}
+            </label>`).join('')}
+          </div>`;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'rvDeleteOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:14px;padding:28px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+          <div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:8px;">Confirm Delete</div>
+          <div style="font-size:13px;color:#444466;margin-bottom:4px;">Are you sure you want to delete this entry? This cannot be undone.</div>
+          ${linkedHTML}
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+            <button onclick="document.getElementById('rvDeleteOverlay').remove()" style="padding:9px 20px;background:#f0efe9;color:#444466;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+            <button onclick="rvConfirmDelete()" style="padding:9px 20px;background:#b5301e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Yes, Delete</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+
+    async function rvConfirmDelete() {
+      const checkedLinked = [];
+      document.querySelectorAll('#rvDeleteOverlay input[type=checkbox]:checked').forEach(cb => {
+        checkedLinked.push({ type: cb.dataset.type, id: parseInt(cb.dataset.id) });
+      });
+      document.getElementById('rvDeleteOverlay')?.remove();
+      try {
+        const res = await fetch('/api/delete-entry', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'receipt', id: _rvPopupId, linked: checkedLinked })
+        });
+        const result = await res.json();
+        if (result.status === 'SUCCESS') {
+          closeRvPopup();
+          loadReport();
+        } else {
+          alert('Delete failed: ' + (result.error || 'Unknown error'));
+        }
+      } catch(e) {
+        alert('Delete failed: ' + e.message);
+      }
+    }
+
     function closeRvPopup() {
       document.getElementById('rvPopup').style.display = 'none';
+      _rvPopupId = null;
     }
     document.getElementById('rvPopup').addEventListener('click', function(e) {
       if (e.target === this) closeRvPopup();
