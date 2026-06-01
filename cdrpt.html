@@ -324,9 +324,10 @@
         const tbody=document.getElementById('reportTable');
         tbody.innerHTML=`<tr><td colspan="13" class="loading-state">Loading...</td></tr>`;
         try{
-          const [purchasesRes,voucherRes]=await Promise.all([
+          const [purchasesRes,voucherRes,profileRes]=await Promise.all([
             fetch('/api/purchases/list').then(r=>r.json()),
             fetch('/api/vouchers/list').then(r=>r.json()),
+            fetch('/api/profile/all').then(r=>r.json()),
           ]);
 
           const voucherMap={};
@@ -347,7 +348,9 @@
             const net=parseFloat(p.net_value||p.total_value||0);
             const paid=voucherMap[p.id]||0;
             const isPaid=net>0&&paid>=net-0.01;
-            return{id:p.id,profile_id:p.profile_id,company:p.company_name||'-',dateRaw:p.date||'',dateStr:fmtDate(p.date),bill_no:p.bill_no,noteType:p.description||p.voucher_type||'—',taxable,gst,tds,net,paid,isPaid,enteredBy:p.created_by_name||p.created_by||'—'};
+            const prof=profileRes.find(c=>String(c.id)===String(p.profile_id));
+            const company=prof?(prof.company||prof.alias||'-'):'-';
+            return{id:p.id,profile_id:p.profile_id,company,dateRaw:p.date||'',dateStr:fmtDate(p.date),bill_no:p.bill_no,noteType:p.description||p.voucher_type||'—',taxable,gst,tds,net,paid,isPaid,enteredBy:p.created_by_name||p.created_by||'—'};
           });
 
           if(payFilter==='paid')allRows=allRows.filter(r=>r.isPaid);
