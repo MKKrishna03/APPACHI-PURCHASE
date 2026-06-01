@@ -1282,7 +1282,7 @@
             <td class="mono"${row.isSubtotal ? ' style="color:var(--accent);font-weight:700;"' : ""}>${row.issueNo || "-"}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.isSubtotal ? (ivSum > 0 ? ivSum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-") : row.ivWeight > 0 ? row.ivWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
             <td>${receiptDateStr}</td>
-            <td class="mono">${row.billNo}</td>
+            <td class="mono">${(row.rvId || row.rvGroupId) && row.billNo !== "-" ? `<span style="color:var(--accent);cursor:pointer;text-decoration:underline;" onclick="openRvPopup(${row.rvId || row.rvGroupId})">${row.billNo}</span>` : row.billNo}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.rvWeight > 0 ? row.rvWeight.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
             <td style="font-family:'DM Mono',monospace;text-align:right;${row.isSubtotal ? "font-weight:700;" : ""}">${row.billValue > 0 ? "₹" + Math.round(row.billValue).toLocaleString("en-IN") : "-"}</td>
             <td style="font-family:'DM Mono',monospace;color:var(--accent);font-weight:${row.isSubtotal ? "700" : "600"};text-align:right;">${row.payment > 0 ? "₹" + Math.round(row.payment).toLocaleString("en-IN") : "-"}</td>
@@ -1500,6 +1500,7 @@
                   status: payment ? "paid" : "unpaid",
                   profile_id: iv.profile_id,
                   rvGroupId: isMulti ? rv.id : null,
+                  rvId: isMulti ? null : rv.id,
                   isSubtotal: false,
                 });
                 if (!isMulti) {
@@ -1891,6 +1892,117 @@
         });
       });
     </script>
+
+  <!-- ── RV Bill Popup ── -->
+  <div id="rvPopup" style="display:none;position:fixed;inset:0;background:rgba(26,26,46,0.55);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+    <div style="background:#fff;border-radius:18px;width:100%;max-width:760px;box-shadow:0 30px 80px rgba(0,0,0,0.25);position:relative;overflow:hidden;display:flex;flex-direction:column;max-height:92vh;">
+      <div id="rvPopupHead" style="padding:20px 28px;background:linear-gradient(135deg,#2d6a4f 0%,#52b788 100%);color:#fff;position:relative;">
+        <button onclick="closeRvPopup()" style="position:absolute;top:16px;right:18px;background:rgba(255,255,255,0.18);border:none;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;">✕</button>
+        <div id="rvPopupHeadContent"></div>
+      </div>
+      <div id="rvPopupContent" style="padding:24px 28px;overflow-y:auto;flex:1;"></div>
+      <div style="padding:14px 28px;border-top:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;background:#f9f9f6;">
+        <div id="rvPopupEnteredBy" style="font-size:11px;color:#8888aa;"></div>
+        <button onclick="closeRvPopup()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function _rvField(label, value, accent) {
+      return `<div style="background:#f9f9f6;border:1px solid rgba(0,0,0,0.05);border-radius:10px;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#8888aa;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">${label}</div>
+        <div style="font-size:13px;font-weight:600;color:${accent || '#1a1a2e'};">${value || '—'}</div>
+      </div>`;
+    }
+    function _rvSectionTitle(t) {
+      return `<div style="font-size:10px;font-weight:700;color:#8888aa;letter-spacing:0.1em;text-transform:uppercase;margin:18px 0 10px;">${t}</div>`;
+    }
+    function _rvTotalsRow(label, val, opts) {
+      opts = opts || {};
+      return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;padding:5px 0;${opts.bold ? 'font-weight:700;font-size:14px;border-top:1px solid rgba(0,0,0,0.08);margin-top:6px;padding-top:10px;' : 'font-size:12px;'}">
+        <span style="color:${opts.bold ? '#1a1a2e' : '#8888aa'};min-width:140px;text-align:right;">${label}</span>
+        <span style="font-family:'DM Mono',monospace;color:${opts.accent || '#1a1a2e'};min-width:120px;text-align:right;">${val}</span>
+      </div>`;
+    }
+    function _rvItemsTable(items) {
+      return `<table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid rgba(0,0,0,0.06);border-radius:10px;overflow:hidden;">
+        <thead><tr style="background:#f0efe9;">
+          <th style="padding:8px 10px;text-align:left;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Sl</th>
+          <th style="padding:8px 10px;text-align:left;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Description</th>
+          <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Qty</th>
+          <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Rate</th>
+          <th style="padding:8px 10px;text-align:right;color:#8888aa;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Amount</th>
+        </tr></thead>
+        <tbody>${items.map(i => `<tr>
+          <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);font-family:'DM Mono',monospace;font-size:11px;color:#2d6a4f;">${i.sl_no}</td>
+          <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);">${i.description || '-'}</td>
+          <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;">${parseFloat(i.quantity || 0).toFixed(2)}</td>
+          <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;">${parseFloat(i.rate || 0).toFixed(2)}</td>
+          <td style="padding:8px 10px;border-top:1px solid rgba(0,0,0,0.05);text-align:right;font-family:'DM Mono',monospace;font-weight:600;">${parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+    function _rvFmt(v) {
+      return '₹' + parseFloat(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function openRvPopup(id) {
+      const popup = document.getElementById('rvPopup');
+      const headEl = document.getElementById('rvPopupHeadContent');
+      const bodyEl = document.getElementById('rvPopupContent');
+      const footEl = document.getElementById('rvPopupEnteredBy');
+      headEl.innerHTML = '';
+      footEl.textContent = '';
+      bodyEl.innerHTML = '<div style="color:#8888aa;padding:28px 0;text-align:center;">Loading…</div>';
+      popup.style.display = 'flex';
+      try {
+        const res = await fetch(`/api/labour/${id}`);
+        if (!res.ok) throw new Error('Not found');
+        const d = await res.json();
+        const l = d.labour;
+        const items = d.items || [];
+        const fmtDate = s => s ? new Date(s).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '—';
+        headEl.innerHTML = `
+          <div style="display:inline-block;padding:3px 10px;background:rgba(255,255,255,0.22);border-radius:99px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Receipt Voucher</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-0.3px;line-height:1.1;">${l.receipt_bill_no || '—'}</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.78);margin-top:4px;">${l.company_name || '-'} · ${fmtDate(l.date)}</div>`;
+        let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+          ${_rvField('Receipt Bill No', l.receipt_bill_no, '#2d6a4f')}
+          ${_rvField('Issue No', l.issue_number)}
+          ${_rvField('Date', fmtDate(l.date))}
+          ${_rvField('Company', l.company_name)}
+          ${l.labour_item_type ? _rvField('Item Type', l.labour_item_type) : ''}
+        </div>`;
+        if (items.length) html += _rvSectionTitle('Line Items') + _rvItemsTable(items);
+        if (l.taxable_total || l.cgst || l.sgst || l.igst || l.total || l.tds || l.bill_value_after_deduction) {
+          html += _rvSectionTitle('Totals') + '<div>';
+          if (l.taxable_total) html += _rvTotalsRow('Taxable Total', _rvFmt(l.taxable_total));
+          if (parseFloat(l.cgst)) html += _rvTotalsRow('CGST', _rvFmt(l.cgst));
+          if (parseFloat(l.sgst)) html += _rvTotalsRow('SGST', _rvFmt(l.sgst));
+          if (parseFloat(l.igst)) html += _rvTotalsRow('IGST', _rvFmt(l.igst));
+          if (parseFloat(l.round_off)) html += _rvTotalsRow('Round Off', _rvFmt(l.round_off));
+          if (l.total) html += _rvTotalsRow('Total', _rvFmt(l.total), { bold: true });
+          if (parseFloat(l.tds)) html += _rvTotalsRow('TDS', _rvFmt(l.tds));
+          if (l.bill_value_after_deduction) html += _rvTotalsRow('Net Payable', _rvFmt(l.bill_value_after_deduction), { bold: true, accent: '#2d6a4f' });
+          html += '</div>';
+        }
+        if (l.photo_url) html += _rvSectionTitle('Bill Photo') + `<img src="${l.photo_url}" style="max-width:100%;border-radius:10px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;" onclick="window.open('${l.photo_url}','_blank')" />`;
+        bodyEl.innerHTML = html;
+        footEl.textContent = l.created_by_name ? 'Entered by: ' + l.created_by_name : '';
+      } catch (e) {
+        bodyEl.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Failed to load bill details.</div>';
+      }
+    }
+
+    function closeRvPopup() {
+      document.getElementById('rvPopup').style.display = 'none';
+    }
+    document.getElementById('rvPopup').addEventListener('click', function(e) {
+      if (e.target === this) closeRvPopup();
+    });
+  </script>
+
       <script src="/polish.js"></script>
   </body>
 </html>
