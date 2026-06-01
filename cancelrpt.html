@@ -239,7 +239,15 @@
       function toggleDRP(){const panel=document.getElementById('drpPanel'),backdrop=document.getElementById('drpBackdrop');if(panel.classList.contains('show')){closeDRP();return;}if(!drpStart||!cal0Month){const r=presets[10].fn();drpStart=r.start;drpEnd=r.end;document.getElementById('preset_10').classList.add('active');activePreset=10;syncCalendarsToRange();}renderBothCals();panel.classList.add('show');backdrop.classList.add('show');}
       function closeDRP(){document.getElementById('drpPanel').classList.remove('show');document.getElementById('drpBackdrop').classList.remove('show');}
       function applyDRP(){if(drpStart&&!drpEnd)drpEnd=new Date(drpStart);if(drpStart&&drpEnd){document.getElementById('drpLabel').textContent=`${fmt(drpStart)} To ${fmt(drpEnd)}`;closeDRP();loadReport();}}
-      function inRange(dateStr){if(!dateStr)return false;const ist=new Date(new Date(dateStr).getTime()+5.5*60*60*1000);const n=new Date(ist.getUTCFullYear(),ist.getUTCMonth(),ist.getUTCDate());return n>=drpStart&&n<=drpEnd;}
+      function inRange(dateStr){
+        if(!drpStart||!drpEnd)return true;
+        if(!dateStr)return true; // no date = always include
+        const ms=new Date(String(dateStr).replace(' ','T')).getTime();
+        if(isNaN(ms))return true; // unparseable date = always include
+        const ist=new Date(ms+5.5*60*60*1000);
+        const n=new Date(ist.getUTCFullYear(),ist.getUTCMonth(),ist.getUTCDate());
+        return n>=drpStart&&n<=drpEnd;
+      }
 
       let sortCol='date',sortDir='desc',allRows=[],currentPage=1,pageSize=100;
       const sortCols=['company','date','bill_type','bill_no','amount'];
@@ -315,7 +323,7 @@
         try{
           const data=await fetch('/api/cancelled-bills').then(r=>r.json());
 
-          let rows=data.filter(b=>inRange(b.date||b.created_at));
+          let rows=data.filter(b=>inRange(b.date||b.created_at||''));
           if(companyId)rows=rows.filter(b=>String(b.profile_id)===String(companyId));
           if(billTypeFilter)rows=rows.filter(b=>b.bill_type===billTypeFilter);
 
@@ -363,10 +371,8 @@
 
       buildPresets();
       loadCompanies();
-      const defaultRange=getFinYear(0);
-      drpStart=defaultRange.start;drpEnd=defaultRange.end;
-      document.getElementById('drpLabel').textContent=`${fmt(drpStart)} To ${fmt(drpEnd)}`;
-      activePreset=10;updateSortIcons();loadReport();
+      document.getElementById('drpLabel').textContent='All Time';
+      updateSortIcons();loadReport();
     </script>
     <script src="/polish.js"></script>
   </body>
