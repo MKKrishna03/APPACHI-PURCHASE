@@ -1061,6 +1061,10 @@
             hallmark,
             "photo_url",
           );
+          const { byPid: pbeByPid, byUrl: pbeByUrl } = buildMaps(
+            photoBillEntries,
+            "photo_url",
+          );
 
           allPurchases = cloudinaryPhotos.map((item) => {
             const pid0 = item.public_id.replace(/\.[^/.]+$/, "");
@@ -1077,17 +1081,22 @@
               hallmarkByPid[item.public_id] ||
               hallmarkByUrl[item.url] ||
               hallmarkByPid[pid0];
+            const dbPbe =
+              pbeByPid[item.public_id] ||
+              pbeByUrl[item.url] ||
+              pbeByPid[pid0];
 
-            const dbRecord = dbPurchase || dbLabour || dbHallmark;
+            const dbRecord = dbPurchase || dbLabour || dbHallmark || dbPbe;
 
             let bill_no = item.public_id.split("/").pop();
             if (dbPurchase) bill_no = dbPurchase.bill_no;
             else if (dbLabour)
               bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
             else if (dbHallmark) bill_no = dbHallmark.bill_no;
+            else if (dbPbe) bill_no = dbPbe.bill_no;
 
-            // Date priority: DB record date → Cloudinary bill_date context → upload timestamp
-            const date = dbRecord?.date || item.bill_date || item.created_at;
+            // Date priority: DB record bill date (entered by user) → Cloudinary bill_date → upload timestamp
+            const date = dbPbe?.date || dbPurchase?.date || dbLabour?.date || dbHallmark?.date || item.bill_date || item.created_at;
 
             return {
               id: item.public_id,
@@ -1111,8 +1120,10 @@
               _hallmarkDbId: dbHallmark ? dbHallmark.id : null,
               _isLabour: !!dbLabour && !dbPurchase,
               _isHallmark: !!dbHallmark && !dbPurchase && !dbLabour,
+              _isPhotoBillEntry: !!dbPbe && !dbPurchase && !dbLabour && !dbHallmark,
               _labourRecord: dbLabour || null,
               _hallmarkRecord: dbHallmark || null,
+              _photoBillEntry: dbPbe || null,
               _issueItemType:
                 dbLabour?.effective_item_type ||
                 dbLabour?.labour_item_type ||
@@ -1121,33 +1132,6 @@
               _matched: !!dbRecord,
             };
           });
-
-          // ── Inject photo bill entries as first-class items using their entry date ──
-          const pbeItems = photoBillEntries.flatMap(pbe => {
-            const urls = [...(pbe.photo_urls || []), pbe.photo_url].filter(Boolean);
-            if (!urls.length) return [];
-            return urls.map(url => ({
-              id: `pbe_${pbe.id}_${url}`,
-              public_id: url,
-              profile_id: pbe.profile_id,
-              bill_no: pbe.bill_no || "—",
-              date: pbe.date || pbe.created_at,
-              photo_url: url,
-              is_accounted: false,
-              folder: "photo_bill_entries",
-              is_pdf: false,
-              bytes: 0,
-              _dbId: null,
-              _labourDbId: null,
-              _hallmarkDbId: null,
-              _isLabour: false,
-              _isHallmark: false,
-              _isPhotoBillEntry: true,
-              _photoBillEntry: pbe,
-              _matched: true,
-            }));
-          });
-          allPurchases = [...allPurchases, ...pbeItems];
           applyFilters();
         } catch (e) {
           document.getElementById("galleryContainer").innerHTML =
