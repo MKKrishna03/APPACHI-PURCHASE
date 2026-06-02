@@ -218,8 +218,8 @@
             const res = await fetch('/api/upload-base64', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ data: dataUrl, folder: 'purchase_bills',
-                filename: `photo_entry_${Date.now()}` }),
+              body: JSON.stringify({ data: dataUrl, folder: 'photo_bill_entries',
+                filename: `pbe_${Date.now()}` }),
             });
             const d = await res.json();
             if (d.photo_url) {
@@ -251,7 +251,7 @@
           const res = await fetch('/api/upload-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bill_no: billNo, company, folder: 'purchase_bills', bill_date: document.getElementById('billDate').value }),
+            body: JSON.stringify({ bill_no: billNo, company, folder: 'photo_bill_entries', bill_date: document.getElementById('billDate').value }),
           });
           const data = await res.json();
           uploadToken = data.token;
@@ -303,17 +303,14 @@
         try {
           const profile_id = document.getElementById('companySelect').value || null;
           const remarks = document.getElementById('remarks').value.trim();
-          const res = await fetch('/api/purchases', {
+          const res = await fetch('/api/photo-bill-entries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               profile_id,
               date: billDate,
               bill_no: billNo,
-              voucher_type: 'Photo Entry',
-              description: remarks || 'Photo Entry',
-              taxable_value: 0, cgst: 0, sgst: 0, igst: 0,
-              round_off: 0, total_value: 0, tds: 0, net_value: 0,
+              remarks,
               photo_url: uploadedPhotoUrls[0] || null,
               photo_urls: uploadedPhotoUrls.length ? uploadedPhotoUrls : null,
               created_by: getCurrentUser()?.id || null,
@@ -362,20 +359,14 @@
       async function loadRecent() {
         const el = document.getElementById('recentList');
         try {
-          const res = await fetch('/api/purchases/list');
-          const data = await res.json();
-          const entries = data
-            .filter(p => (p.voucher_type === 'Photo Entry' || p.description === 'Photo Entry') && !p.deleted_at)
-            .slice(0, 10);
+          const data = await fetch('/api/photo-bill-entries').then(r => r.json());
+          const entries = data.slice(0, 20);
           if (!entries.length) {
             el.innerHTML = '<div style="color:var(--ink-3);font-size:12px;text-align:center;padding:16px;">No entries yet.</div>';
             return;
           }
-          const profileRes = await fetch('/api/profile/all').then(r => r.json()).catch(() => []);
+          const fmtDate = s => s ? new Date(s).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '—';
           el.innerHTML = '<div class="entry-list">' + entries.map(p => {
-            const prof = profileRes.find(c => String(c.id) === String(p.profile_id));
-            const company = prof ? (prof.company || prof.alias) : '';
-            const fmtDate = s => s ? new Date(s).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '—';
             const photoUrl = p.photo_url || (p.photo_urls && p.photo_urls[0]);
             const photoCount = (p.photo_urls && p.photo_urls.length) || (p.photo_url ? 1 : 0);
             return `<div class="entry-item">
@@ -384,8 +375,8 @@
                 : `<div class="entry-thumb-placeholder">📄</div>`}
               <div class="entry-info">
                 <div class="entry-billno">${p.bill_no || '—'}</div>
-                <div class="entry-meta">${company ? company + ' · ' : ''}${fmtDate(p.date)}${photoCount > 1 ? ' · ' + photoCount + ' photos' : ''}</div>
-                ${p.description && p.description !== 'Photo Entry' ? `<div class="entry-meta" style="color:var(--ink-2);margin-top:2px;">${p.description}</div>` : ''}
+                <div class="entry-meta">${p.company_name ? p.company_name + ' · ' : ''}${fmtDate(p.date)}${photoCount > 1 ? ' · ' + photoCount + ' photos' : ''}</div>
+                ${p.remarks ? `<div class="entry-meta" style="color:var(--ink-2);margin-top:2px;">${p.remarks}</div>` : ''}
               </div>
               <button class="entry-del" onclick="deleteEntry(${p.id})" title="Delete">🗑</button>
             </div>`;
@@ -396,13 +387,9 @@
       }
 
       async function deleteEntry(id) {
-        if (!confirm('Delete this photo entry?')) return;
+        if (!confirm('Delete this photo entry? Photos will be removed from Cloudinary.')) return;
         try {
-          await fetch('/api/delete-entry', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'purchase', id }),
-          });
+          await fetch(`/api/photo-bill-entries/${id}`, { method: 'DELETE' });
           loadRecent();
         } catch(e) { alert('Delete failed: ' + e.message); }
       }

@@ -609,6 +609,7 @@
             <option value="credit_notes">Credit Notes</option>
             <option value="debit_notes">Debit Notes</option>
             <option value="refinery_bills">Refinery Bills</option>
+            <option value="photo_bill_entries">Photo Bill Entries</option>
           </select>
         </div>
         <div class="filter-group">
@@ -997,12 +998,13 @@
           document.getElementById("galleryContainer").innerHTML =
             `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
 
-          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes] =
+          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes, photoBillRes] =
             await Promise.all([
               fetch("/api/cloudinary/all-photos"),
               fetch("/api/purchases/list"),
               fetch("/api/labour"),
               fetch("/api/hallmark-expenses/list"),
+              fetch("/api/photo-bill-entries"),
             ]);
 
           const cloudinaryPhotos = cloudinaryRes.ok
@@ -1011,6 +1013,7 @@
           const purchases = purchasesRes.ok ? await purchasesRes.json() : [];
           const labour = labourRes.ok ? await labourRes.json() : [];
           const hallmark = hallmarkRes.ok ? await hallmarkRes.json() : [];
+          const photoBillEntries = photoBillRes.ok ? await photoBillRes.json() : [];
 
           // Robust public_id extraction — handles URLs with or without transformation params
           function extractPublicId(url) {
@@ -1119,10 +1122,32 @@
             };
           });
 
-          console.log("Purchase photo_url:", purchases[0]?.photo_url);
-          console.log("Purchase photo_urls:", purchases[0]?.photo_urls);
-          const testP = purchases.find((x) => x.bill_no === "M-492/26-27");
-          console.log("M-492 full record:", JSON.stringify(testP));
+          // ── Inject photo bill entries as first-class items using their entry date ──
+          const pbeItems = photoBillEntries.flatMap(pbe => {
+            const urls = [...(pbe.photo_urls || []), pbe.photo_url].filter(Boolean);
+            if (!urls.length) return [];
+            return urls.map(url => ({
+              id: `pbe_${pbe.id}_${url}`,
+              public_id: url,
+              profile_id: pbe.profile_id,
+              bill_no: pbe.bill_no || "—",
+              date: pbe.date || pbe.created_at,
+              photo_url: url,
+              is_accounted: false,
+              folder: "photo_bill_entries",
+              is_pdf: false,
+              bytes: 0,
+              _dbId: null,
+              _labourDbId: null,
+              _hallmarkDbId: null,
+              _isLabour: false,
+              _isHallmark: false,
+              _isPhotoBillEntry: true,
+              _photoBillEntry: pbe,
+              _matched: true,
+            }));
+          });
+          allPurchases = [...allPurchases, ...pbeItems];
           applyFilters();
         } catch (e) {
           document.getElementById("galleryContainer").innerHTML =
@@ -1142,6 +1167,7 @@
         if (f === "debit_notes") return "debit_note";
         if (f === "refinery_bills") return "refinery";
         if (f === "purchase_bills") return "purchase";
+        if (f === "photo_bill_entries") return "photo_bill_entry";
         return "other";
       }
 
@@ -1154,6 +1180,7 @@
         expense: { label: "Expenses", icon: "💸", cls: "type-expense" },
         credit_note: { label: "Credit Notes", icon: "📥", cls: "type-credit" },
         debit_note: { label: "Debit Notes", icon: "📤", cls: "type-debit" },
+        photo_bill_entry: { label: "Photo Bill Entries", icon: "📸", cls: "type-purchase" },
         other: { label: "Other", icon: "📁", cls: "type-other" },
       };
 
