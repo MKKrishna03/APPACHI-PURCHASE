@@ -208,10 +208,16 @@
         renderPhotos();
       }
 
+      function makeSafeFilename(billNo) {
+        const safe = (billNo || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+        return (safe || 'photo') + '_' + Date.now();
+      }
+
       // ── Direct file / camera upload ──
       async function handleFileSelect(files) {
         if (!files || !files.length) return;
         showMsg('Uploading…', '');
+        const billNo = document.getElementById('billNo').value.trim();
         for (const file of files) {
           try {
             const dataUrl = await fileToDataUrl(file);
@@ -219,7 +225,7 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ data: dataUrl, folder: 'photo_bill_entries',
-                filename: `pbe_${Date.now()}` }),
+                filename: makeSafeFilename(billNo) }),
             });
             const d = await res.json();
             if (d.photo_url) {
