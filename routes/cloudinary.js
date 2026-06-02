@@ -215,10 +215,12 @@ async function getLinkedPublicIds() {
     pool.query("SELECT photo_url FROM labour WHERE photo_url IS NOT NULL"),
     pool.query("SELECT photo_url FROM chittai WHERE photo_url IS NOT NULL"),
     pool.query("SELECT photo_url FROM hallmark_expenses WHERE photo_url IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT photo_url FROM photo_bill_entries WHERE photo_url IS NOT NULL").catch(() => ({ rows: [] })),
     pool.query("SELECT unnest(photo_urls) AS u FROM purchases WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
     pool.query("SELECT unnest(photo_urls) AS u FROM labour WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
     pool.query("SELECT unnest(photo_urls) AS u FROM chittai WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
     pool.query("SELECT unnest(photo_urls) AS u FROM hallmark_expenses WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
+    pool.query("SELECT unnest(photo_urls) AS u FROM photo_bill_entries WHERE photo_urls IS NOT NULL").catch(() => ({ rows: [] })),
   ]);
   const linked = new Set();
   function addUrl(url) {
@@ -228,8 +230,8 @@ async function getLinkedPublicIds() {
       [".pdf", ".jpg", ".jpeg", ".png", ".webp"].forEach((ext) => linked.add(pid + ext));
     }
   }
-  queries.slice(0, 4).forEach((q) => q.rows.forEach((r) => addUrl(r.photo_url)));
-  queries.slice(4).forEach((q) => q.rows.forEach((r) => addUrl(r.u)));
+  queries.slice(0, 5).forEach((q) => q.rows.forEach((r) => addUrl(r.photo_url)));
+  queries.slice(5).forEach((q) => q.rows.forEach((r) => addUrl(r.u)));
   return linked;
 }
 
