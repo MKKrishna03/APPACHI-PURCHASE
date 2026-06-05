@@ -223,7 +223,7 @@ router.put("/labour/:id", async (req, res) => {
   const {
     profile_id, company_name, date, issue_number, labour_item_type, items,
     receipt_bill_no, taxable_total, cgst, sgst, igst, round_off, total, tds, bill_value_after_deduction,
-    payment_voucher_id,
+    payment_voucher_id, labour_ids,
   } = req.body;
   const client = await pool.connect();
   try {
@@ -252,14 +252,25 @@ router.put("/labour/:id", async (req, res) => {
       } else {
         newRemaining = parseFloat(bill_value_after_deduction ?? total ?? 0) || null;
       }
+      // If labour_ids supplied (user changed the IV selection), recompute issue_number
+      let newIssueNumber = null;
+      if (labour_ids?.length) {
+        const nums = await Promise.all(
+          labour_ids.map(async (lid) => {
+            const r = await client.query("SELECT issue_number FROM labour WHERE id = $1", [lid]);
+            return r.rows[0]?.issue_number || String(lid);
+          })
+        );
+        newIssueNumber = nums.join(",");
+      }
       await client.query(
-        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls), payment_voucher_id=$13, remaining_value=$14, gold_rate=COALESCE($15, gold_rate), mc_pct=COALESCE($16, mc_pct) WHERE id=$17`,
+        `UPDATE labour SET date=$1, receipt_bill_no=$2, taxable_total=$3, cgst=$4, sgst=$5, igst=$6, round_off=$7, total=$8, tds=$9, bill_value_after_deduction=$10, photo_url=COALESCE($11, photo_url), photo_urls=COALESCE($12, photo_urls), payment_voucher_id=$13, remaining_value=$14, gold_rate=COALESCE($15, gold_rate), mc_pct=COALESCE($16, mc_pct), issue_number=COALESCE($17, issue_number) WHERE id=$18`,
         [
           date, receipt_bill_no, taxable_total || null, cgst || null, sgst || null,
           igst || null, round_off || null, total || null, tds || null,
           bill_value_after_deduction || null, req.body.photo_url || null,
           req.body.photo_urls?.length ? req.body.photo_urls : null, newPvId, newRemaining,
-          req.body.gold_rate || null, req.body.mc_pct || null, req.params.id,
+          req.body.gold_rate || null, req.body.mc_pct || null, newIssueNumber, req.params.id,
         ],
       );
     }
