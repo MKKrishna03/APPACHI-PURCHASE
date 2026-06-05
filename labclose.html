@@ -1339,13 +1339,12 @@
           const r = await fetch(`/api/tds-required/${companyId}`);
           const data = await r.json();
           _tdsMandatory = data.required;
-          const badge = document.getElementById("tdsMandatoryBadge");
-          badge.style.display = _tdsMandatory ? "inline-block" : "none";
-          if (_tdsMandatory) {
-            const toggle = document.getElementById("autoTdsToggle");
-            if (!toggle.checked) { toggle.checked = true; applyAutoTds(); }
-          }
         } catch(e) { _tdsMandatory = false; }
+        // TDS is mandatory for ALL receipts — always show badge and auto-enable
+        const badge = document.getElementById("tdsMandatoryBadge");
+        badge.style.display = "inline-block";
+        const toggle = document.getElementById("autoTdsToggle");
+        if (!toggle.checked) { toggle.checked = true; applyAutoTds(); }
       }
 
       async function loadCompanyLabourBills(excludeReceiptId = null) {
@@ -1750,8 +1749,8 @@
           return;
         }
         const tdsVal = parseFloat(document.getElementById("billTds").value) || 0;
-        if (_tdsMandatory && tdsVal <= 0) {
-          showMessage("TDS is mandatory for this company — previous TDS found in this financial year", "error");
+        if (tdsVal <= 0) {
+          showMessage("TDS is mandatory for all Receipt Vouchers — please enter a TDS amount", "error");
           document.getElementById("billTds").focus();
           return;
         }
@@ -2054,6 +2053,12 @@
         }
         if (!uploadedPhotoUrls.length) {
           showMessage("Please attach a bill photo before saving", "error");
+          return;
+        }
+        const tdsValEdit = parseFloat(document.getElementById("billTds").value) || 0;
+        if (tdsValEdit <= 0) {
+          showMessage("TDS is mandatory for all Receipt Vouchers — please enter a TDS amount", "error");
+          document.getElementById("billTds").focus();
           return;
         }
         const items = [];
