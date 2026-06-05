@@ -748,6 +748,7 @@
         <div style="padding:14px 28px;border-top:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f9f9f6;">
           <div id="billEnteredBy" style="font-size:11px;color:#8888aa;"></div>
           <div style="display:flex;gap:10px;">
+            <button id="billCancelBtn" onclick="startCancelBill()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:2px solid #e74c3c;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel Bill</button>
             <button id="billDeleteBtn" onclick="startDelete()" style="display:none;padding:9px 22px;background:#fce8e6;color:#b5301e;border:1px solid #f09898;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Delete</button>
             <button id="billEditBtn" onclick="goEditBill()" style="padding:9px 22px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Edit</button>
           </div>
@@ -1429,6 +1430,7 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
 
       let _popupType = null, _popupId = null;
       let _canDelete = false;
+      let _isCancelledIssue = false;
 
       async function checkDeleteAccess() {
         try {
@@ -1492,12 +1494,16 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
       async function showBillPopup(type, id, label) {
         _popupType = type;
         _popupId = id;
+        _isCancelledIssue = false;
         const head = document.getElementById('billPopupHeadContent');
         const el = document.getElementById('billPopupContent');
         const enteredBy = document.getElementById('billEnteredBy');
         head.innerHTML = '';
         enteredBy.textContent = '';
         el.innerHTML = '<div style="color:#8888aa;padding:20px 0;text-align:center;">Loading...</div>';
+        document.getElementById('billCancelBtn').style.display = 'none';
+        // Reset popup header to default green gradient
+        document.getElementById('billPopupHead').style.background = 'linear-gradient(135deg,#2d6a4f 0%,#52b788 100%)';
         document.getElementById('billPopup').style.display = 'flex';
 
         try {
@@ -1507,12 +1513,29 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             const l = d.labour;
             const items = d.items || [];
             const isReceipt = type === 'receipt';
+            _isCancelledIssue = !isReceipt && !!(l.is_cancelled);
+
+            // Red header for cancelled issue vouchers
+            if (_isCancelledIssue) {
+              document.getElementById('billPopupHead').style.background = 'linear-gradient(135deg,#7b1a1a 0%,#c0392b 100%)';
+            }
+
             head.innerHTML = bvHead(
-              isReceipt ? 'Receipt Voucher' : 'Issue Voucher',
+              isReceipt ? 'Receipt Voucher' : (_isCancelledIssue ? '⛔ CANCELLED — Issue Voucher' : 'Issue Voucher'),
               isReceipt ? (l.receipt_bill_no || '—') : (l.issue_number || '—'),
               `${l.company_name||'-'} · ${l.date?new Date(l.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-'}`
             );
-            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+            let html = '';
+            if (_isCancelledIssue) {
+              html += `<div style="background:#fce8e6;border:2px solid #e74c3c;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+                <span style="font-size:26px;">⛔</span>
+                <div>
+                  <div style="font-size:14px;font-weight:700;color:#b5301e;">This Issue Voucher has been CANCELLED</div>
+                  <div style="font-size:12px;color:#c0392b;margin-top:3px;">This bill is no longer active and will not be included in pending calculations.</div>
+                </div>
+              </div>`;
+            }
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
               ${bvField('Issue No', l.issue_number, '#2d6a4f')}
               ${isReceipt?bvField('Receipt Bill No', l.receipt_bill_no, '#2d6a4f'):''}
               ${bvField('Date', l.date?new Date(l.date).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'}):'-')}
@@ -1635,6 +1658,8 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
             enteredBy.textContent = h.created_by_name ? 'Entered by: ' + h.created_by_name : '';
           }
           document.getElementById('billDeleteBtn').style.display = _canDelete ? 'inline-block' : 'none';
+          // Cancel button: only for non-cancelled issue vouchers
+          document.getElementById('billCancelBtn').style.display = (_popupType === 'issue' && !_isCancelledIssue) ? 'inline-block' : 'none';
         } catch(e) {
           el.innerHTML = '<div style="color:#b5301e;padding:20px;text-align:center;">Error loading details</div>';
         }
@@ -1717,6 +1742,43 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
           alert('Delete failed: ' + e.message);
         }
       }
+      function startCancelBill() {
+        const div = document.createElement('div');
+        div.id = 'cancelBillOverlay';
+        div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;display:flex;align-items:center;justify-content:center;';
+        div.innerHTML = `
+          <div style="background:#fff;border-radius:14px;padding:28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+            <div style="font-size:16px;font-weight:700;color:#b5301e;margin-bottom:10px;">⛔ Cancel Issue Voucher</div>
+            <div style="font-size:13px;color:#444466;margin-bottom:18px;">This will mark the bill as <strong style="color:#b5301e;">CANCELLED</strong>. The voucher will remain in the system and will appear in the Cancelled Bills report. This action cannot be undone.</div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+              <button onclick="document.getElementById('cancelBillOverlay').remove()" style="padding:9px 20px;background:#f0efe9;color:#444466;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Back</button>
+              <button onclick="confirmCancelBill()" style="padding:9px 20px;background:#b5301e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Yes, Cancel Bill</button>
+            </div>
+          </div>`;
+        document.body.appendChild(div);
+      }
+
+      async function confirmCancelBill() {
+        document.getElementById('cancelBillOverlay')?.remove();
+        try {
+          const user = getCurrentUser();
+          const res = await fetch(`/api/labour/${_popupId}/cancel`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cancelled_by: user?.id || null }),
+          });
+          const result = await res.json();
+          if (result.status === 'SUCCESS') {
+            await showBillPopup('issue', _popupId, '');
+            loadAll();
+          } else {
+            alert('Failed to cancel: ' + (result.error || 'Unknown error'));
+          }
+        } catch(e) {
+          alert('Error: ' + e.message);
+        }
+      }
+
       function getCurrentUser() {
   try {
     const u = localStorage.getItem("auth_user") || sessionStorage.getItem("auth_user");

@@ -4,6 +4,9 @@ const { deleteCloudinaryPhoto } = require("./cloudinary");
 
 const router = express.Router();
 
+pool.query(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS is_cancelled BOOLEAN DEFAULT FALSE`)
+  .catch(e => console.error("labour is_cancelled column error:", e.message));
+
 router.get("/labour/list", async (req, res) => {
   const { profile_id, voucher_type } = req.query;
   try {
@@ -436,6 +439,37 @@ router.patch("/labour/:id/mc", async (req, res) => {
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/labour/:id/cancel", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const row = await client.query(`SELECT * FROM labour WHERE id=$1 AND deleted_at IS NULL`, [req.params.id]);
+    if (!row.rows[0]) return res.status(404).json({ error: "Not found" });
+    const l = row.rows[0];
+    await client.query("BEGIN");
+    await client.query(`UPDATE labour SET is_cancelled=TRUE WHERE id=$1`, [req.params.id]);
+    await client.query(
+      `INSERT INTO cancelled_bills (profile_id, bill_type, bill_no, date, amount, reason, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        l.profile_id,
+        "Issue Voucher",
+        l.issue_number || "",
+        l.date || null,
+        null,
+        req.body.reason || "Cancelled from bill view",
+        req.body.cancelled_by || null,
+      ],
+    );
+    await client.query("COMMIT");
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
