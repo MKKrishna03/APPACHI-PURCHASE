@@ -2047,13 +2047,12 @@
           const r = await fetch(`/api/tds-required/${companyId}`);
           const data = await r.json();
           _tdsMandatory = data.required;
-          const badge = document.getElementById("tdsMandatoryBadge");
-          if (badge) badge.style.display = _tdsMandatory ? "inline-block" : "none";
-          if (_tdsMandatory) {
-            const toggle = document.getElementById("autoTdsToggle");
-            if (toggle) { toggle.checked = true; applyAutoTds(); }
-          }
         } catch (e) { _tdsMandatory = false; }
+        // TDS is mandatory for ALL hallmark/expense entries — always show badge and auto-enable
+        const badge = document.getElementById("tdsMandatoryBadge");
+        if (badge) badge.style.display = "inline-block";
+        const toggle = document.getElementById("autoTdsToggle");
+        if (toggle && !toggle.checked) { toggle.checked = true; applyAutoTds(); }
       }
 
       // ── TABLE ──
@@ -2303,6 +2302,12 @@
         }
         if (!uploadedPhotoUrls.length) {
           showMessage("Please attach a bill photo before saving", "error");
+          return;
+        }
+        const tdsVal = parseFloat(document.getElementById("billTds").value) || 0;
+        if (tdsVal <= 0) {
+          showMessage("TDS is mandatory for all entries — please enter a TDS amount", "error");
+          document.getElementById("billTds").focus();
           return;
         }
         if (!document.getElementById("billDataVerified").checked) {
