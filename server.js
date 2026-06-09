@@ -27,6 +27,7 @@ const aiRoutes = require("./routes/ai");
 const miscRoutes = require("./routes/misc");
 const cancelledBillsRoutes = require("./routes/cancelledBills");
 const photoBillEntriesRoutes = require("./routes/photoBillEntries");
+const { router: activityLogRouter } = require("./routes/activityLog");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -130,6 +131,7 @@ app.use("/api", aiRoutes);
 app.use("/api", miscRoutes);
 app.use("/api", cancelledBillsRoutes);
 app.use("/api", photoBillEntriesRoutes);
+app.use("/api", activityLogRouter);
 
 // ── Page routes ──
 const pages = {
