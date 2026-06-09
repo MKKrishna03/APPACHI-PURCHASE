@@ -58,6 +58,12 @@ router.get("/purchases/no-photo", async (req, res) => {
          AND (p.voucher_type IS NULL OR p.voucher_type NOT ILIKE '%Hallmark Voucher%')
          AND (p.voucher_type IS NULL OR p.voucher_type NOT ILIKE '%issue%')
          AND p.deleted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM labour lx
+           WHERE lx.issue_number = p.bill_no
+             AND UPPER(lx.voucher_type) = 'ISSUE VOUCHER'
+             AND lx.deleted_at IS NULL
+         )
        UNION ALL
        SELECT l.id, l.profile_id, l.receipt_bill_no AS bill_no, l.date,
               l.bill_value_after_deduction AS net_value, l.total AS total_value,
