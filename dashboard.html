@@ -2625,7 +2625,7 @@ function doLogout() {
               r.issue_number.split(",").forEach((n) => closedSet.add(n.trim()));
             }
           });
-          const pending = issues.filter((b) => !closedSet.has(b.issue_number));
+          const pending = issues.filter((b) => !closedSet.has(b.issue_number) && !b.is_cancelled);
           window._pendingVouchers = pending;
           _countUp(document.getElementById("pendingCount"), pending.length, 600);
           _countUp(document.getElementById("kpiLabourOut"), pending.length, 700);
@@ -2764,74 +2764,37 @@ function doLogout() {
         const el = document.getElementById("activityList");
         el.innerHTML = '<div class="empty-msg">Loading...</div>';
         try {
-          const [vouchers, chittais, labourAll, purchasesAll] = await Promise.all([
-            cachedFetch('/api/vouchers/list'),
-            cachedFetch('/api/chittai/list/all'),
-            cachedFetch('/api/labour'),
-            cachedFetch('/api/purchases/list'),
-          ]);
-          const all = [
-            ...(Array.isArray(vouchers) ? vouchers : []).map((v) => ({
-              label: v.voucher_type,
-              sub: v.bill_no || "-",
-              date: v.created_at,
-              amount: v.total_value,
-              company:
-                companies.find((c) => String(c.id) === String(v.profile_id))
-                  ?.name || "-",
-            })),
-            ...(Array.isArray(chittais) ? chittais : []).map((c) => ({
-              label: "Chittai",
-              sub: c.chittai_no,
-              date: c.created_at,
-              amount: c.rtgs_amount,
-              company:
-                companies.find((co) => String(co.id) === String(c.profile_id))
-                  ?.alias || "-",
-            })),
-            ...(Array.isArray(labourAll) ? labourAll : []).map((b) => ({
-              label: b.voucher_type,
-              sub: b.issue_number || b.receipt_bill_no || "-",
-              date: b.created_at,
-              amount: b.total || 0,
-              company: b.company_name || "-",
-            })),
-            ...(Array.isArray(purchasesAll) ? purchasesAll : []).map((p) => ({
-              label: "Purchase Voucher",
-              sub: p.bill_no || "-",
-              date: p.created_at,
-              amount: p.net_value || p.total_value || 0,
-              company: companies.find((c) => String(c.id) === String(p.profile_id))?.name || "-",
-            })),
-          ].filter((x) => {
-            if (!x.date) return false;
-            const ist = toIST(x.date);
-            const pad = (n) => String(n).padStart(2, "0");
-            const istDate = `${ist.getFullYear()}-${pad(ist.getMonth() + 1)}-${pad(ist.getDate())}`;
-            return istDate === dateVal;
-          });
-          if (!all.length) {
-            el.innerHTML = '<div class="empty-msg">No activity</div>';
+          const rows = await fetch(`/api/activity-log?date=${dateVal}`).then(r => r.json());
+          if (!Array.isArray(rows) || !rows.length) {
+            el.innerHTML = '<div class="empty-msg">No activity today</div>';
             return;
           }
-          all.sort((a, b) => new Date(b.date) - new Date(a.date));
-          el.innerHTML = all
-            .map(
-              (x) => `
-                  <div class="pending-item">
-                    <div>
-                      <div class="pending-item-id">${x.company}</div>
-                      <div class="pending-item-sub">${x.label} · <span style="color:var(--ink-3);font-weight:400;">${x.sub} ${
-                        x.date ? toIST(x.date).toTimeString().slice(0, 5) : ""
-                      }</span></div>
-                    </div>
-                    <span class="pending-tag">₹${Number(x.amount || 0).toLocaleString("en-IN")}</span>
-                  </div>`,
-            )
-            .join("");
+          const actionCfg = {
+            CREATE: { label: "ADDED",    bg: "#d1fae5", color: "#065f46", border: "#6ee7b7" },
+            UPDATE: { label: "EDITED",   bg: "#fef3c7", color: "#92400e", border: "#fcd34d" },
+            DELETE: { label: "DELETED",  bg: "#fee2e2", color: "#991b1b", border: "#fca5a5" },
+            CANCEL: { label: "CANCELLED",bg: "#fce8e6", color: "#b5301e", border: "#e74c3c" },
+          };
+          el.innerHTML = rows.map(row => {
+            const cfg = actionCfg[row.action] || { label: row.action, bg: "#f3f4f6", color: "#374151", border: "#d1d5db" };
+            const company = row.company_display || row.company_name || "—";
+            const billPart = row.bill_no ? ` · ${row.bill_no}` : "";
+            const timeStr = row.created_at ? toIST(row.created_at).toTimeString().slice(0, 5) : "";
+            const who = row.user_name || "—";
+            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-1);">
+              <span style="flex-shrink:0;margin-top:2px;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.4px;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.border};">${cfg.label}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:600;color:var(--ink-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${company}</div>
+                <div style="font-size:11px;color:var(--ink-2);margin-top:1px;">${row.entity_type}${billPart}</div>
+              </div>
+              <div style="flex-shrink:0;text-align:right;">
+                <div style="font-size:11px;color:var(--ink-2);">${timeStr}</div>
+                <div style="font-size:10px;color:var(--ink-3);margin-top:1px;">${who}</div>
+              </div>
+            </div>`;
+          }).join("");
         } catch (e) {
-          el.innerHTML =
-            '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
+          el.innerHTML = '<div class="empty-msg" style="color:#b5301e;">Error loading</div>';
         }
       }
 
