@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -62,7 +63,10 @@ router.get("/purchases/no-photo", async (req, res) => {
               l.bill_value_after_deduction AS net_value, l.total AS total_value,
               COALESCE(pr2.alias, pr2.company_name, l.company_name) AS company_name, 'receipt_voucher' AS source
        FROM labour l LEFT JOIN profiles pr2 ON pr2.id = l.profile_id
-       WHERE l.voucher_type = 'Receipt Voucher' AND (l.photo_url IS NULL OR l.photo_url = '') AND l.deleted_at IS NULL
+       WHERE UPPER(l.voucher_type) = 'RECEIPT VOUCHER'
+         AND (l.photo_url IS NULL OR l.photo_url = '')
+         AND (l.photo_urls IS NULL OR cardinality(l.photo_urls) = 0)
+         AND l.deleted_at IS NULL
        UNION ALL
        SELECT he.id, he.profile_id, he.bill_no, he.date, he.net_value, he.total_value,
               COALESCE(pr3.alias, pr3.company_name) AS company_name,
@@ -150,6 +154,7 @@ router.post("/purchases", async (req, res) => {
       }
     }
     await client.query("COMMIT");
+    logActivity({ action: "CREATE", entity_type: req.body.voucher_type || "Purchase", entity_id: purchaseId, bill_no: bill_no, profile_id, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: purchaseId });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -168,6 +173,8 @@ router.put("/purchases/:id", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const curRow = await client.query(`SELECT profile_id FROM purchases WHERE id=$1`, [id]);
+    const profileId = curRow.rows[0]?.profile_id;
     await client.query(
       `UPDATE purchases SET date=$1, bill_no=$2, description=$3, taxable_value=$4, cgst=$5, sgst=$6, igst=$7,
         round_off=$8, total_value=$9, tds=$10, net_value=$11, photo_url=$12, photo_urls=$13 WHERE id=$14`,
@@ -184,6 +191,7 @@ router.put("/purchases/:id", async (req, res) => {
       }
     }
     await client.query("COMMIT");
+    logActivity({ action: "UPDATE", entity_type: req.body.voucher_type || "Purchase", entity_id: parseInt(id), bill_no, profile_id: profileId, user_id: req.user?.user_id, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: parseInt(id) });
   } catch (err) {
     await client.query("ROLLBACK");
