@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const { pool, generateResetKey } = require("../db");
+// Auth always reads/writes the old pool — users are shared across both companies.
+const { oldPool: pool, generateResetKey } = require("../db");
 const { signToken } = require("../middleware/auth");
 
 const router = express.Router();

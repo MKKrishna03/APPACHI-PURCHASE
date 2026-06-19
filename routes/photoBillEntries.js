@@ -1,6 +1,7 @@
 const express = require("express");
 const { pool } = require("../db");
 const { deleteCloudinaryPhoto } = require("./cloudinary");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -41,19 +42,21 @@ router.post("/photo-bill-entries", async (req, res) => {
         photo_url || null, photo_urls?.length ? photo_urls : null, created_by || null,
       ],
     );
+    logActivity({ action: "CREATE", entity_type: "Photo Bill Entry", entity_id: result.rows[0].id, bill_no: bill_no || null, profile_id: profile_id || null, user_id: req.user?.user_id || created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: result.rows[0].id });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.delete("/photo-bill-entries/:id", async (req, res) => {
   try {
-    const row = await pool.query(`SELECT photo_url, photo_urls FROM photo_bill_entries WHERE id=$1`, [req.params.id]);
+    const row = await pool.query(`SELECT photo_url, photo_urls, bill_no, profile_id FROM photo_bill_entries WHERE id=$1`, [req.params.id]);
     const r = row.rows[0];
     if (r) {
       const urls = [...(r.photo_urls || []), r.photo_url].filter(Boolean);
       for (const u of urls) await deleteCloudinaryPhoto(u);
     }
     await pool.query(`DELETE FROM photo_bill_entries WHERE id=$1`, [req.params.id]);
+    logActivity({ action: "DELETE", entity_type: "Photo Bill Entry", entity_id: Number(req.params.id), bill_no: r?.bill_no || null, profile_id: r?.profile_id || null, user_id: req.user?.user_id, user_name: req.user?.name });
     res.json({ status: "SUCCESS" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

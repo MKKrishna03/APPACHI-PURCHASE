@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const cloudinaryPkg = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const { pool } = require("../db");
+const { pool, oldPool, companyStore } = require("../db");
 const { logger } = require("../middleware/logger");
 
 const router = express.Router();
@@ -14,15 +14,26 @@ cloudinaryPkg.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const ALLOWED_FOLDERS = new Set([
+const BASE_FOLDERS = [
   "purchase_bills", "chittai_bills", "labour_receipts",
   "hallmark_bills", "expense_bills", "credit_notes", "debit_notes", "refinery_bills",
   "mc_bills", "cancelled_bills", "photo_bill_entries",
-]);
-const ALL_FOLDERS = [...ALLOWED_FOLDERS];
+];
+const PVT_FOLDERS = BASE_FOLDERS.map((f) => "pvtltd/" + f);
+const ALLOWED_FOLDERS = new Set([...BASE_FOLDERS, ...PVT_FOLDERS]);
+const ALL_FOLDERS = [...BASE_FOLDERS, ...PVT_FOLDERS];
 
+// Returns "pvtltd/" for new company (id 2) or "" for old company (id 1).
+// Falls back to "" when called outside request context (module load time).
+function getCompanyPrefix() {
+  const cid = companyStore.getStore();
+  return cid === 1 ? "" : "pvtltd/";
+}
+
+// Upload sessions are always stored in oldPool so the mobile upload page
+// (which has no company context) can retrieve them regardless of company.
 async function getSession(token) {
-  const result = await pool.query(
+  const result = await oldPool.query(
     `SELECT * FROM upload_sessions WHERE token=$1 AND expires_at > NOW()`,
     [token],
   );
@@ -53,11 +64,13 @@ function makeUploader(defaultFolder) {
       cloudinary: cloudinaryPkg,
       params: async (req, file) => {
         const isPdf = file.mimetype === "application/pdf";
-        let folder = defaultFolder;
+        const prefix = getCompanyPrefix();
+        let folder = prefix + defaultFolder;
         const session = req.params?.token ? await getSession(req.params.token) : null;
+        // session.folder already contains the prefix (set when session was created)
         if (session && ALLOWED_FOLDERS.has(session.folder)) folder = session.folder;
-        else if (req.body?.folder && ALLOWED_FOLDERS.has(req.body.folder)) folder = req.body.folder;
-        else if (req.query?.folder && ALLOWED_FOLDERS.has(req.query.folder)) folder = req.query.folder;
+        else if (req.body?.folder && ALLOWED_FOLDERS.has(req.body.folder)) folder = prefix + req.body.folder;
+        else if (req.query?.folder && ALLOWED_FOLDERS.has(req.query.folder)) folder = prefix + req.query.folder;
         const bill_date = session?.bill_date || req.body?.bill_date || null;
         // Use bill_no + company from session (phone upload) or request body (PC upload)
         const bill_no = session?.bill_no || req.body?.bill_no || null;
@@ -88,9 +101,11 @@ const uploadChittai = makeUploader("chittai_bills");
 router.post("/upload-session", async (req, res) => {
   const { bill_no, company, folder, bill_date } = req.body;
   const token = crypto.randomBytes(8).toString("hex");
-  const finalFolder = ALLOWED_FOLDERS.has(folder) ? folder : "purchase_bills";
+  const prefix = getCompanyPrefix();
+  const baseFolder = BASE_FOLDERS.includes(folder) ? folder : "purchase_bills";
+  const finalFolder = prefix + baseFolder;
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  await pool.query(
+  await oldPool.query(
     `INSERT INTO upload_sessions (token, bill_no, company, folder, bill_date, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`,
     [token, bill_no || "", company || "", finalFolder, bill_date || null, expiresAt],
   );
@@ -116,7 +131,7 @@ router.post("/upload-session/:token/upload", upload.single("photo"), async (req,
   if (!req.file) return res.status(400).json({ error: "No file" });
   const url = req.file.path;
   const newUrls = [...(session.photo_urls || []), url];
-  await pool.query(
+  await oldPool.query(
     `UPDATE upload_sessions SET photo_url=COALESCE(photo_url, $1), photo_urls=$2 WHERE token=$3`,
     [url, newUrls, req.params.token],
   );
@@ -126,7 +141,7 @@ router.post("/upload-session/:token/upload", upload.single("photo"), async (req,
 router.post("/upload-session/:token/done", async (req, res) => {
   const session = await getSession(req.params.token);
   if (!session) return res.status(404).json({ error: "Invalid or expired" });
-  await pool.query(`UPDATE upload_sessions SET done=true WHERE token=$1`, [req.params.token]);
+  await oldPool.query(`UPDATE upload_sessions SET done=true WHERE token=$1`, [req.params.token]);
   res.json({ status: "SUCCESS" });
 });
 
@@ -134,7 +149,8 @@ router.post("/upload-session/:token/done", async (req, res) => {
 router.post("/upload-base64", async (req, res) => {
   const { data, folder, filename } = req.body;
   if (!data) return res.status(400).json({ error: "No data" });
-  const finalFolder = ALLOWED_FOLDERS.has(folder) ? folder : "mc_bills";
+  const prefix = getCompanyPrefix();
+  const finalFolder = BASE_FOLDERS.includes(folder) ? prefix + folder : prefix + "mc_bills";
   try {
     const result = await cloudinaryPkg.uploader.upload(data, {
       folder: finalFolder,

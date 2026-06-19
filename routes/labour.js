@@ -1,6 +1,7 @@
 const express = require("express");
 const { pool } = require("../db");
 const { deleteCloudinaryPhoto } = require("./cloudinary");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -168,6 +169,7 @@ router.post("/labour", async (req, res) => {
       );
     }
     await client.query("COMMIT");
+    logActivity({ action: "CREATE", entity_type: "Issue Voucher", entity_id: labourId, bill_no: issue_number, profile_id, company_name, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: labourId });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -213,6 +215,7 @@ router.put("/labour/:id/with-cascade", async (req, res) => {
       }
     }
     await client.query("COMMIT");
+    logActivity({ action: "UPDATE", entity_type: "Issue Voucher", entity_id: parseInt(id), bill_no: issue_number, profile_id, company_name, user_id: req.user?.user_id, user_name: req.user?.name });
     res.json({ status: "SUCCESS", updated_rv_count });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -287,6 +290,13 @@ router.put("/labour/:id", async (req, res) => {
       }
     }
     await client.query("COMMIT");
+    if (profile_id !== undefined) {
+      logActivity({ action: "UPDATE", entity_type: "Issue Voucher", entity_id: parseInt(req.params.id), bill_no: issue_number, profile_id, company_name, user_id: req.user?.user_id, user_name: req.user?.name });
+    } else {
+      pool.query(`SELECT profile_id, company_name FROM labour WHERE id=$1`, [req.params.id])
+        .then(r => { const ro = r.rows[0] || {}; logActivity({ action: "UPDATE", entity_type: "Receipt Voucher", entity_id: parseInt(req.params.id), bill_no: receipt_bill_no, profile_id: ro.profile_id, company_name: ro.company_name, user_id: req.user?.user_id, user_name: req.user?.name }); })
+        .catch(() => {});
+    }
     res.json({ status: "SUCCESS" });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -358,6 +368,7 @@ router.post("/close-issue-voucher", async (req, res) => {
         }
       }
       await client.query("COMMIT");
+      logActivity({ action: "CREATE", entity_type: "Receipt Voucher", entity_id: close_labour_id, bill_no: req.body.bill_no || null, profile_id: labour.profile_id, company_name: labour.company_name, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
       console.log("[close-issue-voucher] BULK saved receipt id=%d issue_number=%s labour_ids=%j", close_labour_id, issueNumbers.join(","), labour_ids);
       return res.json({ status: "SUCCESS", id: close_labour_id, saved_issue_number: issueNumbers.join(","), saved_count: labour_ids.length });
     } catch (err) {
@@ -408,6 +419,7 @@ router.post("/close-issue-voucher", async (req, res) => {
       await client.query(`UPDATE vouchers SET linked_labour_id = $1 WHERE id = $2`, [close_labour_id, payment_voucher_id]);
     }
     await client.query("COMMIT");
+    logActivity({ action: "CREATE", entity_type: "Receipt Voucher", entity_id: close_labour_id, bill_no: req.body.bill_no || null, profile_id: labour.profile_id, company_name: labour.company_name, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: close_labour_id });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -464,6 +476,7 @@ router.patch("/labour/:id/cancel", async (req, res) => {
       ],
     );
     await client.query("COMMIT");
+    logActivity({ action: "CANCEL", entity_type: "Issue Voucher", entity_id: parseInt(req.params.id), bill_no: l.issue_number, profile_id: l.profile_id, company_name: l.company_name, user_id: req.user?.user_id, user_name: req.user?.name });
     res.json({ status: "SUCCESS" });
   } catch (err) {
     await client.query("ROLLBACK");

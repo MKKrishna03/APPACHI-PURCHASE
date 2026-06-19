@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -67,6 +68,7 @@ router.post("/chittai", async (req, res) => {
       );
       await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [chittai_id]);
     }
+    logActivity({ action: "CREATE", entity_type: "Chittai", entity_id: chittai_id, bill_no: chittai_no, profile_id, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,6 +90,7 @@ router.patch("/chittai/:id", async (req, res) => {
           req.params.id,
         ],
       );
+      logActivity({ action: "UPDATE", entity_type: "Chittai", entity_id: Number(req.params.id), bill_no: chittai_no, profile_id, user_id: req.user?.user_id, user_name: req.user?.name });
     } else if (linked_voucher_id !== undefined) {
       result = await pool.query(
         `UPDATE chittai SET linked_voucher_id=$1, is_paid=COALESCE($2, is_paid) WHERE id=$3 RETURNING *`,

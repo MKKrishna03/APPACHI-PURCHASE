@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -156,10 +157,36 @@ async function softDeleteById(type, id) {
 router.delete("/delete-entry", async (req, res) => {
   const { type, id, linked } = req.body;
   try {
+    // Capture entity info before deletion for the activity log
+    let logInfo = { entity_type: type, bill_no: null, profile_id: null, company_name: null };
+    if (type === "issue" || type === "receipt") {
+      const r = await pool.query(`SELECT issue_number, receipt_bill_no, profile_id, company_name, voucher_type FROM labour WHERE id=$1`, [id]);
+      if (r.rows[0]) {
+        const ro = r.rows[0];
+        logInfo.entity_type = ro.voucher_type === "Receipt Voucher" ? "Receipt Voucher" : "Issue Voucher";
+        logInfo.bill_no = ro.issue_number || ro.receipt_bill_no;
+        logInfo.profile_id = ro.profile_id;
+        logInfo.company_name = ro.company_name;
+      }
+    } else if (type === "txn") {
+      const r = await pool.query(`SELECT bill_no, profile_id, voucher_type FROM vouchers WHERE id=$1`, [id]);
+      if (r.rows[0]) { logInfo.entity_type = r.rows[0].voucher_type || "Transaction"; logInfo.bill_no = r.rows[0].bill_no; logInfo.profile_id = r.rows[0].profile_id; }
+    } else if (type === "purchase") {
+      const r = await pool.query(`SELECT bill_no, profile_id FROM purchases WHERE id=$1`, [id]);
+      if (r.rows[0]) { logInfo.entity_type = "Purchase"; logInfo.bill_no = r.rows[0].bill_no; logInfo.profile_id = r.rows[0].profile_id; }
+    } else if (type === "chittai") {
+      const r = await pool.query(`SELECT chittai_no, profile_id FROM chittai WHERE id=$1`, [id]);
+      if (r.rows[0]) { logInfo.entity_type = "Chittai"; logInfo.bill_no = r.rows[0].chittai_no; logInfo.profile_id = r.rows[0].profile_id; }
+    } else if (type === "hallmark") {
+      const r = await pool.query(`SELECT bill_no, profile_id, voucher_type FROM hallmark_expenses WHERE id=$1`, [id]);
+      if (r.rows[0]) { logInfo.entity_type = r.rows[0].voucher_type || "Hallmark/Expense"; logInfo.bill_no = r.rows[0].bill_no; logInfo.profile_id = r.rows[0].profile_id; }
+    }
+
     if (linked?.length) {
       for (const l of linked) await softDeleteLinked(l);
     }
     await softDeleteById(type, id);
+    logActivity({ action: "DELETE", ...logInfo, entity_id: id, user_id: req.user?.user_id, user_name: req.user?.name });
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });

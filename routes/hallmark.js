@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.get("/hallmark-expenses/list", async (req, res) => {
 });
 
 router.get("/hallmark-expenses/:id", async (req, res) => {
-  if (isNaN(req.params.id)) return res.status(404).json({ error: "Not found" });
+  if (Number.isNaN(Number(req.params.id))) return res.status(404).json({ error: "Not found" });
   try {
     const p = await pool.query("SELECT * FROM hallmark_expenses WHERE id=$1 AND deleted_at IS NULL", [req.params.id]);
     if (!p.rows[0]) return res.status(404).json({ error: "Not found" });
@@ -78,6 +79,7 @@ router.post("/hallmark-expenses", async (req, res) => {
       for (const cid of linked_chittai_ids) await client.query(`UPDATE chittai SET linked_purchase_id=$1 WHERE id=$2`, [entryId, cid]);
     }
     await client.query("COMMIT");
+    logActivity({ action: "CREATE", entity_type: voucher_type || "Hallmark/Expense", entity_id: entryId, bill_no: bill_no, profile_id, user_id: req.user?.user_id || created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: entryId });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -96,6 +98,8 @@ router.put("/hallmark-expenses/:id", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const curRow = await client.query(`SELECT profile_id FROM hallmark_expenses WHERE id=$1`, [id]);
+    const profileId = curRow.rows[0]?.profile_id;
     await client.query(
       `UPDATE hallmark_expenses SET date=$1, bill_no=$2, voucher_type=$3, description=$4, taxable_value=$5,
         tax_percent=$6, cgst=$7, sgst=$8, igst=$9, round_off=$10, total_value=$11, tds=$12, net_value=$13,
@@ -114,7 +118,8 @@ router.put("/hallmark-expenses/:id", async (req, res) => {
       }
     }
     await client.query("COMMIT");
-    res.json({ status: "SUCCESS", id: parseInt(id) });
+    logActivity({ action: "UPDATE", entity_type: voucher_type || "Hallmark/Expense", entity_id: Number(id), bill_no, profile_id: profileId, user_id: req.user?.user_id, user_name: req.user?.name });
+    res.json({ status: "SUCCESS", id: Number(id) });
   } catch (err) {
     await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });

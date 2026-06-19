@@ -1,5 +1,6 @@
 const express = require("express");
 const { pool } = require("../db");
+const { logActivity } = require("./activityLog");
 
 const router = express.Router();
 
@@ -112,6 +113,7 @@ router.post("/vouchers", async (req, res) => {
         linked_labour_id, linked_chittai_id, req.body.created_by || null, voucher_no,
       ],
     );
+    logActivity({ action: "CREATE", entity_type: voucher_type, entity_id: result.rows[0].id, bill_no, profile_id, user_id: req.user?.user_id || req.body.created_by, user_name: req.user?.name });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -137,6 +139,7 @@ router.patch("/vouchers/:id", async (req, res) => {
         `UPDATE vouchers SET profile_id=$1, voucher_type=$2, date=$3, bill_no=$4, entry_type=$5, description=$6, total_value=$7, linked_chittai_id=COALESCE($8, linked_chittai_id) WHERE id=$9 RETURNING *`,
         [profile_id, voucher_type, date, bill_no, entry_type, description, total_value, linked_chittai_id_val, req.params.id],
       );
+      logActivity({ action: "UPDATE", entity_type: voucher_type, entity_id: Number(req.params.id), bill_no, profile_id, user_id: req.user?.user_id, user_name: req.user?.name });
     }
     res.json(result.rows[0]);
   } catch (err) {

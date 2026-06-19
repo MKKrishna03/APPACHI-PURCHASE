@@ -2,6 +2,7 @@ require("dotenv").config();
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
 const { Pool, types } = require("pg");
+const { AsyncLocalStorage } = require("async_hooks");
 // Return DATE columns as plain "YYYY-MM-DD" strings instead of JS Date objects.
 // postgres-date v1 parses DATE as local-midnight Date, which JSON-serialises to
 // the previous UTC day in IST (UTC+5:30), causing an off-by-one date bug.
@@ -16,56 +17,76 @@ function generateResetKey() {
   return key;
 }
 
-const dbUrl = new URL(process.env.DATABASE_URL);
-const pool = new Pool({
-  host: dbUrl.hostname,
-  port: dbUrl.port || 5432,
-  user: decodeURIComponent(dbUrl.username),
-  password: decodeURIComponent(dbUrl.password),
-  database: dbUrl.pathname.slice(1),
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 90000,
-  keepAlive: true,
-  allowExitOnIdle: false,
-  lookup: (hostname, options, callback) => {
-    dns.lookup(hostname, { family: 4 }, callback);
+function makePool(url) {
+  const dbUrl = new URL(url);
+  const p = new Pool({
+    host: dbUrl.hostname,
+    port: dbUrl.port || 5432,
+    user: decodeURIComponent(dbUrl.username),
+    password: decodeURIComponent(dbUrl.password),
+    database: dbUrl.pathname.slice(1),
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 90000,
+    keepAlive: true,
+    allowExitOnIdle: false,
+    lookup: (hostname, options, callback) => {
+      dns.lookup(hostname, { family: 4 }, callback);
+    },
+  });
+  p.on("error", (err) => console.error("[DB] Pool error:", err.message));
+  const _orig = p.query.bind(p);
+  p.query = async function (...args) {
+    let lastErr;
+    for (let i = 0; i < 3; i++) {
+      try { return await _orig(...args); }
+      catch (err) {
+        lastErr = err;
+        if (
+          err.code === "ETIMEDOUT" ||
+          err.message?.includes("ETIMEDOUT") ||
+          err.message?.includes("Connection terminated")
+        ) {
+          await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
+  };
+  return p;
+}
+
+const oldPool = makePool(process.env.DATABASE_URL);
+const newPool = process.env.NEW_DATABASE_URL
+  ? makePool(process.env.NEW_DATABASE_URL)
+  : oldPool;
+
+// Keep-alive pings on both pools
+setInterval(() => {
+  oldPool.query("SELECT 1").catch(() => {});
+  if (newPool !== oldPool) newPool.query("SELECT 1").catch(() => {});
+}, 240000);
+
+// ── Company context (AsyncLocalStorage) ──
+// companyId 1 = APPACHI JEWELLERY (old), 2 = APPACHI JEWELLERY PVT LTD (new)
+const companyStore = new AsyncLocalStorage();
+
+// Proxy pool: routes all queries to oldPool (company 1) or newPool (company 2).
+// Route files continue to do `const { pool } = require('../db')` unchanged.
+const pool = new Proxy(Object.create(null), {
+  get(_, prop) {
+    const companyId = companyStore.getStore();
+    const target = companyId === 1 ? oldPool : newPool;
+    const val = target[prop];
+    return typeof val === "function" ? val.bind(target) : val;
   },
 });
 
-pool.on("error", (err) => {
-  console.error("[DB] Pool error:", err.message);
-});
-
-const _origQuery = pool.query.bind(pool);
-pool.query = async function (...args) {
-  let lastErr;
-  for (let i = 0; i < 3; i++) {
-    try {
-      return await _origQuery(...args);
-    } catch (err) {
-      lastErr = err;
-      if (
-        err.code === "ETIMEDOUT" ||
-        err.message?.includes("ETIMEDOUT") ||
-        err.message?.includes("Connection terminated")
-      ) {
-        await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastErr;
-};
-
-// Keep-alive ping
-setInterval(() => {
-  pool.query("SELECT 1").catch(() => {});
-}, 240000);
-
-async function initDB() {
+// ── Database schema (runs on whichever pool is active via companyStore) ──
+async function initDB_internal() {
   // ── Core tables ──
   await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
@@ -379,6 +400,55 @@ async function initDB() {
     )
   `);
 
+  // ── Cancelled bills ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cancelled_bills (
+      id           SERIAL PRIMARY KEY,
+      profile_id   INTEGER,
+      bill_type    VARCHAR(60),
+      bill_no      VARCHAR(100),
+      date         DATE,
+      amount       DECIMAL(15,2),
+      reason       TEXT,
+      photo_url    TEXT,
+      photo_urls   TEXT[],
+      created_by   TEXT,
+      created_at   TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  // ── Photo bill entries ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS photo_bill_entries (
+      id         SERIAL PRIMARY KEY,
+      profile_id INTEGER,
+      bill_no    VARCHAR(100),
+      date       DATE,
+      remarks    TEXT,
+      photo_url  TEXT,
+      photo_urls TEXT[],
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  // ── Activity log ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id           SERIAL PRIMARY KEY,
+      action       VARCHAR(20)  NOT NULL,
+      entity_type  VARCHAR(80)  NOT NULL,
+      entity_id    INTEGER,
+      bill_no      VARCHAR(100),
+      profile_id   INTEGER,
+      company_name VARCHAR(255),
+      details      TEXT,
+      user_id      TEXT,
+      user_name    TEXT,
+      created_at   TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   // ── Sequences ──
   await pool.query(`CREATE SEQUENCE IF NOT EXISTS payment_voucher_seq START 1`);
   await pool.query(`CREATE SEQUENCE IF NOT EXISTS receipt_voucher_seq START 1`);
@@ -408,6 +478,7 @@ async function initDB() {
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS is_cancelled BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE labour_items ADD COLUMN IF NOT EXISTS tax_percent NUMERIC`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS payment_voucher_id INTEGER REFERENCES vouchers(id)`);
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS created_by TEXT`);
@@ -432,6 +503,9 @@ async function initDB() {
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
   await alterIfNotExists(`ALTER TABLE hallmark_expenses ADD COLUMN IF NOT EXISTS remaining_value NUMERIC`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_receipt_id INTEGER REFERENCES labour(id)`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS gold_rate NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_pct NUMERIC`);
+  await alterIfNotExists(`ALTER TABLE cancelled_bills ADD COLUMN IF NOT EXISTS fields_data JSONB`);
 
   // Backfill mc_receipt_id for issue vouchers that already have a matching MC receipt
   await pool.query(`
@@ -452,8 +526,6 @@ async function initDB() {
       AND iv.mc_receipt_id IS NULL
       AND iv.deleted_at IS NULL
   `).catch(() => {});
-  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS gold_rate NUMERIC`);
-  await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_pct NUMERIC`);
 
   // ── Soft delete columns ──
   await alterIfNotExists(`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
@@ -507,8 +579,16 @@ async function initDB() {
 
   // Clean expired upload sessions
   await pool.query(`DELETE FROM upload_sessions WHERE expires_at < NOW()`);
+}
 
+async function initDB() {
+  console.log("[DB] Initializing old company database...");
+  await companyStore.run(1, initDB_internal);
+  if (newPool !== oldPool) {
+    console.log("[DB] Initializing new company database...");
+    await companyStore.run(2, initDB_internal);
+  }
   console.log("[DB] Ready");
 }
 
-module.exports = { pool, initDB, generateResetKey };
+module.exports = { pool, oldPool, newPool, companyStore, initDB, generateResetKey };
