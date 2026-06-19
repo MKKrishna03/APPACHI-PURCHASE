@@ -6,7 +6,7 @@
   var _fetch = window.fetch.bind(window);
   window.fetch = function (url, opts) {
     if (typeof url === 'string' && url.startsWith('/api')) {
-      var cid = localStorage.getItem('activeCompany') || '2';
+      var cid = localStorage.getItem('activeCompany') || '1';
       opts = Object.assign({}, opts || {}, {
         headers: Object.assign({ 'X-Company-ID': cid }, (opts && opts.headers) || {}),
       });
@@ -20,7 +20,7 @@
     '2': { name: 'AJ PRIVATE LIMITED',     sub: 'Private Limited',      dot: '#10b981', badge: '#ecfdf5', text: '#065f46', border: '#6ee7b7' },
   };
 
-  function getActive() { return localStorage.getItem('activeCompany') || '2'; }
+  function getActive() { return localStorage.getItem('activeCompany') || '1'; }
 
   window._setCo = function (id) {
     localStorage.setItem('activeCompany', String(id));

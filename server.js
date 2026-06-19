@@ -95,7 +95,9 @@ app.use(express.urlencoded({ extended: true }));
 // and binds the correct DB pool for the duration of the request via AsyncLocalStorage.
 // companyId 1 = APPACHI JEWELLERY (old DB), 2 = APPACHI JEWELLERY PVT LTD (new DB)
 app.use("/api/", (req, res, next) => {
-  const cid = req.headers["x-company-id"] === "1" ? 1 : 2;
+  // Default to company 1 (old DB) when header is absent so existing data
+  // is visible even before company-context.js has run on the client.
+  const cid = req.headers["x-company-id"] === "2" ? 2 : 1;
   companyStore.run(cid, () => next());
 });
 
@@ -221,7 +223,7 @@ const pages = {
 // Inject company-context.js into every HTML page so the company switcher
 // and fetch interceptor (X-Company-ID header) are available without
 // touching the 20+ individual HTML files.
-const CO_SCRIPT = '<script src="/company-context.js" defer></script>';
+const CO_SCRIPT = '<script src="/company-context.js"></script>';
 for (const [route, file] of Object.entries(pages)) {
   app.get(route, (req, res) => {
     try {
