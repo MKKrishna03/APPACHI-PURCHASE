@@ -1,5 +1,5 @@
 const express = require("express");
-const { pool } = require("../db");
+const { oldPool: pool } = require("../db");
 const { broadcast } = require("../sse");
 
 const router = express.Router();
