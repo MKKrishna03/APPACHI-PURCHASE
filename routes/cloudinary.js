@@ -30,6 +30,12 @@ function getCompanyPrefix() {
   return cid === 1 ? "" : "pvtltd/";
 }
 
+// Returns only the folders that belong to the current company.
+function getCompanyFolders() {
+  const cid = companyStore.getStore();
+  return cid === 1 ? BASE_FOLDERS : PVT_FOLDERS;
+}
+
 // Upload sessions are always stored in oldPool so the mobile upload page
 // (which has no company context) can retrieve them regardless of company.
 async function getSession(token) {
@@ -203,7 +209,7 @@ function extractPublicIdFromUrl(url) {
 async function fetchAllCloudinaryResources() {
   const auth = Buffer.from(`${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`).toString("base64");
   let all = [];
-  for (const folder of ALL_FOLDERS) {
+  for (const folder of getCompanyFolders()) {
     for (const resource_type of ["image", "raw"]) {
       let nextCursor = null;
       do {
@@ -256,7 +262,7 @@ router.get("/cloudinary/all-photos", async (req, res) => {
     const auth = Buffer.from(`${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`).toString("base64");
     let allResources = [];
     for (const resource_type of ["image", "raw"]) {
-      for (const folder of ALL_FOLDERS) {
+      for (const folder of getCompanyFolders()) {
         let nextCursor = null;
         do {
           const params = new URLSearchParams({ type: "upload", prefix: folder, max_results: 500, resource_type, context: "true" });
