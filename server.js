@@ -275,8 +275,33 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
+// ── Sync profiles from oldPool → newPool on startup ──
+async function syncProfilesToNewDb() {
+  if (newPool === oldPool) return;
+  try {
+    const { rows } = await oldPool.query(`SELECT * FROM profiles ORDER BY id`);
+    if (!rows.length) return;
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const vals = cols.map((_, i) => `$${i + 1}`);
+      const updateCols = cols.filter((c) => c !== "id");
+      await newPool.query(
+        `INSERT INTO profiles (${cols.join(",")}) VALUES (${vals.join(",")})
+         ON CONFLICT (id) DO UPDATE SET ${updateCols.map((c) => `${c}=EXCLUDED.${c}`).join(",")}`,
+        Object.values(row),
+      );
+    }
+    const maxId = Math.max(...rows.map((r) => r.id || 0));
+    if (maxId > 0) await newPool.query(`SELECT setval('profiles_id_seq', GREATEST(currval('profiles_id_seq'), $1))`, [maxId]);
+    console.log(`[DB] Synced ${rows.length} profiles to new DB`);
+  } catch (err) {
+    console.error("[DB] Profile sync on startup failed:", err.message);
+  }
+}
+
 // ── Start ──
 initDB()
+  .then(() => syncProfilesToNewDb())
   .then(() => {
     app.listen(PORT, () =>
       console.log(

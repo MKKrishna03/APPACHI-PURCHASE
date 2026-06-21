@@ -1,5 +1,23 @@
 const express = require("express");
-const { oldPool: pool } = require("../db");
+const { oldPool, oldPool: pool, newPool } = require("../db");
+
+// Sync a profile row to newPool so FK constraints on chittai/purchases/etc. work for company 2.
+async function syncProfileToNewDb(row) {
+  if (newPool === oldPool) return;
+  const cols = Object.keys(row);
+  const vals = cols.map((_, i) => `$${i + 1}`);
+  const updateCols = cols.filter((c) => c !== "id");
+  await newPool
+    .query(
+      `INSERT INTO profiles (${cols.join(",")}) VALUES (${vals.join(",")})
+       ON CONFLICT (id) DO UPDATE SET ${updateCols.map((c) => `${c}=EXCLUDED.${c}`).join(",")}`,
+      Object.values(row),
+    )
+    .catch((err) => console.error("[DB] Profile sync to new DB failed:", err.message));
+  await newPool
+    .query(`SELECT setval('profiles_id_seq', GREATEST(currval('profiles_id_seq'), $1))`, [row.id])
+    .catch(() => {});
+}
 
 const router = express.Router();
 
@@ -67,11 +85,11 @@ router.get("/profile/:alias", async (req, res) => {
 router.post("/profile", async (req, res) => {
   const d = req.body;
   try {
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO profiles
         (alias,company_name,address,city,pincode,state,state_code,gst_number,pan_number,
          contact1,contact2,email,ac_holder,bank_name,account_number,ifsc_code,branch,ledger_types)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [
         d["ALIAS"], d["COMPANY NAME"], d["ADDRESS"], d["CITY"], d["PINCODE"],
         d["STATE"], d["STATE CODE"], d["GST NUMBER"], d["PAN NUMBER"],
@@ -80,6 +98,7 @@ router.post("/profile", async (req, res) => {
         d["IFSC CODE"], d["BRANCH"], d["LEDGER_TYPES"] || [],
       ],
     );
+    await syncProfileToNewDb(result.rows[0]);
     res.json({ status: "SUCCESS" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -109,19 +128,23 @@ router.put("/profile/:alias", async (req, res) => {
       `UPDATE labour l SET company_name = p.company_name FROM profiles p WHERE l.profile_id = p.id AND p.alias = $1`,
       [d["ALIAS"]],
     );
+    const updatedRow = await pool.query(`SELECT * FROM profiles WHERE alias=$1`, [d["ALIAS"]]);
+    if (updatedRow.rows[0]) await syncProfileToNewDb(updatedRow.rows[0]);
 
     let duplicate_created = false;
     if (d["CREATE_DUPLICATE"] && d["DUPLICATE_ALIAS"]) {
       const dupAlias = d["DUPLICATE_ALIAS"];
       const exists = await pool.query("SELECT id FROM profiles WHERE alias=$1", [dupAlias]);
+      let dupRow;
       if (exists.rows[0]) {
-        await pool.query(`UPDATE profiles SET ledger_types=$1, updated_at=NOW() WHERE alias=$2`, [d["DUPLICATE_LEDGER_TYPES"] || [], dupAlias]);
+        const r = await pool.query(`UPDATE profiles SET ledger_types=$1, updated_at=NOW() WHERE alias=$2 RETURNING *`, [d["DUPLICATE_LEDGER_TYPES"] || [], dupAlias]);
+        dupRow = r.rows[0];
       } else {
-        await pool.query(
+        const r = await pool.query(
           `INSERT INTO profiles
             (alias,company_name,address,city,pincode,state,state_code,gst_number,pan_number,
              contact1,contact2,email,ac_holder,bank_name,account_number,ifsc_code,branch,ledger_types)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
           [
             dupAlias, d["COMPANY NAME"] + " II", d["ADDRESS"], d["CITY"], d["PINCODE"],
             d["STATE"], d["STATE CODE"], d["GST NUMBER"], d["PAN NUMBER"],
@@ -130,7 +153,9 @@ router.put("/profile/:alias", async (req, res) => {
             d["IFSC CODE"], d["BRANCH"], d["DUPLICATE_LEDGER_TYPES"] || [],
           ],
         );
+        dupRow = r.rows[0];
       }
+      if (dupRow) await syncProfileToNewDb(dupRow);
       duplicate_created = true;
     }
     res.json({ status: "SUCCESS", duplicate_created });
