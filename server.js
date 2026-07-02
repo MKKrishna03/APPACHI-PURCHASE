@@ -299,9 +299,32 @@ async function syncProfilesToNewDb() {
   }
 }
 
+// ── Sync labour item types from oldPool → newPool on startup ──
+async function syncLabourItemTypesToNewDb() {
+  if (newPool === oldPool) return;
+  try {
+    const { rows } = await oldPool.query(`SELECT * FROM labour_item_types ORDER BY id`);
+    if (!rows.length) return;
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const vals = cols.map((_, i) => `$${i + 1}`);
+      await newPool.query(
+        `INSERT INTO labour_item_types (${cols.join(",")}) VALUES (${vals.join(",")}) ON CONFLICT (name) DO NOTHING`,
+        Object.values(row),
+      );
+    }
+    const maxId = Math.max(...rows.map((r) => r.id || 0));
+    if (maxId > 0) await newPool.query(`SELECT setval('labour_item_types_id_seq', GREATEST(currval('labour_item_types_id_seq'), $1))`, [maxId]);
+    console.log(`[DB] Synced ${rows.length} labour item types to new DB`);
+  } catch (err) {
+    console.error("[DB] Labour item type sync on startup failed:", err.message);
+  }
+}
+
 // ── Start ──
 initDB()
   .then(() => syncProfilesToNewDb())
+  .then(() => syncLabourItemTypesToNewDb())
   .then(() => {
     app.listen(PORT, () =>
       console.log(
