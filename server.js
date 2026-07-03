@@ -321,10 +321,58 @@ async function syncLabourItemTypesToNewDb() {
   }
 }
 
+// ── Sync tax formats (GST dropdown) from oldPool → newPool on startup ──
+async function syncTaxFormatsToNewDb() {
+  if (newPool === oldPool) return;
+  try {
+    const { rows } = await oldPool.query(`SELECT * FROM tax_format ORDER BY id`);
+    if (!rows.length) return;
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const vals = cols.map((_, i) => `$${i + 1}`);
+      const updateCols = cols.filter((c) => c !== "id");
+      await newPool.query(
+        `INSERT INTO tax_format (${cols.join(",")}) VALUES (${vals.join(",")})
+         ON CONFLICT (id) DO UPDATE SET ${updateCols.map((c) => `${c}=EXCLUDED.${c}`).join(",")}`,
+        Object.values(row),
+      );
+    }
+    const maxId = Math.max(...rows.map((r) => r.id || 0));
+    if (maxId > 0) await newPool.query(`SELECT setval('tax_format_id_seq', GREATEST(currval('tax_format_id_seq'), $1))`, [maxId]);
+    console.log(`[DB] Synced ${rows.length} tax formats to new DB`);
+  } catch (err) {
+    console.error("[DB] Tax format sync on startup failed:", err.message);
+  }
+}
+
+// ── Sync descriptions (autosuggest) from oldPool → newPool on startup ──
+async function syncDescriptionsToNewDb() {
+  if (newPool === oldPool) return;
+  try {
+    const { rows } = await oldPool.query(`SELECT * FROM descriptions ORDER BY id`);
+    if (!rows.length) return;
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const vals = cols.map((_, i) => `$${i + 1}`);
+      await newPool.query(
+        `INSERT INTO descriptions (${cols.join(",")}) VALUES (${vals.join(",")}) ON CONFLICT (name) DO NOTHING`,
+        Object.values(row),
+      );
+    }
+    const maxId = Math.max(...rows.map((r) => r.id || 0));
+    if (maxId > 0) await newPool.query(`SELECT setval('descriptions_id_seq', GREATEST(currval('descriptions_id_seq'), $1))`, [maxId]);
+    console.log(`[DB] Synced ${rows.length} descriptions to new DB`);
+  } catch (err) {
+    console.error("[DB] Description sync on startup failed:", err.message);
+  }
+}
+
 // ── Start ──
 initDB()
   .then(() => syncProfilesToNewDb())
   .then(() => syncLabourItemTypesToNewDb())
+  .then(() => syncTaxFormatsToNewDb())
+  .then(() => syncDescriptionsToNewDb())
   .then(() => {
     app.listen(PORT, () =>
       console.log(
