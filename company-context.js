@@ -20,9 +20,34 @@
     '2': { name: 'AJ PRIVATE LIMITED',     sub: 'Private Limited',      dot: '#10b981', badge: '#ecfdf5', text: '#065f46', border: '#6ee7b7' },
   };
 
+  // ── Old DB (company 1 / APPACHI JEWELLERY) is restricted to specific users ──
+  // Mirrors the server-side check in server.js (user_id "16" = MUTHUKUMAR, "admin" = VIMAL).
+  var OLD_DB_ALLOWED_USER_IDS = ['16', 'admin'];
+
+  function currentUserId() {
+    try {
+      var raw = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
+      if (!raw) return null;
+      var u = JSON.parse(raw);
+      return u && (u.id || u.user_id) != null ? String(u.id || u.user_id) : null;
+    } catch (e) { return null; }
+  }
+
+  function canUseOldDb() {
+    var uid = currentUserId();
+    return uid !== null && OLD_DB_ALLOWED_USER_IDS.indexOf(uid) !== -1;
+  }
+
   function getActive() { return localStorage.getItem('activeCompany') || '1'; }
 
+  // Restricted users are transparently kept on company 2 — the server would
+  // reroute them anyway, but fixing it client-side avoids a stale UI state.
+  if (!canUseOldDb() && getActive() === '1') {
+    localStorage.setItem('activeCompany', '2');
+  }
+
   window._setCo = function (id) {
+    if (String(id) === '1' && !canUseOldDb()) return;
     localStorage.setItem('activeCompany', String(id));
     location.reload();
   };
@@ -44,8 +69,7 @@
   function buildSwitcher() {
     var active = getActive();
     var co     = COS[active];
-    var other  = active === '1' ? '2' : '1';
-    var oco    = COS[other];
+    var allowOld = canUseOldDb();
 
     var sidebar = document.querySelector('.sidebar');
 
@@ -82,7 +106,7 @@
         '<div id="_co-drop" style="display:none;position:absolute;bottom:calc(100% + 4px);' +
              'left:8px;right:8px;background:#1a2b1e;border:1px solid rgba(255,255,255,.13);' +
              'border-radius:10px;overflow:hidden;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.55);">' +
-          _coItem('1', active) + _coItem('2', active) +
+          (allowOld ? _coItem('1', active) : '') + _coItem('2', active) +
         '</div>';
 
       sidebar.appendChild(wrap);
@@ -106,7 +130,7 @@
         '<div id="_co-drop" style="display:none;position:absolute;bottom:calc(100% + 6px);' +
              'left:0;min-width:250px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;' +
              'overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);">' +
-          _coItemLight('1', active) + _coItemLight('2', active) +
+          (allowOld ? _coItemLight('1', active) : '') + _coItemLight('2', active) +
         '</div>';
 
       document.body.appendChild(wrap2);

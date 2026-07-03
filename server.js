@@ -125,6 +125,21 @@ app.get("/health", async (req, res) => {
 // ── Auth middleware on all /api/ routes ──
 app.use("/api/", requireAuth);
 
+// ── Restrict old DB (company 1 / APPACHI JEWELLERY) to specific users ──
+// user_id "16" = MUTHUKUMAR, "admin" = VIMAL. Everyone else is transparently
+// routed to the new DB (company 2) even if they request/still have company 1 active.
+const OLD_DB_ALLOWED_USER_IDS = new Set(["16", "admin"]);
+app.use("/api/", (req, res, next) => {
+  if (
+    companyStore.getStore() === 1 &&
+    req.user &&
+    !OLD_DB_ALLOWED_USER_IDS.has(String(req.user.user_id))
+  ) {
+    return companyStore.run(2, () => next());
+  }
+  next();
+});
+
 // ── Server-Sent Events ──
 app.get("/api/events", sseHandler);
 
