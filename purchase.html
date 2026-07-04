@@ -1661,6 +1661,9 @@
           // Build voucher -> total consumed amount from the purchases side.
           // A voucher can be referenced by multiple purchases (partial bills),
           // so sum all net_values across every purchase that cites this voucher.
+          const voucherTotalById = {};
+          all.forEach((v) => { voucherTotalById[v.id] = parseFloat(v.total_value || 0); });
+
           const purchasedByVoucher = {};
           purchases.forEach((p) => {
             const ids =
@@ -1670,8 +1673,15 @@
                   ? [p.linked_voucher_id]
                   : [];
             const pNet = parseFloat(p.net_value || p.total_value || 0);
+            // A single purchase can combine several payment vouchers to cover
+            // one bill, so attribute each voucher its own value (capped by what's
+            // left of the purchase amount) instead of charging every voucher the
+            // full purchase amount — otherwise each one looks overpaid ("Excess").
+            let remainingNet = pNet;
             ids.forEach((id) => {
-              purchasedByVoucher[id] = (purchasedByVoucher[id] || 0) + pNet;
+              const share = Math.min(voucherTotalById[id] ?? pNet, Math.max(remainingNet, 0));
+              purchasedByVoucher[id] = (purchasedByVoucher[id] || 0) + share;
+              remainingNet -= share;
             });
           });
 
