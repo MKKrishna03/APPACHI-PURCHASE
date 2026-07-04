@@ -1830,14 +1830,30 @@
             purchaseById[p.id] = p;
           });
 
-          const purchasedByVoucher = {};
+          // A single purchase can combine several payment vouchers to cover
+          // one bill, so group vouchers by their shared linked_purchase_id and
+          // attribute each voucher its own value (capped by what's left of the
+          // purchase amount) instead of charging every voucher the full
+          // purchase amount — otherwise each one looks overpaid ("Excess").
+          const vouchersByPurchase = {};
           all.forEach((v) => {
             if (v.linked_purchase_id && purchaseById[v.linked_purchase_id]) {
-              const p = purchaseById[v.linked_purchase_id];
-              purchasedByVoucher[v.id] = parseFloat(
-                p.net_value || p.total_value || 0,
-              );
+              if (!vouchersByPurchase[v.linked_purchase_id]) vouchersByPurchase[v.linked_purchase_id] = [];
+              vouchersByPurchase[v.linked_purchase_id].push(v);
             }
+          });
+
+          const purchasedByVoucher = {};
+          Object.keys(vouchersByPurchase).forEach((pid) => {
+            const p = purchaseById[pid];
+            const pNet = parseFloat(p.net_value || p.total_value || 0);
+            let remainingNet = pNet;
+            vouchersByPurchase[pid].forEach((v) => {
+              const voucherTotal = parseFloat(v.total_value || 0);
+              const share = Math.min(voucherTotal, Math.max(remainingNet, 0));
+              purchasedByVoucher[v.id] = share;
+              remainingNet -= share;
+            });
           });
 
           const payments = all.filter((v) => {
@@ -2623,13 +2639,19 @@
               }
             }
             showMessage(voucherTypeLabel + " created successfully!", "success");
-            const netVal =
+            // Split netVal across the selected cards (capped by each card's own
+            // remaining balance) instead of deducting the full amount from every
+            // card — otherwise each one looks overpaid ("Excess") even though
+            // together they matched the bill.
+            let remainingNetVal =
               parseFloat(document.getElementById("billNet").value) || 0;
             selectedVoucherIds.forEach((id) => {
               const card = document.getElementById(`pay_${id}`);
               if (!card) return;
               const oldBalance = parseFloat(card.dataset.balance || 0);
-              const newBalance = oldBalance - netVal;
+              const deduction = Math.min(oldBalance, Math.max(remainingNetVal, 0));
+              remainingNetVal -= deduction;
+              const newBalance = oldBalance - deduction;
               card.dataset.balance = newBalance;
               const balanceDiv = card.querySelector(".pay-card-balance");
               const balanceColor =

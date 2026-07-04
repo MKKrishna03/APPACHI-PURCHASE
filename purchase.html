@@ -2510,14 +2510,20 @@
             clearPhotoStorage(); // draft photos submitted — wipe session draft
             _showLastSaved(document.getElementById("message"));
             if (window._markFormClean) _markFormClean();
-            // Update selected cards balance live
-            const netVal =
+            // Update selected cards balance live. When several payments were
+            // combined to cover this one bill, split netVal across them
+            // (capped by each card's own remaining balance) instead of
+            // deducting the full amount from every card — otherwise each
+            // one looks overpaid ("Excess") even though together they matched.
+            let remainingNetVal =
               parseFloat(document.getElementById("billNet").value) || 0;
             selectedVoucherIds.forEach((id) => {
               const card = document.getElementById(`pay_${id}`);
               if (!card) return;
               const oldBalance = parseFloat(card.dataset.balance || 0);
-              const newBalance = oldBalance - netVal;
+              const deduction = Math.min(oldBalance, Math.max(remainingNetVal, 0));
+              remainingNetVal -= deduction;
+              const newBalance = oldBalance - deduction;
               card.dataset.balance = newBalance;
               const balanceDiv = card.querySelector(".pay-card-balance");
               const balanceColor =
