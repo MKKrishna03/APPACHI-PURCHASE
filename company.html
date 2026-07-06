@@ -1692,7 +1692,8 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
       async function startDelete() {
         let linked = [];
         try {
-          const res = await fetch(`/api/linked-data/${_popupType}/${_popupId}`);
+          const apiType = _popupType === 'hmex' ? 'hallmark' : _popupType;
+          const res = await fetch(`/api/linked-data/${apiType}/${_popupId}`);
           linked = await res.json();
         } catch(e) {}
 
@@ -1731,10 +1732,11 @@ drpEnd = new Date(defaultRange.end.getFullYear(), defaultRange.end.getMonth(), d
         });
         document.getElementById('deleteConfirmOverlay')?.remove();
         try {
+          const apiType = _popupType === 'hmex' ? 'hallmark' : _popupType;
           const res = await fetch('/api/delete-entry', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: _popupType, id: _popupId, linked: checkedLinked })
+            body: JSON.stringify({ type: apiType, id: _popupId, linked: checkedLinked })
           });
           const result = await res.json();
           if (result.status === 'SUCCESS') {

@@ -151,6 +151,8 @@ async function softDeleteById(type, id) {
   } else if (type === "hallmark") {
     await pool.query(`UPDATE vouchers SET linked_purchase_id=NULL WHERE linked_purchase_id=$1`, [id]);
     await pool.query(`UPDATE hallmark_expenses SET deleted_at=NOW() WHERE id=$1`, [id]);
+  } else {
+    throw new Error(`Unknown entry type: ${type}`);
   }
 }
 
