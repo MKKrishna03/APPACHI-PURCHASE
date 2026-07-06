@@ -353,10 +353,12 @@ router.delete("/cloudinary/photo", async (req, res) => {
 router.patch("/cloudinary/move-photo", async (req, res) => {
   const { public_id, target_folder } = req.body;
   if (!public_id || !target_folder) return res.status(400).json({ error: "public_id and target_folder required" });
-  if (!ALLOWED_FOLDERS.has(target_folder)) return res.status(400).json({ error: "Invalid target folder" });
+  const bareTarget = target_folder.replace(/^pvtltd\//, "");
+  if (!BASE_FOLDERS.includes(bareTarget)) return res.status(400).json({ error: "Invalid target folder" });
   try {
     const filename = public_id.split("/").pop();
-    const new_public_id = `${target_folder}/${filename}`;
+    const prefix = public_id.startsWith("pvtltd/") ? "pvtltd/" : "";
+    const new_public_id = `${prefix}${bareTarget}/${filename}`;
     const isPdf = /\.pdf$/i.test(filename);
     const result = await cloudinaryPkg.uploader.rename(public_id, new_public_id, {
       resource_type: isPdf ? "raw" : "image", invalidate: true, overwrite: false,

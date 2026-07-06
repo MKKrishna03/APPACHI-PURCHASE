@@ -1112,7 +1112,7 @@
                   : dbHallmark
                     ? dbHallmark.is_accounted
                     : false,
-              folder: item.folder,
+              folder: (item.folder || "").replace(/^pvtltd\//, ""),
               is_pdf: item.is_pdf || false,
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
@@ -2082,7 +2082,8 @@
         container.innerHTML = unlinkedData
           .map((item, i) => {
             const filename = item.public_id.split("/").pop();
-            const label = FOLDER_LABELS[item.folder] || item.folder;
+            const bareFolder = (item.folder || "").replace(/^pvtltd\//, "");
+            const label = FOLDER_LABELS[bareFolder] || bareFolder;
             const date = item.created_at ? item.created_at.slice(0, 10) : "—";
             const sizeKb = item.bytes
               ? (item.bytes / 1024).toFixed(0) + " KB"
