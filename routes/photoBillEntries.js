@@ -7,17 +7,20 @@ const router = express.Router();
 
 pool.query(`
   CREATE TABLE IF NOT EXISTS photo_bill_entries (
-    id         SERIAL PRIMARY KEY,
-    profile_id INTEGER,
-    bill_no    VARCHAR(100),
-    date       DATE,
-    remarks    TEXT,
-    photo_url  TEXT,
-    photo_urls TEXT[],
-    created_by TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    id           SERIAL PRIMARY KEY,
+    profile_id   INTEGER,
+    bill_no      VARCHAR(100),
+    date         DATE,
+    remarks      TEXT,
+    photo_url    TEXT,
+    photo_urls   TEXT[],
+    is_accounted BOOLEAN DEFAULT false,
+    created_by   TEXT,
+    created_at   TIMESTAMP DEFAULT NOW()
   )
 `).catch(e => console.error("photo_bill_entries table init error:", e.message));
+pool.query(`ALTER TABLE photo_bill_entries ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`)
+  .catch(e => console.error("photo_bill_entries is_accounted column init error:", e.message));
 
 router.get("/photo-bill-entries", async (req, res) => {
   try {
@@ -44,6 +47,13 @@ router.post("/photo-bill-entries", async (req, res) => {
     );
     logActivity({ action: "CREATE", entity_type: "Photo Bill Entry", entity_id: result.rows[0].id, bill_no: bill_no || null, profile_id: profile_id || null, user_id: req.user?.user_id || created_by, user_name: req.user?.name });
     res.json({ status: "SUCCESS", id: result.rows[0].id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch("/photo-bill-entries/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(`UPDATE photo_bill_entries SET is_accounted = $1 WHERE id = $2`, [req.body.is_accounted, req.params.id]);
+    res.json({ status: "SUCCESS" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
