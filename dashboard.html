@@ -2379,6 +2379,24 @@ function doLogout() {
         return _dashCache[url];
       }
 
+      // ── Shared KPI period range — used by both the KPI cards and the pending-action cards below ──
+      function getSelectedPeriodRange() {
+        const now = new Date();
+        const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+        const period = document.getElementById('kpiPeriodSelect')?.value || 'fy';
+        if (!period || period === 'fy') {
+          return { start: new Date(fyYear, 3, 1), end: new Date(fyYear + 1, 2, 31, 23, 59, 59) };
+        }
+        const [yr, mo] = period.split('-').map(Number);
+        return { start: new Date(yr, mo - 1, 1), end: new Date(yr, mo, 0, 23, 59, 59) };
+      }
+      function inSelectedPeriod(dateStr) {
+        if (!dateStr) return false;
+        const { start, end } = getSelectedPeriodRange();
+        const d = new Date(dateStr);
+        return d >= start && d <= end;
+      }
+
       let companies = [];
 
       async function loadCompanies() {
@@ -2625,7 +2643,7 @@ function doLogout() {
               r.issue_number.split(",").forEach((n) => closedSet.add(n.trim()));
             }
           });
-          const pending = issues.filter((b) => !closedSet.has(b.issue_number) && !b.is_cancelled);
+          const pending = issues.filter((b) => !closedSet.has(b.issue_number) && !b.is_cancelled && inSelectedPeriod(b.date));
           window._pendingVouchers = pending;
           _countUp(document.getElementById("pendingCount"), pending.length, 600);
           _countUp(document.getElementById("kpiLabourOut"), pending.length, 700);
@@ -2817,10 +2835,11 @@ function doLogout() {
               .map((v) => v.bill_no),
           );
           const receipts = labourRes.filter(
-            (b) => b.voucher_type === "Receipt Voucher" 
-              && !linkedIds.has(b.id) 
+            (b) => b.voucher_type === "Receipt Voucher"
+              && !linkedIds.has(b.id)
               && !paidBillNos.has(b.receipt_bill_no)
-              && !paidBillNos.has(b.issue_number),
+              && !paidBillNos.has(b.issue_number)
+              && inSelectedPeriod(b.date),
           );
           console.log("VOUCHERS:", voucherRes.map(v=>({bill_no:v.bill_no,entry_type:v.entry_type,linked_labour_id:v.linked_labour_id})));
           console.log("RECEIPTS SHOWING:", receipts.map(r=>({id:r.id,receipt_bill_no:r.receipt_bill_no,issue_number:r.issue_number})));
@@ -4216,7 +4235,8 @@ function doLogout() {
             purchaseProfileIds.has(String(v.profile_id)) &&
             !linkedVoucherIds.has(String(v.id)) &&
             v.voucher_type !== "Chittai Payment" &&
-            !v.linked_chittai_id
+            !v.linked_chittai_id &&
+            inSelectedPeriod(v.date)
           );
           paymentVouchers.forEach(v => {
             const prof = profileRes.find(c => String(c.id) === String(v.profile_id));
@@ -4329,6 +4349,7 @@ function doLogout() {
             const amtKey = `${v.profile_id}:${Math.round(parseFloat(v.total_value || 0))}`;
             if (purchaseAmtKeys.has(amtKey)) return false;
             if (hmexAmtKeys.has(amtKey)) return false;
+            if (!inSelectedPeriod(v.date)) return false;
             return true;
           });
           paymentVouchers.forEach(v => {
@@ -4392,7 +4413,8 @@ function doLogout() {
       // ── Purchase Bills with No Attached Photo ──
       async function loadNoPictureBills() {
         try {
-          const list = await fetch("/api/purchases/no-photo").then(r => r.json());
+          const all = await fetch("/api/purchases/no-photo").then(r => r.json());
+          const list = all.filter(p => inSelectedPeriod(p.date));
           window._noPictureBills = list;
           _countUp(document.getElementById("noPhotoBillsCount"), list.length, 600);
           renderNoPictureBills(list);
@@ -4549,7 +4571,14 @@ function doLogout() {
             document.getElementById('kpiTdsBills').textContent      = `${tdsCount} bills with TDS`;
           }
 
-          if (sel) sel.addEventListener('change', () => renderKpiValues(sel.value));
+          if (sel) sel.addEventListener('change', () => {
+            renderKpiValues(sel.value);
+            loadPendingVouchers();
+            loadPendingPayments();
+            loadPendingChittai();
+            loadPendingBillsForPay();
+            loadNoPictureBills();
+          });
           renderKpiValues('fy');
 
           // Monthly chart: April→March for current FY (always full FY, not filtered)
