@@ -1312,20 +1312,6 @@
                   Auto TDS (194Q)
                 </label>
               </span>
-              <span
-                id="tdsMandatoryBadge"
-                style="
-                  display: none;
-                  font-size: 10px;
-                  font-weight: 700;
-                  color: #b5301e;
-                  background: #fdecea;
-                  border: 1px solid #f5c6c6;
-                  border-radius: 6px;
-                  padding: 2px 8px;
-                "
-                >TDS Mandatory</span
-              >
               <input
                 type="number"
                 id="billTds"
@@ -2009,15 +1995,11 @@
         document.getElementById("chittaiBanner").classList.remove("show");
       }
 
-      let _tdsMandatory = false;
-
       async function onCompanyChange(reloadSidebar = true) {
         const companyId = document.getElementById("companySelect").value;
         const btn = document.getElementById("createFreeBtn");
         if (!companyId) {
           if (btn) btn.style.display = "none";
-          _tdsMandatory = false;
-          document.getElementById("tdsMandatoryBadge").style.display = "none";
           return;
         }
         if (btn) btn.style.display = "inline-block";
@@ -2041,23 +2023,6 @@
         document.getElementById("igstRow").style.display =
           selectedGstType === "IGST" ? "flex" : "none";
 
-        // Check TDS mandatory for this company in current FY
-        try {
-          const r = await fetch(`/api/tds-required/${companyId}`);
-          const data = await r.json();
-          _tdsMandatory = data.required;
-          const badge = document.getElementById("tdsMandatoryBadge");
-          badge.style.display = _tdsMandatory ? "inline-block" : "none";
-          if (_tdsMandatory) {
-            const toggle = document.getElementById("autoTdsToggle");
-            if (!toggle.checked) {
-              toggle.checked = true;
-              applyAutoTds();
-            }
-          }
-        } catch (e) {
-          _tdsMandatory = false;
-        }
       }
 
       // ── TABLE ──
@@ -2361,17 +2326,6 @@
           showMessage("Please attach a bill photo before saving", "error");
           return;
         }
-        const tdsVal =
-          parseFloat(document.getElementById("billTds").value) || 0;
-        if (_tdsMandatory && tdsVal <= 0) {
-          showMessage(
-            "TDS is mandatory for this company — previous TDS found in this financial year",
-            "error",
-          );
-          document.getElementById("billTds").focus();
-          return;
-        }
-
         const items = [];
         document.querySelectorAll("#itemsTable tr").forEach((row, idx) => {
           const qty = parseFloat(row.querySelector(".quantity")?.value) || 0;
