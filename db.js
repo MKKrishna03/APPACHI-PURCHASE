@@ -332,6 +332,35 @@ async function initDB_internal() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Seed the TDS rate table if it's empty — this table has no per-row default,
+  // so a freshly created database (e.g. a new company's DB) starts with zero
+  // rows, which makes the auto-TDS lookup fall through to the hardcoded
+  // "no PAN" rate (20%) for every company instead of their real rate.
+  const tdsRowCount = await pool.query(`SELECT COUNT(*) FROM tds`);
+  if (parseInt(tdsRowCount.rows[0].count, 10) === 0) {
+    await pool.query(`
+      INSERT INTO tds (pan_4th_letter, section, entity_type, tds_percentage, remarks) VALUES
+      ('P','194C','Individual','1.00','Individual - 1% TDS'),
+      ('H','194C','HUF (Hindu Undivided Family)','1.00','HUF - 1% TDS'),
+      ('C','194C','Company','2.00','Company - 2% TDS'),
+      ('F','194C','Firm/LLP','2.00','Partnership Firm - 2% TDS'),
+      ('A','194C','Association of Persons (AOP)','2.00','AOP - 2% TDS'),
+      ('B','194C','Body of Individuals (BOI)','2.00','BOI - 2% TDS'),
+      ('T','194C','Trust','2.00','Trust - 2% TDS'),
+      ('L','194C','Local Authority','2.00','Local Authority - 2% TDS'),
+      ('J','194C','Artificial Juridical Person','2.00','AJP - 2% TDS'),
+      ('G','194C','Government','2.00','Government - 2% TDS'),
+      ('X','194C','No PAN Provided','20.00','PAN not furnished - 20% TDS as per Sec 206AA'),
+      ('P','194Q','Individual','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('H','194Q','HUF','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('C','194Q','Company','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('F','194Q','Firm/LLP','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('A','194Q','AOP','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('B','194Q','BOI','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('T','194Q','Trust','0.10','Purchase of goods - 0.1% TDS u/s 194Q'),
+      ('X','194Q','No PAN Provided','5.00','No PAN - 5% TDS u/s 206AA')
+    `);
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS descriptions (
