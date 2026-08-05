@@ -674,6 +674,7 @@
             <input
               type="checkbox"
               id="markAccountedChk"
+              onchange="localStorage.setItem('markAccountedChk', this.checked ? '1' : '0')"
               style="width: 16px; height: 16px; cursor: pointer"
             />
             Mark as Accounted on Download
@@ -2440,6 +2441,11 @@
 
       // ── INIT ──
       (async () => {
+        const markAccountedChk = document.getElementById("markAccountedChk");
+        if (markAccountedChk) {
+          markAccountedChk.checked =
+            localStorage.getItem("markAccountedChk") !== "0";
+        }
         await loadCompanies();
         await loadAllPurchases();
       })();
