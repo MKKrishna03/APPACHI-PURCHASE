@@ -68,6 +68,16 @@ router.post("/cancelled-bills", async (req, res) => {
   }
 });
 
+// PATCH /api/cancelled-bills/:id/accounted
+router.patch("/cancelled-bills/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(`UPDATE cancelled_bills SET is_accounted = $1 WHERE id = $2`, [req.body.is_accounted, req.params.id]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/cancelled-bills/:id
 router.delete("/cancelled-bills/:id", async (req, res) => {
   try {

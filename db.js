@@ -535,6 +535,8 @@ async function initDB_internal() {
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS gold_rate NUMERIC`);
   await alterIfNotExists(`ALTER TABLE labour ADD COLUMN IF NOT EXISTS mc_pct NUMERIC`);
   await alterIfNotExists(`ALTER TABLE cancelled_bills ADD COLUMN IF NOT EXISTS fields_data JSONB`);
+  await alterIfNotExists(`ALTER TABLE chittai ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
+  await alterIfNotExists(`ALTER TABLE cancelled_bills ADD COLUMN IF NOT EXISTS is_accounted BOOLEAN DEFAULT false`);
 
   // Backfill mc_receipt_id for issue vouchers that already have a matching MC receipt
   await pool.query(`

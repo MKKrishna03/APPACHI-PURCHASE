@@ -114,4 +114,13 @@ router.patch("/chittai/:id/photo", async (req, res) => {
   }
 });
 
+router.patch("/chittai/:id/accounted", async (req, res) => {
+  try {
+    await pool.query(`UPDATE chittai SET is_accounted = $1 WHERE id = $2`, [req.body.is_accounted, req.params.id]);
+    res.json({ status: "SUCCESS" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

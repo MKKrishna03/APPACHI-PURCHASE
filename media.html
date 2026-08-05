@@ -998,13 +998,15 @@
           document.getElementById("galleryContainer").innerHTML =
             `<div class="empty-state"><div class="empty-icon">⏳</div><div>Loading all photos from Cloudinary...</div></div>`;
 
-          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes, photoBillRes] =
+          const [cloudinaryRes, purchasesRes, labourRes, hallmarkRes, photoBillRes, chittaiRes, cancelledRes] =
             await Promise.all([
               fetch("/api/cloudinary/all-photos"),
               fetch("/api/purchases/list"),
               fetch("/api/labour"),
               fetch("/api/hallmark-expenses/list"),
               fetch("/api/photo-bill-entries"),
+              fetch("/api/chittai/list/all"),
+              fetch("/api/cancelled-bills"),
             ]);
 
           const cloudinaryPhotos = cloudinaryRes.ok
@@ -1014,6 +1016,8 @@
           const labour = labourRes.ok ? await labourRes.json() : [];
           const hallmark = hallmarkRes.ok ? await hallmarkRes.json() : [];
           const photoBillEntries = photoBillRes.ok ? await photoBillRes.json() : [];
+          const chittai = chittaiRes.ok ? await chittaiRes.json() : [];
+          const cancelledBills = cancelledRes.ok ? await cancelledRes.json() : [];
 
           // Robust public_id extraction — handles URLs with or without transformation params
           function extractPublicId(url) {
@@ -1065,6 +1069,14 @@
             photoBillEntries,
             "photo_url",
           );
+          const { byPid: chittaiByPid, byUrl: chittaiByUrl } = buildMaps(
+            chittai,
+            "photo_url",
+          );
+          const { byPid: cancelledByPid, byUrl: cancelledByUrl } = buildMaps(
+            cancelledBills,
+            "photo_url",
+          );
 
           allPurchases = cloudinaryPhotos.map((item) => {
             const pid0 = item.public_id.replace(/\.[^/.]+$/, "");
@@ -1085,8 +1097,17 @@
               pbeByPid[item.public_id] ||
               pbeByUrl[item.url] ||
               pbeByPid[pid0];
+            const dbChittai =
+              chittaiByPid[item.public_id] ||
+              chittaiByUrl[item.url] ||
+              chittaiByPid[pid0];
+            const dbCancelled =
+              cancelledByPid[item.public_id] ||
+              cancelledByUrl[item.url] ||
+              cancelledByPid[pid0];
 
-            const dbRecord = dbPurchase || dbLabour || dbHallmark || dbPbe;
+            const dbRecord =
+              dbPurchase || dbLabour || dbHallmark || dbPbe || dbChittai || dbCancelled;
 
             let bill_no = item.public_id.split("/").pop();
             if (dbPurchase) bill_no = dbPurchase.bill_no;
@@ -1094,9 +1115,21 @@
               bill_no = dbLabour.receipt_bill_no || dbLabour.issue_number;
             else if (dbHallmark) bill_no = dbHallmark.bill_no;
             else if (dbPbe) bill_no = dbPbe.bill_no;
+            else if (dbChittai) bill_no = dbChittai.chittai_no;
+            else if (dbCancelled) bill_no = dbCancelled.bill_no;
 
             // Date priority: DB record bill date (entered by user) → Cloudinary bill_date → upload timestamp
-            const date = dbPbe?.date || dbPurchase?.date || dbLabour?.date || dbHallmark?.date || item.bill_date || item.created_at;
+            const date = dbPbe?.date || dbPurchase?.date || dbLabour?.date || dbHallmark?.date || dbChittai?.date || dbCancelled?.date || item.bill_date || item.created_at;
+
+            const _pbeDbId = dbPbe && !dbPurchase && !dbLabour && !dbHallmark ? dbPbe.id : null;
+            const _chittaiDbId =
+              dbChittai && !dbPurchase && !dbLabour && !dbHallmark && !dbPbe
+                ? dbChittai.id
+                : null;
+            const _cancelledDbId =
+              dbCancelled && !dbPurchase && !dbLabour && !dbHallmark && !dbPbe && !dbChittai
+                ? dbCancelled.id
+                : null;
 
             return {
               id: item.public_id,
@@ -1113,14 +1146,20 @@
                     ? dbHallmark.is_accounted
                     : dbPbe
                       ? dbPbe.is_accounted
-                      : false,
+                      : dbChittai
+                        ? dbChittai.is_accounted
+                        : dbCancelled
+                          ? dbCancelled.is_accounted
+                          : false,
               folder: (item.folder || "").replace(/^pvtltd\//, ""),
               is_pdf: item.is_pdf || false,
               bytes: item.bytes,
               _dbId: dbPurchase ? dbPurchase.id : null,
               _labourDbId: dbLabour ? dbLabour.id : null,
               _hallmarkDbId: dbHallmark ? dbHallmark.id : null,
-              _pbeDbId: dbPbe && !dbPurchase && !dbLabour && !dbHallmark ? dbPbe.id : null,
+              _pbeDbId,
+              _chittaiDbId,
+              _cancelledDbId,
               _isLabour: !!dbLabour && !dbPurchase,
               _isHallmark: !!dbHallmark && !dbPurchase && !dbLabour,
               _isPhotoBillEntry: !!dbPbe && !dbPurchase && !dbLabour && !dbHallmark,
@@ -1682,6 +1721,7 @@
             "jpg",
           ])[1];
           downloadBlob(blob, `${currentLightbox.bill_no || "bill"}.${ext}`);
+          await markItemsAccounted([currentLightbox]);
         } catch (e) {
           showToast("Download failed", "error");
         }
@@ -1695,6 +1735,7 @@
             [currentLightbox],
             `${currentLightbox.bill_no || "bill"}.pdf`,
           );
+          await markItemsAccounted([currentLightbox]);
         } catch (e) {
           showToast("PDF failed", "error");
         }
@@ -1743,6 +1784,26 @@
                 },
               );
               success = res.ok;
+            } else if (p._chittaiDbId) {
+              const res = await fetch(
+                `/api/chittai/${p._chittaiDbId}/accounted`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ is_accounted: true }),
+                },
+              );
+              success = res.ok;
+            } else if (p._cancelledDbId) {
+              const res = await fetch(
+                `/api/cancelled-bills/${p._cancelledDbId}/accounted`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ is_accounted: true }),
+                },
+              );
+              success = res.ok;
             }
             console.log(
               "markAccounted:",
@@ -1759,9 +1820,25 @@
               p.is_accounted = true;
               const masterItem = allPurchases.find((x) => x.id === p.id);
               if (masterItem) masterItem.is_accounted = true;
+            } else if (
+              p._dbId ||
+              p._labourDbId ||
+              p._hallmarkDbId ||
+              p._pbeDbId ||
+              p._chittaiDbId ||
+              p._cancelledDbId
+            ) {
+              showToast(
+                `Failed to mark ${p.bill_no || "item"} as accounted`,
+                "error",
+              );
             }
           } catch (e) {
             console.error("markAccounted error:", e);
+            showToast(
+              `Failed to mark ${p.bill_no || "item"} as accounted`,
+              "error",
+            );
           }
         }
         renderGallery(document.getElementById("galleryContainer"));
