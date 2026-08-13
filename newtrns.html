@@ -299,6 +299,13 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
+      .bill-check-date {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--ink-3);
+        font-family: "DM Mono", monospace;
+        white-space: nowrap;
+      }
       .bill-check-amt {
         font-size: 13px;
         font-weight: 700;
@@ -655,6 +662,13 @@
         });
       }
 
+      function fmtBillDate(d) {
+        if (!d) return "—";
+        const dt = new Date(d);
+        if (Number.isNaN(dt.getTime())) return "—";
+        return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+      }
+
       // Build a flat list of bill items for the given voucher type
       function getBillItems(voucherType) {
         const fmtAmt = (n) => Number.parseFloat(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -665,6 +679,7 @@
             amount: Number.parseFloat(c.rtgs_amount || c.total || 0),
             fullAmount: Number.parseFloat(c.total || 0),
             isBal: false,
+            date: c.date,
           }));
         }
         if (voucherType === "Receipt Voucher") {
@@ -672,7 +687,7 @@
             .map((lv) => {
               const fullAmt = Number.parseFloat(lv.bill_value_after_deduction || lv.total || 0);
               const balAmt = lv.remaining_value != null ? Number.parseFloat(lv.remaining_value) : fullAmt;
-              return { label: lv.receipt_bill_no || `ID-${lv.id}`, typeTag: "Labour", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+              return { label: lv.receipt_bill_no || `ID-${lv.id}`, typeTag: "Labour", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01, date: lv.date };
             })
             .filter((b) => b.amount > 0.009);
         }
@@ -680,7 +695,7 @@
           return (window._openPurchases || []).map((p) => {
             const fullAmt = Number.parseFloat(p.net_value || p.total_value || 0);
             const balAmt = p.remaining_value != null ? Number.parseFloat(p.remaining_value) : fullAmt;
-            return { label: p.bill_no || `PUR-${p.id}`, typeTag: "Purchase", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+            return { label: p.bill_no || `PUR-${p.id}`, typeTag: "Purchase", amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01, date: p.date };
           });
         }
         return companyVouchers
@@ -688,7 +703,7 @@
           .map((v) => {
             const fullAmt = Number.parseFloat(v.total_value || 0);
             const balAmt = v.remaining_value != null ? Number.parseFloat(v.remaining_value) : fullAmt;
-            return { label: v.bill_no || `ID-${v.id}`, typeTag: voucherType, amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01 };
+            return { label: v.bill_no || `ID-${v.id}`, typeTag: voucherType, amount: balAmt, fullAmount: fullAmt, isBal: balAmt < fullAmt - 0.01, date: v.date };
           });
       }
 
@@ -721,6 +736,7 @@
             <input type="checkbox" class="bill-cb" data-bill-no="${item.label}" data-amount="${item.amount}" onchange="updateAgainstTotals()" />
             <span class="bill-check-no">${item.label}</span>
             <span class="bill-check-type">${item.typeTag}</span>
+            <span class="bill-check-date">${fmtBillDate(item.date)}</span>
             <span class="bill-check-amt">₹${item.amount.toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
             ${item.isBal ? `<span class="bill-check-bal">bal</span>` : ""}
           `;
