@@ -73,24 +73,53 @@ router.post("/vouchers", async (req, res) => {
     profile_id, voucher_type, date, bill_no, entry_type, description,
     qty, rate, va, taxable_value, tax_percent, igst, cgst, sgst, tax_amount, total_value,
   } = req.body;
+  const against_type = req.body.against_type;
+  const billNos = Array.isArray(req.body.bill_nos) && req.body.bill_nos.length
+    ? req.body.bill_nos
+    : (bill_no ? [bill_no] : []);
+  const billAmounts = Array.isArray(req.body.bill_amounts) ? req.body.bill_amounts : [];
   try {
     let linked_labour_id = null;
-    if (entry_type === "against" && bill_no && voucher_type?.toLowerCase().includes("labour")) {
-      const labourMatch = await pool.query(
-        `SELECT id FROM labour WHERE receipt_bill_no = $1 AND profile_id = $2 AND voucher_type = 'Receipt Voucher' LIMIT 1`,
-        [bill_no, profile_id],
-      );
-      if (labourMatch.rows[0]) linked_labour_id = labourMatch.rows[0].id;
+    if (entry_type === "against" && against_type === "Receipt Voucher" && billNos.length) {
+      for (let i = 0; i < billNos.length; i++) {
+        const payAmt = parseFloat(billAmounts[i] ?? 0) || 0;
+        const labourMatch = await pool.query(
+          `SELECT id, COALESCE(remaining_value, bill_value_after_deduction, total) AS rem FROM labour WHERE receipt_bill_no = $1 AND profile_id = $2 AND voucher_type = 'Receipt Voucher' LIMIT 1`,
+          [billNos[i], profile_id],
+        );
+        const row = labourMatch.rows[0];
+        if (row) {
+          if (!linked_labour_id) linked_labour_id = row.id;
+          const newRem = Math.max(0, parseFloat(row.rem || 0) - payAmt);
+          await pool.query(`UPDATE labour SET remaining_value=$1 WHERE id=$2`, [newRem, row.id]);
+        }
+      }
     }
     let linked_chittai_id = null;
-    if (entry_type === "against" && bill_no) {
-      const chittaiMatch = await pool.query(
-        `SELECT id FROM chittai WHERE chittai_no = $1 AND profile_id = $2 LIMIT 1`,
-        [bill_no, profile_id],
-      );
-      if (chittaiMatch.rows[0]) {
-        linked_chittai_id = chittaiMatch.rows[0].id;
-        await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [linked_chittai_id]);
+    if (entry_type === "against" && billNos.length) {
+      for (const bNo of billNos) {
+        const chittaiMatch = await pool.query(
+          `SELECT id FROM chittai WHERE chittai_no = $1 AND profile_id = $2 LIMIT 1`,
+          [bNo, profile_id],
+        );
+        if (chittaiMatch.rows[0]) {
+          if (!linked_chittai_id) linked_chittai_id = chittaiMatch.rows[0].id;
+          await pool.query(`UPDATE chittai SET is_paid=true WHERE id=$1`, [chittaiMatch.rows[0].id]);
+        }
+      }
+    }
+    if (entry_type === "against" && against_type === "Purchase Voucher" && billNos.length) {
+      for (let i = 0; i < billNos.length; i++) {
+        const payAmt = parseFloat(billAmounts[i] ?? 0) || 0;
+        const purchaseMatch = await pool.query(
+          `SELECT id, COALESCE(remaining_value, net_value, total_value) AS rem FROM purchases WHERE bill_no = $1 AND profile_id = $2 LIMIT 1`,
+          [billNos[i], profile_id],
+        );
+        const row = purchaseMatch.rows[0];
+        if (row) {
+          const newRem = Math.max(0, parseFloat(row.rem || 0) - payAmt);
+          await pool.query(`UPDATE purchases SET remaining_value=$1 WHERE id=$2`, [newRem, row.id]);
+        }
       }
     }
     let voucher_no = null;

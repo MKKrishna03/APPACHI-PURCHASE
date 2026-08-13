@@ -815,6 +815,7 @@
           // Collect all checked bills
           const checkedCbs = [...document.querySelectorAll("#againstBillList .bill-cb:checked")];
           const selectedBillNos = checkedCbs.map((cb) => cb.dataset.billNo).filter(Boolean);
+          const selectedBillAmounts = checkedCbs.map((cb) => Number.parseFloat(cb.dataset.amount) || 0);
           const vt = againstVoucherType.value,
             date = document.getElementById("againstDate").value,
             amount = document.getElementById("againstAmount").value,
@@ -830,6 +831,8 @@
             date,
             bill_no: combinedBillNo,
             bill_nos: selectedBillNos,
+            bill_amounts: selectedBillAmounts,
+            against_type: vt,
             entry_type: "against",
             description:
               (transactionKind.value === "Receipt Voucher" ? "Receipt" : "Payment") +
