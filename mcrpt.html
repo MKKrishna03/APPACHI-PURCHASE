@@ -358,17 +358,20 @@
         return res.ok ? await res.json() : [];
       }
 
-      // Company filter only ever lists parties from your current active
-      // books (mirrors every other report) — it does not try to unify
-      // parties across the two separate databases, since a profile_id in
-      // one has no relation to the same-looking id in the other.
-      async function loadCompanies(){
-        try{
-          const res=await fetch('/api/profile/all');
-          const companies=await res.json();
-          const sel=document.getElementById('companySelect');
-          sel.innerHTML='<option value="">— All Companies —</option>'+companies.map(c=>`<option value="${c.id}">${c.company||c.alias}</option>`).join('');
-        }catch(e){}
+      // The Company dropdown is rebuilt from whichever rows are currently in
+      // scope (after date + entity filtering) and matches by company name,
+      // not by database-specific profile_id — a party's numeric id in one
+      // database has no relation to its id in the other, but the name is
+      // the same thing a person recognizes, and it's what selecting a
+      // company should narrow down regardless of which entity(ies) the
+      // report is currently merging.
+      function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+      function renderCompanyOptions(rows){
+        const sel=document.getElementById('companySelect');
+        const prevVal=sel.value;
+        const names=[...new Set(rows.map(r=>r.company_name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+        sel.innerHTML='<option value="">— All Companies —</option>'+names.map(n=>`<option value="${escAttr(n)}">${escAttr(n)}</option>`).join('');
+        sel.value=names.includes(prevVal)?prevVal:'';
       }
 
       // Merge both entities' data whenever the selected range touches the
@@ -399,9 +402,8 @@
 
           let rows=data.filter(r=>inRange(r.date));
           if(entityFilter)rows=rows.filter(r=>r._entity===entityFilter);
-          // The Company dropdown lists parties from your active books only,
-          // so selecting one implicitly scopes to that entity's own data.
-          if(companyId)rows=rows.filter(r=>r._entity===activeEntity && String(r.profile_id)===companyId);
+          renderCompanyOptions(rows);
+          if(companyId)rows=rows.filter(r=>r.company_name===companyId);
 
           allRows=rows.map(r=>{
             const generated=!!r.mc_receipt_id;
@@ -454,7 +456,6 @@
       }
 
       buildPresets();
-      loadCompanies();
       const defaultRange=getFinYear(0);
       drpStart=defaultRange.start;drpEnd=defaultRange.end;
       document.getElementById('drpLabel').textContent=`${fmt(drpStart)} To ${fmt(drpEnd)}`;
