@@ -140,6 +140,11 @@
 
     <div class="main">
       <div class="filters">
+        <select id="entityFilter" onchange="renderCompanyOptions();loadReport()">
+          <option value="">— All Entities —</option>
+          <option value="sole">Sole Proprietorship</option>
+          <option value="pvt">Private Limited</option>
+        </select>
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
@@ -188,6 +193,7 @@
               <tr>
                 <th style="width:44px;text-align:center">S.No</th>
                 <th class="sortable" onclick="sortBy('company')">Company<span class="si" id="si_company">⇅</span></th>
+                <th class="sortable" onclick="sortBy('entity')">Entity<span class="si" id="si_entity">⇅</span></th>
                 <th class="sortable" onclick="sortBy('date')">Issue Date<span class="si" id="si_date">▼</span></th>
                 <th class="sortable" onclick="sortBy('issue_no')">Issue No<span class="si" id="si_issue_no">⇅</span></th>
                 <th class="sortable" onclick="sortBy('weight')" style="text-align:right">Weight (g)<span class="si" id="si_weight">⇅</span></th>
@@ -202,11 +208,11 @@
               </tr>
             </thead>
             <tbody id="reportTable">
-              <tr><td colspan="13" class="loading-state">Select a date range to load data</td></tr>
+              <tr><td colspan="14" class="loading-state">Select a date range to load data</td></tr>
             </tbody>
             <tfoot id="reportFoot" style="display:none">
               <tr>
-                <td colspan="4">Total</td>
+                <td colspan="5">Total</td>
                 <td id="footWeight" style="text-align:right">—</td>
                 <td></td><td></td><td></td><td></td>
                 <td id="footAmount" style="text-align:right">—</td>
@@ -284,21 +290,22 @@
       function inRange(dateStr){if(!dateStr)return false;const ist=new Date(new Date(dateStr).getTime()+5.5*60*60*1000);const n=new Date(ist.getUTCFullYear(),ist.getUTCMonth(),ist.getUTCDate());return n>=drpStart&&n<=drpEnd;}
 
       let sortCol='date', sortDir='desc', allRows=[], currentPage=1, pageSize=100;
-      const sortCols=['company','date','issue_no','weight','mc_bill_no','mc_date','gold_rate','pct','amount'];
+      const sortCols=['company','entity','date','issue_no','weight','mc_bill_no','mc_date','gold_rate','pct','amount'];
 
       function updateSortIcons(){sortCols.forEach(col=>{const el=document.getElementById('si_'+col);if(!el)return;if(col===sortCol){el.textContent=sortDir==='asc'?'▲':'▼';el.style.opacity='1';el.style.color='var(--accent)';}else{el.textContent='⇅';el.style.opacity='0.4';el.style.color='';}}); }
       function sortBy(col){if(sortCol===col){sortDir=sortDir==='asc'?'desc':'asc';}else{sortCol=col;sortDir='asc';}updateSortIcons();renderRows();}
-      function getSortVal(row,col){switch(col){case'company':return(row.company||'').toLowerCase();case'date':return row.dateRaw||'';case'issue_no':return(row.issue_no||'').toLowerCase();case'weight':return row.weight;case'mc_bill_no':return(row.mcBillNo||'').toLowerCase();case'mc_date':return row.mcDateRaw||'';case'gold_rate':return row.goldRate;case'pct':return row.pct;case'amount':return row.amount;default:return'';}}
+      function getSortVal(row,col){switch(col){case'company':return(row.company||'').toLowerCase();case'entity':return(row.entityLabel||'').toLowerCase();case'date':return row.dateRaw||'';case'issue_no':return(row.issue_no||'').toLowerCase();case'weight':return row.weight;case'mc_bill_no':return(row.mcBillNo||'').toLowerCase();case'mc_date':return row.mcDateRaw||'';case'gold_rate':return row.goldRate;case'pct':return row.pct;case'amount':return row.amount;default:return'';}}
 
       function renderRows(){
         const tbody=document.getElementById('reportTable');
         const sorted=[...allRows].sort((a,b)=>{const va=getSortVal(a,sortCol),vb=getSortVal(b,sortCol);if(va<vb)return sortDir==='asc'?-1:1;if(va>vb)return sortDir==='asc'?1:-1;return 0;});
-        if(!sorted.length){tbody.innerHTML=`<tr><td colspan="13" class="empty-state">No MC bill records found</td></tr>`;renderPagination(0);return;}
+        if(!sorted.length){tbody.innerHTML=`<tr><td colspan="14" class="empty-state">No MC bill records found</td></tr>`;renderPagination(0);return;}
         const total=sorted.length;const totalPages=pageSize===0?1:Math.ceil(total/pageSize);if(currentPage>totalPages)currentPage=totalPages;
         const start=pageSize===0?0:(currentPage-1)*pageSize;const end=pageSize===0?total:Math.min(start+pageSize,total);const page=sorted.slice(start,end);
         tbody.innerHTML=page.map((row,i)=>`<tr>
           <td style="color:var(--ink-3);font-size:11px;text-align:center;">${start+i+1}</td>
-          <td style="color:var(--ink);font-weight:500;cursor:pointer;" onclick="window.location.href='/company?id=${row.profile_id}'">${row.company}</td>
+          <td style="color:var(--ink);font-weight:500;">${row.company}</td>
+          <td><span class="tag ${row.entity==='pvt'?'tag-paid':'tag-unpaid'}">${row.entityLabel}</span></td>
           <td style="white-space:nowrap;">${row.dateStr}</td>
           <td class="mono">${row.issue_no||'-'}</td>
           <td class="num" style="text-align:right;">${row.weight?row.weight.toFixed(3):'-'}</td>
@@ -329,9 +336,9 @@
 
       function exportCSV() {
         const esc = (v) => { const s = String(v ?? ""); return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-        const headers = ["Company", "Issue Date", "Issue No", "Weight (g)", "MC Bill No", "MC Bill Date", "Gold Rate", "Percentage", "MC Amount", "Status"];
+        const headers = ["Company", "Entity", "Issue Date", "Issue No", "Weight (g)", "MC Bill No", "MC Bill Date", "Gold Rate", "Percentage", "MC Amount", "Status"];
         const lines = [headers.join(","), ...allRows.map((r) =>
-          [r.company, r.dateStr, r.issue_no || "", r.weight || 0, r.mcBillNo || "", r.mcDateStr === '-' ? '' : r.mcDateStr, r.goldRate || 0, r.pct || 0, r.amount || 0, r.generated ? "Generated" : "Not Generated"].map(esc).join(",")
+          [r.company, r.entityLabel, r.dateStr, r.issue_no || "", r.weight || 0, r.mcBillNo || "", r.mcDateStr === '-' ? '' : r.mcDateStr, r.goldRate || 0, r.pct || 0, r.amount || 0, r.generated ? "Generated" : "Not Generated"].map(esc).join(",")
         )];
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
@@ -339,28 +346,82 @@
         a.click();
       }
 
+      // Explicit X-Company-ID overrides the page-wide active-company header
+      // injected by company-context.js (its wrapper lets a caller-supplied
+      // header win), letting this report pull from either DB regardless of
+      // which company is currently active in the sidebar switcher.
+      const ENTITY_CID = { sole: '1', pvt: '2' };
+      const ENTITY_LABEL = { sole: 'Sole Proprietorship', pvt: 'Private Limited' };
+
+      async function fetchForEntity(path, entity) {
+        const res = await fetch(path, { headers: { 'X-Company-ID': ENTITY_CID[entity] } });
+        return res.ok ? await res.json() : [];
+      }
+
+      let allCompanies = []; // [{id, name, entity}]
       async function loadCompanies(){
-        try{const res=await fetch('/api/profile/all');const companies=await res.json();const sel=document.getElementById('companySelect');sel.innerHTML='<option value="">— All Companies —</option>'+companies.map(c=>`<option value="${c.id}">${c.company||c.alias}</option>`).join('');}catch(e){}
+        try{
+          const [sole, pvt] = await Promise.all([
+            fetchForEntity('/api/profile/all', 'sole'),
+            fetchForEntity('/api/profile/all', 'pvt'),
+          ]);
+          allCompanies = [
+            ...sole.map(c=>({id:c.id,name:c.company||c.alias,entity:'sole'})),
+            ...pvt.map(c=>({id:c.id,name:c.company||c.alias,entity:'pvt'})),
+          ];
+          renderCompanyOptions();
+        }catch(e){}
+      }
+
+      function renderCompanyOptions(){
+        const entityFilter=document.getElementById('entityFilter').value;
+        const sel=document.getElementById('companySelect');
+        const prevVal=sel.value;
+        const list=entityFilter?allCompanies.filter(c=>c.entity===entityFilter):allCompanies;
+        sel.innerHTML='<option value="">— All Companies —</option>'+list.map(c=>
+          `<option value="${c.entity}:${c.id}">${entityFilter?'':(c.entity==='pvt'?'[Pvt Ltd] ':'[Sole Prop] ')}${c.name}</option>`
+        ).join('');
+        sel.value=[...sel.options].some(o=>o.value===prevVal)?prevVal:'';
+      }
+
+      // Merge both entities' data whenever the selected range touches the
+      // current financial year (the cutover period); otherwise report only
+      // the currently active company, matching every other page in the app.
+      function shouldMergeEntities(){
+        const fy=getFinYear(0);
+        return drpStart<=fy.end && fy.start<=drpEnd;
       }
 
       async function loadReport(){
         if(!drpStart||!drpEnd)return;
-        const companyId=document.getElementById('companySelect').value;
+        const companyVal=document.getElementById('companySelect').value; // "" or "entity:id"
+        const entityFilter=document.getElementById('entityFilter').value; // "", "sole", "pvt"
         const statusFilter=document.getElementById('statusFilter').value;
         const tbody=document.getElementById('reportTable');
-        tbody.innerHTML=`<tr><td colspan="13" class="loading-state">Loading...</td></tr>`;
+        tbody.innerHTML=`<tr><td colspan="14" class="loading-state">Loading...</td></tr>`;
         try{
-          const res=await fetch('/api/labour/mc-bill-issues');
-          const data=await res.json();
+          const merge=shouldMergeEntities();
+          const activeCid=localStorage.getItem('activeCompany')||'1';
+          const entities=merge?['sole','pvt']:[activeCid==='2'?'pvt':'sole'];
+
+          const results=await Promise.all(entities.map(ent=>
+            fetchForEntity('/api/labour/mc-bill-issues', ent).then(rows=>rows.map(r=>({...r,_entity:ent})))
+          ));
+          const data=results.flat();
 
           let rows=data.filter(r=>inRange(r.date));
-          if(companyId)rows=rows.filter(r=>String(r.profile_id)===String(companyId));
+          if(entityFilter)rows=rows.filter(r=>r._entity===entityFilter);
+          if(companyVal){
+            const [ce,cid]=companyVal.split(':');
+            rows=rows.filter(r=>r._entity===ce && String(r.profile_id)===cid);
+          }
 
           allRows=rows.map(r=>{
             const generated=!!r.mc_receipt_id;
             const amount=r.mc_bill_value_after_deduction!=null?parseFloat(r.mc_bill_value_after_deduction):(r.mc_total!=null?parseFloat(r.mc_total):null);
             return {
               id:r.id,profile_id:r.profile_id,company:r.company_name||'-',
+              entity:r._entity,entityLabel:ENTITY_LABEL[r._entity],
               dateRaw:r.date||'',dateStr:fmtDate(r.date),
               issue_no:r.issue_number,
               weight:parseFloat(r.total_weight||0),
@@ -379,7 +440,7 @@
 
           document.getElementById('rowCount').textContent=allRows.length;
 
-          if(!allRows.length){tbody.innerHTML=`<tr><td colspan="13" class="empty-state">No MC bill records found for selected range</td></tr>`;document.getElementById('reportFoot').style.display='none';updateSummary(0,0,0,0,0);return;}
+          if(!allRows.length){tbody.innerHTML=`<tr><td colspan="14" class="empty-state">No MC bill records found for selected range</td></tr>`;document.getElementById('reportFoot').style.display='none';updateSummary(0,0,0,0,0);return;}
 
           const totWeight=allRows.reduce((s,r)=>s+r.weight,0);
           const totAmount=allRows.reduce((s,r)=>s+(r.amount||0),0);
@@ -393,7 +454,7 @@
           updateSortIcons();renderRows();
           updateSummary(allRows.length,totWeight,genCount,notGenCount,totAmount);
         }catch(e){
-          document.getElementById('reportTable').innerHTML=`<tr><td colspan="13" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
+          document.getElementById('reportTable').innerHTML=`<tr><td colspan="14" class="empty-state" style="color:var(--danger);">Error loading data</td></tr>`;
         }
       }
 
