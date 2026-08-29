@@ -718,7 +718,9 @@
       </div>
       <div class="modal-body">
         <div id="mcBalanceBanner" style="text-align:center;padding:14px 10px;margin-bottom:14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border-strong);">
-          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">MC Ledger Balance — This FY (Sole Prop + Pvt Ltd combined)</div>
+          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">MC Ledger — This FY (Sole Prop + Pvt Ltd combined)</div>
+          <div id="mcBalanceLimitLine" style="font-size:11px;color:var(--ink-3);margin-top:2px;font-family:'DM Mono',monospace;"></div>
+          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;margin-top:10px;">Available Balance (before this bill)</div>
           <div id="mcBalanceAmount" style="font-size:34px;font-weight:800;font-family:'DM Mono',monospace;color:#c0186a;margin-top:4px;">—</div>
           <div id="mcBalanceSub" style="font-size:11px;color:var(--ink-3);margin-top:4px;"></div>
         </div>
@@ -1050,7 +1052,9 @@
       function updateBalanceBanner(rounded, genBtn) {
         const balEl = document.getElementById("mcBalanceAmount");
         const subEl = document.getElementById("mcBalanceSub");
+        const limitEl = document.getElementById("mcBalanceLimitLine");
         if (_mcUsedSoFar === null) {
+          limitEl.textContent = `Limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")}`;
           balEl.textContent = "Unable to verify";
           balEl.style.color = "var(--danger)";
           subEl.textContent = "Could not load the MC ledger total — close and reopen this dialog to retry.";
@@ -1059,15 +1063,16 @@
         }
         const remaining = MC_LEDGER_LIMIT - _mcUsedSoFar;
         const projected = remaining - rounded;
+        limitEl.textContent = `Limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")}  −  Already used ₹${_mcUsedSoFar.toLocaleString("en-IN")}`;
         balEl.textContent = `₹${remaining.toLocaleString("en-IN")}`;
         balEl.style.color = projected < 0 ? "var(--danger)" : "#c0186a";
         if (rounded > 0) {
           subEl.textContent =
             projected < 0
-              ? `This bill (₹${rounded.toLocaleString("en-IN")}) exceeds the remaining balance by ₹${Math.abs(projected).toLocaleString("en-IN")}`
-              : `₹${projected.toLocaleString("en-IN")} will remain after this bill`;
+              ? `This bill's total (₹${rounded.toLocaleString("en-IN")}) is ₹${Math.abs(projected).toLocaleString("en-IN")} more than what's available — cannot generate.`
+              : `After this bill (₹${rounded.toLocaleString("en-IN")}), ₹${projected.toLocaleString("en-IN")} will remain available.`;
         } else {
-          subEl.textContent = `MC ledger limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")} / FY`;
+          subEl.textContent = "Enter gold rate and percentage to see what remains after this bill.";
         }
         if (genBtn) genBtn.disabled = rounded > 0 && projected < 0;
       }
@@ -1107,7 +1112,8 @@
         document.getElementById("invNo").value = _suggestNo;
 
         _mcUsedSoFar = null;
-        document.getElementById("mcBalanceAmount").textContent = "Loading…";
+        document.getElementById("mcBalanceLimitLine").textContent = "Loading…";
+        document.getElementById("mcBalanceAmount").textContent = "—";
         document.getElementById("mcBalanceAmount").style.color = "";
         document.getElementById("mcBalanceSub").textContent = "";
         refreshPreview();
