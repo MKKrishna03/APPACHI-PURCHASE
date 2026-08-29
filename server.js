@@ -231,6 +231,7 @@ const pages = {
   "/reports/tds": "tds.html",
   "/reports/cd-note": "cdrpt.html",
   "/reports/cancelled": "cancelrpt.html",
+  "/reports/mc": "mcrpt.html",
   "/photo-entry": "photobill.html",
   "/mc": "mc.html",
 };
