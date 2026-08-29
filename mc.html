@@ -717,6 +717,11 @@
         <button class="modal-close" onclick="closeInvoiceModal()">✕</button>
       </div>
       <div class="modal-body">
+        <div id="mcBalanceBanner" style="text-align:center;padding:14px 10px;margin-bottom:14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border-strong);">
+          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">MC Ledger Balance — This FY (Sole Prop + Pvt Ltd combined)</div>
+          <div id="mcBalanceAmount" style="font-size:34px;font-weight:800;font-family:'DM Mono',monospace;color:#c0186a;margin-top:4px;">—</div>
+          <div id="mcBalanceSub" style="font-size:11px;color:var(--ink-3);margin-top:4px;"></div>
+        </div>
         <div class="field-3">
           <div class="field">
             <label for="invDate">Invoice Date</label>
@@ -969,8 +974,106 @@
           .classList.toggle("visible", checked.length > 0);
       }
 
+      // ── MC ledger balance cap ──
+      // One shared ₹19,20,000 limit per financial year, combining Sole
+      // Proprietorship + Pvt Ltd (the same underlying business, just
+      // legally restructured mid-year), not a separate cap per company.
+      const MC_LEDGER_LIMIT = 1920000;
+      let _mcUsedSoFar = null; // null = not yet computed / failed to load
+
+      function getCurrentFYRange() {
+        const today = new Date();
+        const y = today.getFullYear(), m = today.getMonth();
+        const sy = m >= 3 ? y : y - 1;
+        return { start: new Date(sy, 3, 1), end: new Date(sy + 1, 2, 31, 23, 59, 59) };
+      }
+
+      // Explicit X-Company-ID overrides the page-wide active-company header
+      // injected by company-context.js, letting this fetch the OTHER
+      // entity's data regardless of which company is currently active here.
+      async function fetchOtherEntityMcData() {
+        const activeCid = localStorage.getItem("activeCompany") || "1";
+        const otherCid = activeCid === "2" ? "1" : "2";
+        const res = await fetch("/api/labour/mc-bill-issues", {
+          headers: { "X-Company-ID": otherCid },
+        });
+        if (!res.ok) throw new Error("Failed to load other company's MC data");
+        return await res.json();
+      }
+
+      // mc-bill-issues returns one row per Issue Voucher, so a bill that
+      // combines several issue vouchers appears — with its receipt total
+      // duplicated — once per issue voucher. Dedupe by mc_receipt_id
+      // before summing, or a multi-voucher bill would be counted N times.
+      // Receipt ids are separate SERIAL sequences per database though, so a
+      // Sole Prop bill and a Pvt Ltd bill can share the same numeric id —
+      // rows must be entity-tagged (r._entity) and the dedupe key must
+      // include the entity, or two distinct bills collapse into one.
+      function sumGeneratedThisFY(rows, excludeKey, fy) {
+        const seen = new Map();
+        for (const r of rows) {
+          if (!r.mc_receipt_id) continue;
+          const key = `${r._entity}:${r.mc_receipt_id}`;
+          if (excludeKey && key === excludeKey) continue;
+          if (!r.mc_receipt_date) continue;
+          const d = new Date(r.mc_receipt_date);
+          if (d < fy.start || d > fy.end) continue;
+          if (!seen.has(key)) {
+            const amt =
+              r.mc_bill_value_after_deduction != null
+                ? Number.parseFloat(r.mc_bill_value_after_deduction)
+                : r.mc_total != null
+                  ? Number.parseFloat(r.mc_total)
+                  : 0;
+            seen.set(key, amt);
+          }
+        }
+        let sum = 0;
+        for (const v of seen.values()) sum += v;
+        return sum;
+      }
+
+      async function computeMcUsedThisFY(excludeReceiptId) {
+        const fy = getCurrentFYRange();
+        const activeCid = localStorage.getItem("activeCompany") || "1";
+        const activeEntity = activeCid === "2" ? "pvt" : "sole";
+        const otherEntity = activeEntity === "pvt" ? "sole" : "pvt";
+        const other = await fetchOtherEntityMcData();
+        const tagged = [
+          ...allData.map((r) => ({ ...r, _entity: activeEntity })),
+          ...other.map((r) => ({ ...r, _entity: otherEntity })),
+        ];
+        const excludeKey = excludeReceiptId ? `${activeEntity}:${excludeReceiptId}` : null;
+        return sumGeneratedThisFY(tagged, excludeKey, fy);
+      }
+
+      function updateBalanceBanner(rounded, genBtn) {
+        const balEl = document.getElementById("mcBalanceAmount");
+        const subEl = document.getElementById("mcBalanceSub");
+        if (_mcUsedSoFar === null) {
+          balEl.textContent = "Unable to verify";
+          balEl.style.color = "var(--danger)";
+          subEl.textContent = "Could not load the MC ledger total — close and reopen this dialog to retry.";
+          if (genBtn) genBtn.disabled = true;
+          return;
+        }
+        const remaining = MC_LEDGER_LIMIT - _mcUsedSoFar;
+        const projected = remaining - rounded;
+        balEl.textContent = `₹${remaining.toLocaleString("en-IN")}`;
+        balEl.style.color = projected < 0 ? "var(--danger)" : "#c0186a";
+        if (rounded > 0) {
+          subEl.textContent =
+            projected < 0
+              ? `This bill (₹${rounded.toLocaleString("en-IN")}) exceeds the remaining balance by ₹${Math.abs(projected).toLocaleString("en-IN")}`
+              : `₹${projected.toLocaleString("en-IN")} will remain after this bill`;
+        } else {
+          subEl.textContent = `MC ledger limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")} / FY`;
+        }
+        if (genBtn) genBtn.disabled = rounded > 0 && projected < 0;
+      }
+
       // ── Invoice Modal ──
-      function openInvoiceModal() {
+      async function openInvoiceModal() {
         if (!document.querySelectorAll(".row-chk:checked").length) return;
         document.getElementById("invDate").value = new Date()
           .toISOString()
@@ -979,10 +1082,12 @@
         const _firstChecked = [...document.querySelectorAll(".row-chk:checked")][0];
         const _invCompany = _firstChecked?.dataset.company || "";
         let _suggestNo;
+        let _excludeReceiptId = null;
         if (_editingId) {
           // Edit: restore exact number, date, gold rate, pct from DB via allData
           const _editRow = allData.find((r) => String(r.id) === String(_editingId));
           _suggestNo = parseMcBillNum(_editRow?.mc_receipt_bill_no) || 1;
+          _excludeReceiptId = _editRow?.mc_receipt_id || null;
           if (_editRow?.mc_receipt_date) {
             document.getElementById("invDate").value = String(_editRow.mc_receipt_date).slice(0, 10);
           }
@@ -1000,9 +1105,22 @@
           document.getElementById("invPct").value = localStorage.getItem(`mc_last_pct_${_invCompany}`) || _defaultPct;
         }
         document.getElementById("invNo").value = _suggestNo;
+
+        _mcUsedSoFar = null;
+        document.getElementById("mcBalanceAmount").textContent = "Loading…";
+        document.getElementById("mcBalanceAmount").style.color = "";
+        document.getElementById("mcBalanceSub").textContent = "";
         refreshPreview();
         document.getElementById("invoiceDialog").showModal();
         setTimeout(() => document.getElementById("invGoldRate").focus(), 100);
+
+        try {
+          _mcUsedSoFar = await computeMcUsedThisFY(_excludeReceiptId);
+        } catch (e) {
+          console.warn("[MC] Balance check failed:", e.message);
+          _mcUsedSoFar = null;
+        }
+        refreshPreview();
       }
 
       let _editingId = null;
@@ -1031,15 +1149,18 @@
         const pct =
           Number.parseFloat(document.getElementById("invPct").value) || 0;
         const el = document.getElementById("invPreview");
+        const genBtn = document.querySelector('.btn-generate[onclick="generateInvoice()"]');
+
+        const ratePerGram = goldRate && pct ? (pct / 100) * (goldRate / 10) : 0;
+        const subtotal = totalWeight * ratePerGram;
+        const rounded = Math.round(subtotal);
+        updateBalanceBanner(rounded, genBtn);
 
         if (!goldRate || !pct) {
           el.style.color = "var(--ink-3)";
           el.textContent = `${checked.length} voucher(s) · ${totalWeight.toFixed(3)} g — enter gold rate and percentage to preview.`;
           return;
         }
-        const ratePerGram = (pct / 100) * (goldRate / 10);
-        const subtotal = totalWeight * ratePerGram;
-        const rounded = Math.round(subtotal);
         const roundOff = rounded - subtotal;
         el.style.color = "var(--ink-2)";
         const rows = checked
@@ -1123,6 +1244,18 @@
         const fineWeight = Math.round(totalWeight * 100) / 100;
         const subtotal = parseFloat((fineWeight * ratePerGram).toFixed(2));
         const rounded = Math.round(subtotal);
+
+        if (_mcUsedSoFar === null) {
+          alert("Could not verify the MC ledger balance. Close and reopen this dialog, then try again.");
+          return;
+        }
+        const _mcRemaining = MC_LEDGER_LIMIT - _mcUsedSoFar;
+        if (rounded > _mcRemaining) {
+          alert(
+            `This bill (₹${rounded.toLocaleString("en-IN")}) would exceed the ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")} MC ledger limit for this financial year (Sole Proprietorship + Pvt Ltd combined).\nRemaining balance: ₹${_mcRemaining.toLocaleString("en-IN")}.`,
+          );
+          return;
+        }
 
         const issueNo = vouchers.map(v => v.issue).filter(Boolean).join(", ");
         const _issueRow = allData.find(r => String(r.id) === String(vouchers[0]?.id));
