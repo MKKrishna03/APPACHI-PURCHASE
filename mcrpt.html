@@ -140,7 +140,7 @@
 
     <div class="main">
       <div class="filters">
-        <select id="entityFilter" onchange="renderCompanyOptions();loadReport()">
+        <select id="entityFilter" onchange="loadReport()">
           <option value="">— All Entities —</option>
           <option value="sole">Sole Proprietorship</option>
           <option value="pvt">Private Limited</option>
@@ -358,30 +358,17 @@
         return res.ok ? await res.json() : [];
       }
 
-      let allCompanies = []; // [{id, name, entity}]
+      // Company filter only ever lists parties from your current active
+      // books (mirrors every other report) — it does not try to unify
+      // parties across the two separate databases, since a profile_id in
+      // one has no relation to the same-looking id in the other.
       async function loadCompanies(){
         try{
-          const [sole, pvt] = await Promise.all([
-            fetchForEntity('/api/profile/all', 'sole'),
-            fetchForEntity('/api/profile/all', 'pvt'),
-          ]);
-          allCompanies = [
-            ...sole.map(c=>({id:c.id,name:c.company||c.alias,entity:'sole'})),
-            ...pvt.map(c=>({id:c.id,name:c.company||c.alias,entity:'pvt'})),
-          ];
-          renderCompanyOptions();
+          const res=await fetch('/api/profile/all');
+          const companies=await res.json();
+          const sel=document.getElementById('companySelect');
+          sel.innerHTML='<option value="">— All Companies —</option>'+companies.map(c=>`<option value="${c.id}">${c.company||c.alias}</option>`).join('');
         }catch(e){}
-      }
-
-      function renderCompanyOptions(){
-        const entityFilter=document.getElementById('entityFilter').value;
-        const sel=document.getElementById('companySelect');
-        const prevVal=sel.value;
-        const list=entityFilter?allCompanies.filter(c=>c.entity===entityFilter):allCompanies;
-        sel.innerHTML='<option value="">— All Companies —</option>'+list.map(c=>
-          `<option value="${c.entity}:${c.id}">${entityFilter?'':(c.entity==='pvt'?'[Pvt Ltd] ':'[Sole Prop] ')}${c.name}</option>`
-        ).join('');
-        sel.value=[...sel.options].some(o=>o.value===prevVal)?prevVal:'';
       }
 
       // Merge both entities' data whenever the selected range touches the
@@ -394,7 +381,7 @@
 
       async function loadReport(){
         if(!drpStart||!drpEnd)return;
-        const companyVal=document.getElementById('companySelect').value; // "" or "entity:id"
+        const companyId=document.getElementById('companySelect').value;
         const entityFilter=document.getElementById('entityFilter').value; // "", "sole", "pvt"
         const statusFilter=document.getElementById('statusFilter').value;
         const tbody=document.getElementById('reportTable');
@@ -402,7 +389,8 @@
         try{
           const merge=shouldMergeEntities();
           const activeCid=localStorage.getItem('activeCompany')||'1';
-          const entities=merge?['sole','pvt']:[activeCid==='2'?'pvt':'sole'];
+          const activeEntity=activeCid==='2'?'pvt':'sole';
+          const entities=merge?['sole','pvt']:[activeEntity];
 
           const results=await Promise.all(entities.map(ent=>
             fetchForEntity('/api/labour/mc-bill-issues', ent).then(rows=>rows.map(r=>({...r,_entity:ent})))
@@ -411,10 +399,9 @@
 
           let rows=data.filter(r=>inRange(r.date));
           if(entityFilter)rows=rows.filter(r=>r._entity===entityFilter);
-          if(companyVal){
-            const [ce,cid]=companyVal.split(':');
-            rows=rows.filter(r=>r._entity===ce && String(r.profile_id)===cid);
-          }
+          // The Company dropdown lists parties from your active books only,
+          // so selecting one implicitly scopes to that entity's own data.
+          if(companyId)rows=rows.filter(r=>r._entity===activeEntity && String(r.profile_id)===companyId);
 
           allRows=rows.map(r=>{
             const generated=!!r.mc_receipt_id;
