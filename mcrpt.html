@@ -148,6 +148,10 @@
         <select id="companySelect" onchange="loadReport()">
           <option value="">— All Companies —</option>
         </select>
+        <div id="mcLedgerBalance" style="display:none;padding:6px 14px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border-strong);font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap;">
+          <span style="color:var(--ink-3);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.05em;">MC Ledger (This FY)</span>
+          <span id="mcLedgerText" style="font-family:'DM Mono',monospace;margin-left:6px;"></span>
+        </div>
         <select id="statusFilter" onchange="loadReport()">
           <option value="">— All Status —</option>
           <option value="generated">Generated</option>
@@ -382,6 +386,59 @@
         return drpStart<=fy.end && fy.start<=drpEnd;
       }
 
+      // ── MC Ledger balance (same ₹19,20,000/party/FY rule as mc.html) ──
+      // Always scoped to the REAL current financial year, independent of
+      // whatever date range the report itself is filtered to, and always
+      // combines both entities regardless of the report's Entity filter —
+      // this mirrors the hard limit enforced when generating an MC bill.
+      const MC_LEDGER_LIMIT=1920000;
+      let _mcLedgerReqId=0;
+
+      function sumMcLedgerUsed(rows, companyName, fy){
+        const seen=new Map();
+        for(const r of rows){
+          if(r.company_name!==companyName)continue;
+          if(!r.mc_receipt_id)continue;
+          const key=`${r._entity}:${r.mc_receipt_id}`;
+          if(!r.mc_receipt_date)continue;
+          const d=new Date(r.mc_receipt_date);
+          if(d<fy.start||d>fy.end)continue;
+          if(!seen.has(key)){
+            const amt=r.mc_bill_value_after_deduction!=null?parseFloat(r.mc_bill_value_after_deduction):(r.mc_total!=null?parseFloat(r.mc_total):0);
+            seen.set(key,amt);
+          }
+        }
+        let sum=0;
+        for(const v of seen.values())sum+=v;
+        return sum;
+      }
+
+      async function updateMcLedgerBalance(){
+        const companyId=document.getElementById('companySelect').value;
+        const box=document.getElementById('mcLedgerBalance');
+        const textEl=document.getElementById('mcLedgerText');
+        const reqId=++_mcLedgerReqId;
+        if(!companyId){box.style.display='none';return;}
+        box.style.display='';
+        textEl.style.color='';
+        textEl.textContent='Loading…';
+        try{
+          const [sole,pvt]=await Promise.all([
+            fetchForEntity('/api/labour/mc-bill-issues','sole').then(rows=>rows.map(r=>({...r,_entity:'sole'}))),
+            fetchForEntity('/api/labour/mc-bill-issues','pvt').then(rows=>rows.map(r=>({...r,_entity:'pvt'}))),
+          ]);
+          if(reqId!==_mcLedgerReqId)return; // superseded by a newer selection
+          const used=sumMcLedgerUsed([...sole,...pvt],companyId,getFinYear(0));
+          const balance=MC_LEDGER_LIMIT-used;
+          textEl.textContent=`Limit ₹${MC_LEDGER_LIMIT.toLocaleString('en-IN')}  ·  Used ₹${used.toLocaleString('en-IN')}  ·  Balance ₹${balance.toLocaleString('en-IN')}`;
+          textEl.style.color=balance<0?'var(--danger)':'var(--accent)';
+        }catch(e){
+          if(reqId!==_mcLedgerReqId)return;
+          textEl.textContent='Unable to load';
+          textEl.style.color='var(--danger)';
+        }
+      }
+
       async function loadReport(){
         if(!drpStart||!drpEnd)return;
         const companyId=document.getElementById('companySelect').value;
@@ -403,6 +460,7 @@
           let rows=data.filter(r=>inRange(r.date));
           if(entityFilter)rows=rows.filter(r=>r._entity===entityFilter);
           renderCompanyOptions(rows);
+          updateMcLedgerBalance();
           if(companyId)rows=rows.filter(r=>r.company_name===companyId);
 
           allRows=rows.map(r=>{
