@@ -718,7 +718,7 @@
       </div>
       <div class="modal-body">
         <div id="mcBalanceBanner" style="text-align:center;padding:14px 10px;margin-bottom:14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border-strong);">
-          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">MC Ledger — This FY (Sole Prop + Pvt Ltd combined)</div>
+          <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;">MC Ledger — This FY (Sole Prop + Pvt Ltd combined, per party)</div>
           <div id="mcBalanceLimitLine" style="font-size:11px;color:var(--ink-3);margin-top:2px;font-family:'DM Mono',monospace;"></div>
           <div style="font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;margin-top:10px;">Available Balance (before this bill)</div>
           <div id="mcBalanceAmount" style="font-size:34px;font-weight:800;font-family:'DM Mono',monospace;color:#c0186a;margin-top:4px;">—</div>
@@ -978,10 +978,15 @@
 
       // ── MC ledger balance cap ──
       // One shared ₹19,20,000 limit per financial year, combining Sole
-      // Proprietorship + Pvt Ltd (the same underlying business, just
-      // legally restructured mid-year), not a separate cap per company.
+      // Proprietorship + Pvt Ltd (the same underlying real-world party,
+      // just billed from either books depending on when the bill was
+      // raised) — but it is a SEPARATE ₹19,20,000 cap per party/company
+      // (e.g. NAMACHIVAYAM HUF has its own limit, VIMAL HUF has its own,
+      // etc.) — never combined across different parties.
       const MC_LEDGER_LIMIT = 1920000;
       let _mcUsedSoFar = null; // null = not yet computed / failed to load
+      let _mcInvCompany = ""; // party this balance currently applies to
+      let _mcBalanceReqId = 0; // guards against a stale fetch overwriting a newer one
 
       function getCurrentFYRange() {
         const today = new Date();
@@ -1011,9 +1016,11 @@
       // Sole Prop bill and a Pvt Ltd bill can share the same numeric id —
       // rows must be entity-tagged (r._entity) and the dedupe key must
       // include the entity, or two distinct bills collapse into one.
-      function sumGeneratedThisFY(rows, excludeKey, fy) {
+      // companyName scopes the sum to one party's own ledger only.
+      function sumGeneratedThisFY(rows, companyName, excludeKey, fy) {
         const seen = new Map();
         for (const r of rows) {
+          if (r.company_name !== companyName) continue;
           if (!r.mc_receipt_id) continue;
           const key = `${r._entity}:${r.mc_receipt_id}`;
           if (excludeKey && key === excludeKey) continue;
@@ -1035,7 +1042,7 @@
         return sum;
       }
 
-      async function computeMcUsedThisFY(excludeReceiptId) {
+      async function computeMcUsedThisFY(companyName, excludeReceiptId) {
         const fy = getCurrentFYRange();
         const activeCid = localStorage.getItem("activeCompany") || "1";
         const activeEntity = activeCid === "2" ? "pvt" : "sole";
@@ -1046,7 +1053,7 @@
           ...other.map((r) => ({ ...r, _entity: otherEntity })),
         ];
         const excludeKey = excludeReceiptId ? `${activeEntity}:${excludeReceiptId}` : null;
-        return sumGeneratedThisFY(tagged, excludeKey, fy);
+        return sumGeneratedThisFY(tagged, companyName, excludeKey, fy);
       }
 
       function updateBalanceBanner(rounded, genBtn) {
@@ -1063,7 +1070,7 @@
         }
         const remaining = MC_LEDGER_LIMIT - _mcUsedSoFar;
         const projected = remaining - rounded;
-        limitEl.textContent = `Limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")}  −  Already used ₹${_mcUsedSoFar.toLocaleString("en-IN")}`;
+        limitEl.textContent = `${_mcInvCompany || "This party"}: Limit ₹${MC_LEDGER_LIMIT.toLocaleString("en-IN")}  −  Already used ₹${_mcUsedSoFar.toLocaleString("en-IN")}`;
         balEl.textContent = `₹${remaining.toLocaleString("en-IN")}`;
         balEl.style.color = projected < 0 ? "var(--danger)" : "#c0186a";
         if (rounded > 0) {
@@ -1086,6 +1093,7 @@
         // Per-company invoice number derived from DB (allData)
         const _firstChecked = [...document.querySelectorAll(".row-chk:checked")][0];
         const _invCompany = _firstChecked?.dataset.company || "";
+        _mcInvCompany = _invCompany;
         let _suggestNo;
         let _excludeReceiptId = null;
         if (_editingId) {
@@ -1112,6 +1120,7 @@
         document.getElementById("invNo").value = _suggestNo;
 
         _mcUsedSoFar = null;
+        const _reqId = ++_mcBalanceReqId;
         document.getElementById("mcBalanceLimitLine").textContent = "Loading…";
         document.getElementById("mcBalanceAmount").textContent = "—";
         document.getElementById("mcBalanceAmount").style.color = "";
@@ -1120,12 +1129,17 @@
         document.getElementById("invoiceDialog").showModal();
         setTimeout(() => document.getElementById("invGoldRate").focus(), 100);
 
+        let _result = null;
         try {
-          _mcUsedSoFar = await computeMcUsedThisFY(_excludeReceiptId);
+          _result = await computeMcUsedThisFY(_invCompany, _excludeReceiptId);
         } catch (e) {
           console.warn("[MC] Balance check failed:", e.message);
-          _mcUsedSoFar = null;
         }
+        // A newer openInvoiceModal() call (different party/bill) may have
+        // started and finished while this fetch was in flight — ignore a
+        // stale result so it can't apply the wrong party's used amount.
+        if (_reqId !== _mcBalanceReqId) return;
+        _mcUsedSoFar = _result;
         refreshPreview();
       }
 
