@@ -635,6 +635,15 @@
           />
           <select
             class="filter-input"
+            id="entityFilter"
+            onchange="applyFilter()"
+          >
+            <option value="">All Entities</option>
+            <option value="sole">Sole Proprietorship</option>
+            <option value="pvt">Private Limited</option>
+          </select>
+          <select
+            class="filter-input"
             id="companyFilter"
             onchange="applyFilter()"
             style="min-width: 160px"
@@ -665,6 +674,7 @@
                   />
                 </th>
                 <th>Company / Issue No.</th>
+                <th>Entity</th>
                 <th>Issue Date</th>
                 <th>Weight (g)</th>
                 <th style="text-align:center">Status</th>
@@ -673,7 +683,7 @@
             </thead>
             <tbody id="tableBody">
               <tr>
-                <td colspan="6" class="loading-state">Loading…</td>
+                <td colspan="7" class="loading-state">Loading…</td>
               </tr>
             </tbody>
           </table>
@@ -846,15 +856,40 @@
         ids.forEach((id) => removeMcBillData(id));
       }
 
+      // The entity you're currently active in (per the sidebar switcher).
+      // Only rows from this entity have safe, working View/Edit/Delete/
+      // select-for-invoice actions — see renderTable().
+      function getActiveEntity() {
+        return (localStorage.getItem("activeCompany") || "1") === "2" ? "pvt" : "sole";
+      }
+      const ENTITY_LABEL_MC = { sole: "Sole Proprietorship", pvt: "Private Limited" };
+
       async function loadData() {
         try {
-          const res = await fetch("/api/labour/mc-bill-issues");
-          allData = res.ok ? await res.json() : [];
+          const activeEntity = getActiveEntity();
+          const otherEntity = activeEntity === "pvt" ? "sole" : "pvt";
+          const [activeRes, otherRows] = await Promise.all([
+            fetch("/api/labour/mc-bill-issues"),
+            fetchOtherEntityMcData().catch((e) => {
+              console.warn("[MC] Could not load other entity's data:", e.message);
+              return [];
+            }),
+          ]);
+          const activeRows = activeRes.ok ? await activeRes.json() : [];
+          // Active entity's rows come first — every interactive action below
+          // looks a row up by id via allData.find(), and only ids belonging
+          // to active (interactive) rows are ever passed to those lookups,
+          // so putting them first guarantees a correct match even though
+          // the two databases' ids are independent sequences that can collide.
+          allData = [
+            ...activeRows.map((r) => ({ ...r, _entity: activeEntity })),
+            ...otherRows.map((r) => ({ ...r, _entity: otherEntity })),
+          ];
           populateCompanyDropdown();
           applyFilter();
         } catch {
           document.getElementById("tableBody").innerHTML =
-            '<tr><td colspan="5" class="empty-state">Failed to load data.</td></tr>';
+            '<tr><td colspan="7" class="empty-state">Failed to load data.</td></tr>';
         }
       }
 
@@ -874,6 +909,7 @@
           .trim();
         const from = document.getElementById("fromDate").value;
         const to = document.getElementById("toDate").value;
+        const entity = document.getElementById("entityFilter").value;
         const company = document.getElementById("companyFilter").value;
         const genF = document.getElementById("generatedFilter").value;
 
@@ -884,11 +920,13 @@
             !(r.issue_number || "").toLowerCase().includes(q)
           )
             return false;
+          if (entity && r._entity !== entity) return false;
           if (from && r.date && r.date.slice(0, 10) < from) return false;
           if (to && r.date && r.date.slice(0, 10) > to) return false;
           if (company && r.company_name !== company) return false;
-          if (genF === "generated" && !isGenerated(r.id)) return false;
-          if (genF === "not_generated" && isGenerated(r.id)) return false;
+          const gen = !!r.mc_receipt_id;
+          if (genF === "generated" && !gen) return false;
+          if (genF === "not_generated" && gen) return false;
           return true;
         });
         renderTable();
@@ -903,29 +941,42 @@
 
         if (!filteredData.length) {
           tbody.innerHTML =
-            '<tr><td colspan="6" class="empty-state">No OTHERS issue vouchers found.</td></tr>';
+            '<tr><td colspan="7" class="empty-state">No OTHERS issue vouchers found.</td></tr>';
           updateSummary();
           return;
         }
 
+        const activeEntity = getActiveEntity();
         tbody.innerHTML = filteredData
           .map((r) => {
             const dt = r.date
               ? new Date(r.date).toLocaleDateString("en-GB")
               : "—";
             const wt = Number.parseFloat(r.total_weight || 0).toFixed(3);
-            const gen = isGenerated(r.id);
+            const gen = !!r.mc_receipt_id;
+            const isActive = r._entity === activeEntity;
             const badge = gen
               ? '<span class="status-gen">Generated</span>'
               : '<span class="status-new">Not Generated</span>';
+            const entityBadge = r._entity === "pvt"
+              ? '<span class="status-gen">Pvt Ltd</span>'
+              : '<span class="status-new">Sole Prop</span>';
             const editOnclick = gen
               ? `editMcBill(${r.id})`
               : `location.href='/labour?edit=${r.id}'`;
-            const actionCell = `<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
+            // Rows from the entity you're not currently active in can't
+            // safely support View/Edit/Delete/select here — every action
+            // on this page writes or reads by numeric id against whichever
+            // company is currently active, and the two databases' ids are
+            // independent sequences that can collide. Switch companies
+            // (sidebar switcher) to manage a bill from the other entity.
+            const actionCell = isActive
+              ? `<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
                 <button class="btn-view" onclick="openViewDialog(${r.id})">View</button>
                 <button class="btn-view" style="color:var(--amber);border-color:rgba(181,98,10,0.3);" onclick="${editOnclick}">Edit</button>
                 ${gen ? `<button class="btn-del-mc" onclick="confirmDeleteMcBill(${r.id}, event)">Delete</button>` : ""}
-              </div>`;
+              </div>`
+              : `<div style="font-size:10.5px;color:var(--ink-3);text-align:center;" title="Switch to ${ENTITY_LABEL_MC[r._entity]} to view or manage this bill">Switch company to manage</div>`;
             return `<tr>
             <td><input type="checkbox" class="row-chk"
               data-id="${r.id}"
@@ -934,11 +985,12 @@
               data-issue="${(r.issue_number || "").replaceAll('"', "&quot;")}"
               data-date="${r.date ? r.date.slice(0, 10) : ""}"
               onchange="updateSummary()"
-              ${gen ? 'disabled title="Already generated"' : ""} /></td>
+              ${!isActive ? `disabled title="Switch to ${ENTITY_LABEL_MC[r._entity]} to generate this bill"` : gen ? 'disabled title="Already generated"' : ""} /></td>
             <td>
               <div class="company-name">${r.company_name || "—"}</div>
               <div class="issue-no">${r.issue_number || ""}</div>
             </td>
+            <td style="text-align:center">${entityBadge}</td>
             <td>${dt}</td>
             <td class="weight-cell">${wt} g</td>
             <td style="text-align:center">${badge}</td>
