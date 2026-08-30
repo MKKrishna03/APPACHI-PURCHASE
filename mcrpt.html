@@ -370,10 +370,21 @@
       // company should narrow down regardless of which entity(ies) the
       // report is currently merging.
       function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+      let _lastCompanyOptionsKey='';
       function renderCompanyOptions(rows){
         const sel=document.getElementById('companySelect');
-        const prevVal=sel.value;
         const names=[...new Set(rows.map(r=>r.company_name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+        const key=names.join('');
+        // Rebuilding a <select>'s options from inside its own onchange (e.g.
+        // picking a company re-runs loadReport(), which calls this) breaks
+        // the native dropdown's open state in some browsers until the page
+        // is reloaded. Skip the DOM rebuild entirely when the option list
+        // hasn't actually changed — selecting a company never changes which
+        // companies exist in the current date+entity scope, so this is the
+        // common case, not an edge case.
+        if(key===_lastCompanyOptionsKey)return;
+        _lastCompanyOptionsKey=key;
+        const prevVal=sel.value;
         sel.innerHTML='<option value="">— All Companies —</option>'+names.map(n=>`<option value="${escAttr(n)}">${escAttr(n)}</option>`).join('');
         sel.value=names.includes(prevVal)?prevVal:'';
       }
