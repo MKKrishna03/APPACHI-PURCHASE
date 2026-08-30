@@ -289,7 +289,9 @@
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
           const nw = imgEl.naturalWidth, nh = imgEl.naturalHeight;
-          const scale = Math.min(400 / nw, 400 / nh);
+          // Larger detection canvas so thin text/lines near the edges don't
+          // get blurred into near-white by downscale averaging.
+          const scale = Math.min(600 / nw, 600 / nh);
           canvas.width = nw * scale; canvas.height = nh * scale;
           ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
           const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -297,13 +299,22 @@
           for (let y = 0; y < canvas.height; y++) {
             for (let x = 0; x < canvas.width; x++) {
               const i = (y * canvas.width + x) * 4;
-              if (d[i] < 240 || d[i+1] < 240 || d[i+2] < 240) {
+              // Threshold raised from 240 to 250: camera glare/flash can wash
+              // out faint text near the top/edges of a bill to near-white, and
+              // a too-strict threshold reads that as background, causing the
+              // crop box to cut into real content. Erring toward including
+              // more as "content" only makes the box more generous, never
+              // more aggressive, so this is a one-directional safety margin.
+              if (d[i] < 250 || d[i+1] < 250 || d[i+2] < 250) {
                 if (x < x0) x0 = x; if (x > x1) x1 = x;
                 if (y < y0) y0 = y; if (y > y1) y1 = y;
               }
             }
           }
-          const pw = canvas.width * 0.02, ph = canvas.height * 0.02;
+          // Padding raised from 2% to 7% of each dimension — a wider safety
+          // margin around whatever the detector found, so a slightly-off
+          // detection still leaves real content inside the crop box.
+          const pw = canvas.width * 0.07, ph = canvas.height * 0.07;
           x0 = Math.max(0, x0 - pw); y0 = Math.max(0, y0 - ph);
           x1 = Math.min(canvas.width, x1 + pw); y1 = Math.min(canvas.height, y1 + ph);
           if (x1 - x0 > 20 && y1 - y0 > 20) {
