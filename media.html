@@ -1949,14 +1949,23 @@
 
       async function generatePdf(items, filename) {
         try {
+          // Order by company name first, then by bill date within each company.
+          const sortedItems = [...items].sort((a, b) => {
+            const companyCmp = (getCompanyName(a.profile_id) || "").localeCompare(
+              getCompanyName(b.profile_id) || "",
+            );
+            if (companyCmp !== 0) return companyCmp;
+            return new Date(a.date || 0) - new Date(b.date || 0);
+          });
+
           const { jsPDF } = window.jspdf;
           const pdf = new jsPDF("p", "mm", "a4");
           const pageW = pdf.internal.pageSize.getWidth();
           const pageH = pdf.internal.pageSize.getHeight();
           const margin = 10;
 
-          for (let i = 0; i < items.length; i++) {
-            const p = items[i];
+          for (let i = 0; i < sortedItems.length; i++) {
+            const p = sortedItems[i];
             try {
               const dataUrl = await imgToDataUrl(p.photo_url);
               if (i > 0) pdf.addPage();
